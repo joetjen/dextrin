@@ -1,0 +1,33 @@
+# dextrin's standard named types (DESIGN.md §4.4.1) — common refinements
+# of the built-in primitives, so schema authors don't each redefine
+# "a positive integer" or "a non-empty string" by hand. Every entry
+# here is built purely from the fixed type_expr vocabulary (refine's
+# existing min/max/exclusive-min/exclusive-max/multiple-of/min-length/
+# max-length/pattern/min-count/max-count constraints, DESIGN.md
+# §4.4.3) — nothing here needed a new form, and nothing here is
+# specific to Elixir: any dextrin-compatible reader in any language
+# can load this same file and get the same types.
+#
+# Deliberately not included: anything domain-specific (email, phone
+# number, URL-shaped-string, etc.) — what counts as a valid one is an
+# application decision, not something this library should guess at,
+# and DXN already has native `uri`/`uuid` primitives for the cases
+# that would otherwise tempt a regex reimplementation. `pattern:` is
+# available directly (`{:refine :string %{pattern: ~r/.../}}`) for
+# anything an application needs beyond what's listed here.
+
+%{
+  PositiveInteger:    {:refine :integer %{min: 1}}
+  NonNegativeInteger: {:refine :integer %{min: 0}}
+  NegativeInteger:    {:refine :integer %{max: -1}}
+  NonPositiveInteger: {:refine :integer %{max: 0}}
+
+  PositiveFloat:    {:refine :float %{exclusive-min: 0.0}}
+  NonNegativeFloat: {:refine :float %{min: 0.0}}
+  Percentage:       {:refine :float %{min: 0.0, max: 100.0}}
+
+  NonEmptyString: {:refine :string %{min-length: 1}}
+
+  NonEmptyList: {:refine :list %{min-count: 1}}
+  NonEmptySet:  {:refine :set %{min-count: 1}}
+}
