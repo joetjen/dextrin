@@ -151,6 +151,86 @@ Dextrin.decode(~s(%DateRange{starts: ~D[2024-06-01], ends: ~D[2024-01-01]}), reg
 #=> {:error, %Dextrin.Error{message: "struct \"DateRange\" violates its schema: starts must not be after ends", ...}}
 ```
 
+## A third-party struct provider, end to end
+
+`Dextrin.Schema.Provider` lets a struct's *own* library define its DXN
+schema without depending on `dextrin` — see `Dextrin.Schema.Provider`'s
+own moduledoc for the complete rationale (why a companion module, why
+a behaviour, why explicit registration, the optional-dependency
+mechanics in full). This example shows both sides: the geo library
+that owns the struct, and the application that uses it.
+
+The library, `geo_lib`, ships a `Geo.LatLng` struct. It never depends
+on `dextrin` directly — only optionally, purely for this one
+companion module:
+
+```elixir
+# geo_lib's own mix.exs
+defp deps do
+  [{:dextrin, "~> 0.1", optional: true}]
+end
+```
+
+```elixir
+defmodule Geo.LatLng do
+  defstruct [:lat, :lng]
+end
+
+# lib/geo/lat_lng/dxn.ex -- only compiles if the final application
+# also depends on dextrin; Geo.LatLng itself is never touched.
+if Code.ensure_loaded?(Dextrin.Schema.Provider) do
+  defmodule Geo.LatLng.DXN do
+    @behaviour Dextrin.Schema.Provider
+
+    # Defines a shared named type (Degrees) alongside the one schema
+    # this module is actually "for" -- both get compiled into the
+    # registry together, per Dextrin.Schema.Provider's own moduledoc.
+    @impl true
+    def dxn_schema, do: """
+    %{
+      Degrees: {:refine :float %{min: -180.0, max: 180.0}}
+      LatLng: %schema{
+        fields: @ordered %{ lat: Degrees, lng: Degrees }
+      }
+    }
+    """
+
+    @impl true
+    def dxn_schema_name, do: "LatLng"
+
+    @impl true
+    def dxn_struct, do: Geo.LatLng
+
+    @impl true
+    def dxn_materialize(%{lat: lat, lng: lng}), do: {:ok, %Geo.LatLng{lat: lat, lng: lng}}
+  end
+end
+```
+
+The application depends on both `geo_lib` and `dextrin`. It composes
+`geo_lib`'s provider with dextrin's own standard named types in one
+registry, exactly like chaining any other `base_registry`:
+
+```elixir
+{:ok, registry} = Dextrin.Schema.register_provider(Dextrin.Schema.Std.registry(), Geo.LatLng.DXN)
+
+Dextrin.decode(~s(%LatLng{lat: 51.05, lng: 13.74}), registry: registry)
+#=> {:ok, %Geo.LatLng{lat: 51.05, lng: 13.74}}
+
+Dextrin.encode(%Geo.LatLng{lat: 51.05, lng: 13.74}, registry: registry)
+#=> {:ok, "%LatLng{lat: 51.05, lng: 13.74}"}
+
+# Degrees' own refine constraint is enforced automatically, same as
+# any other schema -- no special handling needed on either side:
+Dextrin.decode(~s(%LatLng{lat: 200.0, lng: 13.74}), registry: registry)
+#=> {:error, %Dextrin.Error{message: "struct \"LatLng\" violates its schema: field \"lat\" does not match its declared type", ...}}
+```
+
+`geo_lib` never mentions `Dextrin.Registry`, `Dextrin.Schema`, or any
+other `dextrin` module outside that one guarded file — an application
+that uses `Geo.LatLng` without `dextrin` installed compiles and runs
+exactly as if `Geo.LatLng.DXN` didn't exist.
+
 ## Cross-file schemas with `Dextrin.Schema.FileResolver`
 
 Given `schemas/Address.dxns` and `schemas/Person.dxns` on disk, where

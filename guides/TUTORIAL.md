@@ -202,6 +202,14 @@ validation recognize `%MyApp.Point{}` values you build yourself
 registry = Dextrin.Registry.put_struct_module(registry, "Point", MyApp.Point)
 ```
 
+This also lets you encode a `%MyApp.Point{}` directly — no need to
+hand-build a `Dextrin.Struct` first:
+
+```elixir
+Dextrin.encode(%MyApp.Point{x: 1, y: 2}, registry: registry)
+#=> {:ok, "%Point{x: 1, y: 2}"}
+```
+
 ## 8. Named types and the standard library
 
 Any `.dxns` entry that *isn't* a `%schema{}` defines a reusable named
@@ -224,7 +232,59 @@ registry as `compile/3`'s `base_registry` to use them:
 {:ok, registry} = Dextrin.Schema.compile(doc, Dextrin.Schema.Std.registry())
 ```
 
-## 9. Putting it together: a small config loader
+## 9. Letting a third-party struct provide its own schema
+
+Everything so far assumed you write the `.dxns` schema yourself. If
+`MyApp.Point` instead came from a library that doesn't want to (and
+shouldn't have to) depend on `dextrin`, that library can ship a small,
+separately-compiled companion module implementing
+`Dextrin.Schema.Provider` — guarded behind an optional dependency, so
+the struct's own module is never conditionally compiled:
+
+```elixir
+# the library's own mix.exs: {:dextrin, "~> 0.1", optional: true}
+
+if Code.ensure_loaded?(Dextrin.Schema.Provider) do
+  defmodule MyLib.Point.DXN do
+    @behaviour Dextrin.Schema.Provider
+
+    @impl true
+    def dxn_schema, do: """
+    %{ Point: %schema{ fields: @ordered %{ x: :integer, y: :integer } } }
+    """
+
+    @impl true
+    def dxn_schema_name, do: "Point"
+
+    @impl true
+    def dxn_struct, do: MyLib.Point
+
+    @impl true
+    def dxn_materialize(%{x: x, y: y}), do: {:ok, %MyLib.Point{x: x, y: y}}
+  end
+end
+```
+
+An application depending on both `my_lib` and `dextrin` registers it
+in one call, wherever it's already building its registry:
+
+```elixir
+{:ok, registry} = Dextrin.Schema.register_provider(Dextrin.Registry.new(), MyLib.Point.DXN)
+
+Dextrin.decode("%Point{x: 1, y: 2}", registry: registry)
+#=> {:ok, %MyLib.Point{x: 1, y: 2}}
+Dextrin.encode(%MyLib.Point{x: 1, y: 2}, registry: registry)
+#=> {:ok, "%Point{x: 1, y: 2}"}
+```
+
+`dxn_materialize/1` is optional — without it, decoding falls back to
+the same plain field map any other schema with no materializer
+produces. See `Dextrin.Schema.Provider`'s own moduledoc for why this
+is a companion module rather than the struct's own, and for reading
+`dxn_schema/0`'s source from a file at compile time instead of an
+inline string.
+
+## 10. Putting it together: a small config loader
 
 ```elixir
 defmodule MyApp.ConfigLoader do

@@ -34,6 +34,7 @@ defmodule Dextrin.Binary.Encoder do
 
   alias Dextrin.Binary.Tags
   alias Dextrin.{Array, Bytes, CustomTag, OrderedMap, Rational, SortedSet, Struct, Uri, Uuid}
+  alias Dextrin.Schema.Compiled
   alias Ichor.Toolkit.Result
 
   # `Dextrin.Tuple` is deliberately not aliased to the bare name `Tuple`
@@ -332,9 +333,40 @@ defmodule Dextrin.Binary.Encoder do
   end
 
   # Reached only for a struct none of the clauses above recognized —
-  # i.e. a genuine application struct, the case `put_tag_encoder/4`
-  # exists for: look it up by module and encode it as that tag instead.
+  # i.e. a genuine application struct. Two independent extension
+  # points, checked in order: a schema-registered struct
+  # (`put_struct_module/3`) is rebuilt as the equivalent positional
+  # `Dextrin.Struct` (`.dxnb` structs are always positional, §2.1) and
+  # re-encoded through that existing clause above, reusing its
+  # recursive field encoding rather than duplicating it; only if no
+  # schema module matches does this fall through to `put_tag_encoder/4`,
+  # the custom-tag-style escape hatch for anything without real field
+  # structure.
   defp encode_item_dispatch(%module{} = other, opts) do
+    registry = Keyword.get(opts, :registry, Dextrin.Registry.new())
+
+    case Dextrin.Registry.fetch_schema_name_for_module(registry, module) do
+      {:ok, name} ->
+        {:ok, compiled, _registry} = Dextrin.Registry.fetch_struct_schema(registry, name)
+
+        values =
+          compiled |> Compiled.field_values(other) |> Enum.map(fn {_name, value} -> value end)
+
+        encode_item(Struct.positional(name, values), opts)
+
+      :error ->
+        encode_via_tag_encoder(other, module, opts)
+    end
+  end
+
+  defp encode_item_dispatch(other, _opts) do
+    {:error,
+     Dextrin.Error.binary("cannot encode value with no DXN representation: #{inspect(other)}")}
+  end
+
+  # ---- helpers -------------------------------------------------------------
+
+  defp encode_via_tag_encoder(other, module, opts) do
     with %Dextrin.Registry{} = registry <- Keyword.get(opts, :registry, :none),
          {:ok, {name, encoder}} <- Dextrin.Registry.fetch_tag_encoder(registry, module) do
       with {:ok, inner_value} <- encoder.(other),
@@ -353,13 +385,6 @@ defmodule Dextrin.Binary.Encoder do
          Dextrin.Error.binary("cannot encode value with no DXN representation: #{inspect(other)}")}
     end
   end
-
-  defp encode_item_dispatch(other, _opts) do
-    {:error,
-     Dextrin.Error.binary("cannot encode value with no DXN representation: #{inspect(other)}")}
-  end
-
-  # ---- helpers -------------------------------------------------------------
 
   defp encode_struct(name, values, opts) do
     with {:ok, name_item} <- encode_item(name, opts),

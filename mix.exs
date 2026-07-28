@@ -132,7 +132,8 @@ defmodule Dextrin.MixProject do
         Dextrin.Schema.Validator,
         Dextrin.Schema.Validated,
         Dextrin.Schema.Std,
-        Dextrin.Schema.FileResolver
+        Dextrin.Schema.FileResolver,
+        Dextrin.Schema.Provider
       ],
       Unicode: [
         Dextrin.Unicode.RangeGenerator

@@ -99,4 +99,79 @@ defmodule Dextrin.Schema do
   def validate_encode_tree(value, %Registry{} = registry) do
     Validator.validate_tree_for_encode(value, registry)
   end
+
+  @doc """
+  Compiles and registers one `Dextrin.Schema.Provider` implementation
+  into `registry` — the explicit half of letting a struct's own
+  library define its DXN schema without depending on `dextrin`; see
+  `Dextrin.Schema.Provider`'s own moduledoc for the full pattern this
+  is meant to support, including why it's a small companion module
+  rather than the struct's own, and the optional-dependency mechanics
+  that keep the struct's library dependency-free.
+
+  Concretely, in order:
+
+    1. Decodes and compiles `module.dxn_schema/0`'s source
+       (`Dextrin.decode/2` + `compile/3`, same as any other `.dxns`
+       document) into `registry`. Every named type and every `%schema{}`
+       entry that document defines gets folded in, not only the one
+       `module.dxn_schema_name/0` points at — a provider module for one
+       struct can usefully define shared named types (or even other
+       related structs) that end up available in the resulting
+       registry regardless.
+    2. Looks up `module.dxn_schema_name/0` in the now-compiled registry.
+       If it isn't there — the provider declared a name its own schema
+       document doesn't actually define, almost certainly a typo in
+       one place or the other — this returns a specific `{:error, _}`
+       naming both the module and the mismatched name, rather than
+       silently registering nothing or raising a generic `KeyError`
+       deeper in `Dextrin.Registry`.
+    3. Associates `module.dxn_struct/0` with that schema name via
+       `Dextrin.Registry.put_struct_module/3` — the same call you'd
+       make by hand for a struct schema you wrote yourself; this is
+       what lets `Dextrin.encode/2`/`encode_binary/2` serialize
+       `dxn_struct/0`'s struct directly and lets `{:reference, name}`
+       checks recognize it.
+    4. If `module` exports `dxn_materialize/1` (the one optional
+       callback), registers it via
+       `Dextrin.Registry.put_struct_materializer/3`. If not, decoding
+       this schema falls back to the default plain field map, same as
+       any other materializer-less schema.
+
+  Composes exactly like `compile/3`'s own `base_registry` — calling
+  `register_provider/2` more than once, for different provider modules,
+  threads the same growing registry through each call, same as chaining
+  `compile/3` calls or seeding from `Dextrin.Schema.Std.registry/1`.
+  """
+  @spec register_provider(Registry.t(), module()) :: {:ok, Registry.t()} | {:error, term()}
+  def register_provider(%Registry{} = registry, module) when is_atom(module) do
+    with {:ok, doc} <- Dextrin.decode(module.dxn_schema()),
+         {:ok, registry} <- compile(doc, registry) do
+      name = module.dxn_schema_name()
+
+      # Re-fetching by name (rather than trusting compile/3 blindly
+      # succeeded for *this* entry) is what catches a provider whose
+      # dxn_schema_name/0 doesn't match its own dxn_schema/0 -- a
+      # mismatch between the two callbacks that compile/3 alone has no
+      # way to notice, since it only ever sees the document as a whole.
+      case Registry.fetch_struct_schema(registry, name) do
+        {:ok, _compiled, registry} ->
+          registry = Registry.put_struct_module(registry, name, module.dxn_struct())
+
+          registry =
+            if function_exported?(module, :dxn_materialize, 1) do
+              Registry.put_struct_materializer(registry, name, &module.dxn_materialize/1)
+            else
+              registry
+            end
+
+          {:ok, registry}
+
+        {:unknown, _registry} ->
+          {:error,
+           "#{inspect(module)}.dxn_schema_name/0 returned #{inspect(name)}, " <>
+             "but its own dxn_schema/0 document has no such schema entry"}
+      end
+    end
+  end
 end

@@ -82,6 +82,23 @@ registry
 `Dextrin.Schema.FileResolver.for_paths(paths, predicates \\ %{})` builds
 a ready-made resolver for `Namespace/Name -> paths/Namespace.dxns`.
 
+## Registry: third-party structs (`Dextrin.Schema.Provider`)
+
+For a struct defined by a library that doesn't (and shouldn't have to)
+depend on `dextrin` itself — see `Dextrin.Schema.Provider`'s own
+moduledoc for the full optional-dependency pattern this is meant to
+support:
+
+```elixir
+{:ok, registry} = Dextrin.Schema.register_provider(registry, SomeLib.Money.DXN)
+```
+
+`SomeLib.Money.DXN` implements the `Dextrin.Schema.Provider` behaviour
+(`dxn_schema/0`, `dxn_schema_name/0`, `dxn_struct/0`, and optionally
+`dxn_materialize/1`) — a small, separately-compiled companion module,
+not the struct's own module, so the struct itself is never
+conditionally compiled.
+
 ## Schema validation, outside of decode
 
 ```elixir

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Dextrin.Schema.Provider`, a behaviour letting a struct's own library
+  ship a DXN schema for it without that library ever depending on
+  `dextrin` — the schema, the target struct module, and an optional
+  materializer are declared on a small, separately-compiled companion
+  module (meant to be guarded behind an `optional: true` dependency),
+  and `Dextrin.Schema.register_provider/2` compiles and wires it into
+  a `Dextrin.Registry` in one call from the consuming application.
+
+### Fixed
+
+- `Dextrin.encode/2`/`encode_binary/2` can now encode a registered
+  application struct (`Dextrin.Registry.put_struct_module/3`) directly
+  — previously, only a hand-built `Dextrin.Struct` could actually be
+  serialized; a real struct registered via `put_struct_module/3` was
+  recognized by automatic encode-time *validation* but had no path to
+  actually being written out, forcing callers to reconstruct a
+  `Dextrin.Struct` from the real struct's own fields by hand before
+  encoding. `Dextrin.Text.Printer`/`Dextrin.Binary.Encoder` now rebuild
+  the equivalent `Dextrin.Struct` automatically, in the compiled
+  schema's own canonical field order.
+
 ### Changed
 
 - `ichor` is now a Hex dependency (`~> 0.1.1`) instead of a sibling

@@ -29,6 +29,7 @@ defmodule Dextrin.Text.Printer do
   }
 
   alias Dextrin.Binary.Tags
+  alias Dextrin.Schema.Compiled
   alias Ichor.Toolkit.Result
 
   # `Dextrin.Keyword` deliberately not aliased to the bare name
@@ -144,11 +145,28 @@ defmodule Dextrin.Text.Printer do
   end
 
   # Reached only for a struct none of the clauses above recognized —
-  # i.e. a genuine application struct, the symmetric text-side
-  # counterpart of `Dextrin.Binary.Encoder`'s own `put_tag_encoder/4`
-  # fallback: any struct none of `Dextrin`'s own built-in clauses
-  # recognize is looked up by module in the registry's tag encoders.
+  # i.e. a genuine application struct. Two independent extension
+  # points, checked in order: a schema-registered struct
+  # (`put_struct_module/3`) is rebuilt as the equivalent keyed
+  # `Dextrin.Struct` and re-printed through that existing clause above
+  # (reusing its recursive field printing rather than duplicating it);
+  # only if no schema module matches does this fall through to
+  # `put_tag_encoder/4`, the custom-tag-style escape hatch for
+  # anything without real field structure.
   def print(%module{} = other, opts) do
+    registry = Keyword.get(opts, :registry, Registry.new())
+
+    case Registry.fetch_schema_name_for_module(registry, module) do
+      {:ok, name} ->
+        {:ok, compiled, _registry} = Registry.fetch_struct_schema(registry, name)
+        print(Struct.keyed(name, Compiled.field_values(compiled, other)), opts)
+
+      :error ->
+        print_via_tag_encoder(other, module, opts)
+    end
+  end
+
+  defp print_via_tag_encoder(other, module, opts) do
     with %Registry{} = registry <- Keyword.get(opts, :registry, :none),
          {:ok, {name, encoder}} <- Registry.fetch_tag_encoder(registry, module) do
       with {:ok, inner_value} <- encoder.(other),
