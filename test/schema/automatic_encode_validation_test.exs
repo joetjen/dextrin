@@ -1,7 +1,7 @@
 defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
   @moduledoc """
-  Automatic, name-driven encode-time validation (DESIGN.md §10/§12,
-  chosen explicitly over a `schema:`-opt-only design): every
+  Automatic, name-driven encode-time validation (chosen explicitly
+  over a `schema:`-opt-only design): every
   `Dextrin.Struct` or registered application struct anywhere in a
   value being encoded is checked against its own schema, wherever it
   turns out to be — not just what a single named schema's own field
@@ -35,7 +35,9 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
     assert {:ok, "%Bar{baz: 1}"} = Dextrin.encode(good, registry: registry)
   end
 
-  test "a named struct nested inside an untyped (:any) field is still caught", %{registry: _registry} do
+  test "a named struct nested inside an untyped (:any) field is still caught", %{
+    registry: _registry
+  } do
     {:ok, doc} =
       Dextrin.decode("""
       %{
@@ -46,18 +48,27 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
 
     {:ok, registry} = Dextrin.Schema.compile(doc)
 
-    bad = Dextrin.Struct.keyed("Holder", [{"payload", Dextrin.Struct.keyed("Bar", [{"baz", true}])}])
+    bad =
+      Dextrin.Struct.keyed("Holder", [{"payload", Dextrin.Struct.keyed("Bar", [{"baz", true}])}])
+
     assert {:error, %Dextrin.Error{message: message}} = Dextrin.encode(bad, registry: registry)
     assert message =~ "Bar"
   end
 
-  test "a named struct nested inside a plain, undeclared list is still caught", %{registry: registry} do
+  test "a named struct nested inside a plain, undeclared list is still caught", %{
+    registry: registry
+  } do
     value = %{Dextrin.Keyword.new("items") => [Dextrin.Struct.keyed("Bar", [{"baz", true}])]}
-    assert {:error, %Dextrin.Error{message: message}} = Dextrin.encode_binary(value, registry: registry)
+
+    assert {:error, %Dextrin.Error{message: message}} =
+             Dextrin.encode_binary(value, registry: registry)
+
     assert message =~ "Bar"
   end
 
-  test "a registered application struct is validated automatically, no schema: needed", %{registry: registry} do
+  test "a registered application struct is validated automatically, no schema: needed", %{
+    registry: registry
+  } do
     registry = Dextrin.Registry.put_struct_module(registry, "Bar", TestBar)
 
     bad = struct(TestBar, baz: true)
@@ -68,13 +79,17 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
     assert :ok = Dextrin.Schema.validate_encode_tree(good, registry)
   end
 
-  test "validate: false opts out, for deliberately building non-conforming data", %{registry: registry} do
+  test "validate: false opts out, for deliberately building non-conforming data", %{
+    registry: registry
+  } do
     bad = Dextrin.Struct.keyed("Bar", [{"baz", true}])
     assert {:ok, "%Bar{baz: true}"} = Dextrin.encode(bad, registry: registry, validate: false)
     assert {:ok, _bin} = Dextrin.encode_binary(bad, registry: registry, validate: false)
   end
 
-  test "a struct with no registered schema at all is untouched, not rejected", %{registry: registry} do
+  test "a struct with no registered schema at all is untouched, not rejected", %{
+    registry: registry
+  } do
     opaque = Dextrin.Struct.keyed("Unregistered", [{"anything", 1}])
     assert {:ok, "%Unregistered{anything: 1}"} = Dextrin.encode(opaque, registry: registry)
   end

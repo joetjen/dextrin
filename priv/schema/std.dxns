@@ -1,12 +1,12 @@
-# dextrin's standard named types (DESIGN.md §4.4.1) — common refinements
-# of the built-in primitives, so schema authors don't each redefine
-# "a positive integer" or "a non-empty string" by hand. Every entry
-# here is built purely from the fixed type_expr vocabulary (refine's
-# existing min/max/exclusive-min/exclusive-max/multiple-of/min-length/
-# max-length/pattern/min-count/max-count constraints, DESIGN.md
-# §4.4.3) — nothing here needed a new form, and nothing here is
-# specific to Elixir: any dextrin-compatible reader in any language
-# can load this same file and get the same types.
+# dextrin's standard named types — common refinements of the built-in
+# primitives, so schema authors don't each redefine "a positive
+# integer" or "a non-empty string" by hand. Every entry here is built
+# purely from the fixed type_expr vocabulary (refine's existing
+# min/max/exclusive-min/exclusive-max/multiple-of/min-length/
+# max-length/pattern/min-count/max-count constraints) — nothing here
+# needed a new form, and nothing here is specific to Elixir: any
+# dextrin-compatible reader in any language can load this same file
+# and get the same types.
 #
 # Deliberately not included: anything domain-specific (email, phone
 # number, URL-shaped-string, etc.) — what counts as a valid one is an

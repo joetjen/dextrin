@@ -1,8 +1,10 @@
 defmodule Dextrin.Rational do
   @moduledoc """
   DXN `rational` (`int/uint`) — an exact ratio, stored exactly as
-  given and never silently reduced (`22/7` and `44/14` are distinct
-  DXN values; `reduce/1` is opt-in — DESIGN.md §4.1).
+  given and never silently reduced: `22/7` and `44/14` are distinct DXN
+  values (`DXN.md` calls it "exact ratio," not "exact reduced ratio"),
+  so reducing on parse would be a silent, opinionated transformation.
+  `reduce/1` is offered but never called implicitly.
   """
 
   @type t :: %__MODULE__{numerator: integer(), denominator: pos_integer()}

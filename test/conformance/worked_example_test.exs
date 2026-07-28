@@ -1,7 +1,7 @@
 defmodule Dextrin.Conformance.WorkedExampleTest do
   @moduledoc """
   `DXN.md` §3's worked example — the one document that exercises every
-  type at once, the way a real consumer would (DESIGN.md §9).
+  type at once, the way a real consumer would.
   """
 
   use ExUnit.Case, async: true
@@ -51,7 +51,11 @@ defmodule Dextrin.Conformance.WorkedExampleTest do
 
   test "tags is a set of keywords", %{value: value} do
     assert %MapSet{} = tags = fetch(value, "tags")
-    assert MapSet.equal?(tags, MapSet.new([Dextrin.Keyword.new("admin"), Dextrin.Keyword.new("staff")]))
+
+    assert MapSet.equal?(
+             tags,
+             MapSet.new([Dextrin.Keyword.new("admin"), Dextrin.Keyword.new("staff")])
+           )
   end
 
   test "meta is an ordered map preserving field order", %{value: value} do
@@ -61,7 +65,8 @@ defmodule Dextrin.Conformance.WorkedExampleTest do
   end
 
   test "address is an opaque positional struct (no schema registered)", %{value: value} do
-    assert %Dextrin.Struct{name: "Point", fields: {:positional, [51.05, 13.74]}} = fetch(value, "address")
+    assert %Dextrin.Struct{name: "Point", fields: {:positional, [51.05, 13.74]}} =
+             fetch(value, "address")
   end
 
   test "result is a tuple", %{value: value} do

@@ -1,18 +1,22 @@
 defmodule Dextrin.Registry do
   @moduledoc """
-  Extension point for both `struct` and `custom-tag` (DESIGN.md §4.3).
+  Extension point for both `struct` and `custom-tag` decoding/encoding.
   No entry for a given name → decode falls back to an opaque
-  `Dextrin.Struct`/`Dextrin.CustomTag`, per DXN.md §1.3/§1.4 — never a
-  hard failure.
+  `Dextrin.Struct`/`Dextrin.CustomTag` — never a hard failure, since
+  neither type requires a registration to be representable at all.
 
   Struct entries only ever come from a compiled `.dxns` schema
-  (`Dextrin.Schema.compile/2`, §4.4) plus an optional materializer
-  layered on top (`put_struct_materializer/3`) — there is no
-  `put_struct/3` that hand-writes a struct's shape directly, because
-  struct is schema-dependent by design (§4.3): the schema is what
-  supplies field names/order/types, a materializer only decides what
-  nicer decoded shape to produce from an already-schema-validated
-  field map.
+  (`Dextrin.Schema.compile/3`) plus an optional materializer layered on
+  top (`put_struct_materializer/3`) — there is no `put_struct/3` that
+  hand-writes a struct's shape directly, because `struct` is
+  schema-dependent by design: the schema is what supplies field
+  names/order/types, a materializer only decides what nicer decoded
+  shape to produce from an already-schema-validated field map.
+
+  Every `put_*`/`fetch_*` pair here is a plain, immutable map update —
+  `Registry.t()` is ordinary data threaded explicitly through
+  `Dextrin.decode/2`, `Dextrin.Schema.compile/3`, etc.; nothing about
+  it is a process, an ETS table, or otherwise global/mutable state.
   """
 
   alias Dextrin.Schema.{Compiled, TypeExpr}
@@ -44,7 +48,8 @@ defmodule Dextrin.Registry do
   def new, do: %__MODULE__{}
 
   @spec put_tag(t(), String.t(), tag_decoder()) :: t()
-  def put_tag(%__MODULE__{} = registry, name, decoder) when is_binary(name) and is_function(decoder, 1) do
+  def put_tag(%__MODULE__{} = registry, name, decoder)
+      when is_binary(name) and is_function(decoder, 1) do
     %{registry | tags: Map.put(registry.tags, name, decoder)}
   end
 
@@ -54,10 +59,10 @@ defmodule Dextrin.Registry do
   @doc """
   The reverse of `put_tag/3`: registers how to turn an application
   struct (keyed by its module) back into `@name value` on encode.
-  Closes the asymmetry DESIGN.md §10 flagged as a real, tracked gap —
-  `put_tag/3` alone let you *decode* `@my-app/money 100` into
-  `%MyApp.Money{}`, but never re-`encode` it, since dispatch there has
-  to happen by Elixir type, not by wire-format name.
+  `put_tag/3` alone lets you *decode* `@my-app/money 100` into
+  `%MyApp.Money{}`, but never re-`encode` it, since dispatch on the way
+  out has to happen by Elixir module, not by wire-format tag name — the
+  two directions need separate lookup tables, not one shared one.
   """
   @spec put_tag_encoder(t(), module(), String.t(), tag_encoder()) :: t()
   def put_tag_encoder(%__MODULE__{} = registry, module, name, encoder)
@@ -66,10 +71,12 @@ defmodule Dextrin.Registry do
   end
 
   @spec fetch_tag_encoder(t(), module()) :: {:ok, {String.t(), tag_encoder()}} | :error
-  def fetch_tag_encoder(%__MODULE__{tag_encoders: tag_encoders}, module), do: Map.fetch(tag_encoders, module)
+  def fetch_tag_encoder(%__MODULE__{tag_encoders: tag_encoders}, module),
+    do: Map.fetch(tag_encoders, module)
 
   @spec put_struct_schema(t(), String.t(), Compiled.t()) :: t()
-  def put_struct_schema(%__MODULE__{} = registry, name, %Compiled{} = compiled) when is_binary(name) do
+  def put_struct_schema(%__MODULE__{} = registry, name, %Compiled{} = compiled)
+      when is_binary(name) do
     %{registry | structs: Map.put(registry.structs, name, compiled)}
   end
 
@@ -86,9 +93,12 @@ defmodule Dextrin.Registry do
 
   @doc """
   Looks up a compiled schema by struct name, consulting the lazy
-  resolver (if any) on a miss and caching the result — "loaded up
-  front vs. on demand" is the caller's choice (DESIGN.md §4.3), this
-  is what makes both paths look the same to the rest of `Dextrin`.
+  resolver (if any) on a miss and caching the result. Whether schemas
+  are all compiled up front (`Dextrin.Schema.compile/3` once, at
+  startup) or resolved on demand (a resolver reading a file, calling a
+  schema service, whatever the caller wants) is entirely the caller's
+  choice — this function is what makes both paths look identical to
+  the rest of `Dextrin`, which never needs to know which one is in play.
   """
   @spec fetch_struct_schema(t(), String.t()) :: {:ok, Compiled.t(), t()} | {:unknown, t()}
   def fetch_struct_schema(%__MODULE__{structs: structs} = registry, name) do
@@ -111,17 +121,17 @@ defmodule Dextrin.Registry do
   end
 
   @spec fetch_materializer(t(), String.t()) :: {:ok, struct_materializer()} | :error
-  def fetch_materializer(%__MODULE__{materializers: materializers}, name), do: Map.fetch(materializers, name)
+  def fetch_materializer(%__MODULE__{materializers: materializers}, name),
+    do: Map.fetch(materializers, name)
 
   @doc """
-  Registers a named type_expr (DESIGN.md §4.4.1's named-type entries)
-  — a reusable name for a combination of the fixed type_expr
-  vocabulary, defined entirely in `.dxns` data, never Elixir code.
-  `Dextrin.Schema.compile/3` populates this automatically from a
-  document's non-`%schema{}` entries; `put_type_alias/3` itself is
-  only needed to seed a base registry by hand (e.g. sharing one
-  vocabulary across several `compile/3` calls without redeclaring it
-  each time).
+  Registers a named type_expr — a reusable name for a combination of
+  the fixed type_expr vocabulary (`Dextrin.Schema.TypeExpr`), defined
+  entirely in `.dxns` data, never Elixir code. `Dextrin.Schema.compile/3`
+  populates this automatically from a document's non-`%schema{}`
+  entries; `put_type_alias/3` itself is only needed to seed a base
+  registry by hand (e.g. sharing one vocabulary across several
+  `compile/3` calls without redeclaring it each time).
   """
   @spec put_type_alias(t(), String.t(), TypeExpr.t()) :: t()
   def put_type_alias(%__MODULE__{} = registry, name, type_expr) when is_binary(name) do
@@ -129,13 +139,14 @@ defmodule Dextrin.Registry do
   end
 
   @spec fetch_type_alias(t(), String.t()) :: {:ok, TypeExpr.t()} | :error
-  def fetch_type_alias(%__MODULE__{type_aliases: type_aliases}, name), do: Map.fetch(type_aliases, name)
+  def fetch_type_alias(%__MODULE__{type_aliases: type_aliases}, name),
+    do: Map.fetch(type_aliases, name)
 
   @doc """
   Declares which Elixir module a schema's data is expected to be —
   used only for `{:reference, name}` checks during *encode-time*
-  validation (`Dextrin.Schema.validate_encode/3`, DESIGN.md §10).
-  Decode-time reference checks don't need this: they carry an
+  validation (`Dextrin.Schema.validate_encode/3`). Decode-time
+  reference checks don't need this: they carry an
   internal provenance marker regardless of materializer shape
   (`Dextrin.Schema.Validated`). Encode-time has no wire data to carry
   that marker before anything's even been encoded — `__struct__` is
@@ -145,12 +156,14 @@ defmodule Dextrin.Registry do
   you use the default plain-map materialization for something else.
   """
   @spec put_struct_module(t(), String.t(), module()) :: t()
-  def put_struct_module(%__MODULE__{} = registry, name, module) when is_binary(name) and is_atom(module) do
+  def put_struct_module(%__MODULE__{} = registry, name, module)
+      when is_binary(name) and is_atom(module) do
     %{registry | struct_modules: Map.put(registry.struct_modules, name, module)}
   end
 
   @spec fetch_struct_module(t(), String.t()) :: {:ok, module()} | :error
-  def fetch_struct_module(%__MODULE__{struct_modules: struct_modules}, name), do: Map.fetch(struct_modules, name)
+  def fetch_struct_module(%__MODULE__{struct_modules: struct_modules}, name),
+    do: Map.fetch(struct_modules, name)
 
   @doc """
   The reverse of `fetch_struct_module/2`: given an application
@@ -162,6 +175,8 @@ defmodule Dextrin.Registry do
   """
   @spec fetch_schema_name_for_module(t(), module()) :: {:ok, String.t()} | :error
   def fetch_schema_name_for_module(%__MODULE__{struct_modules: struct_modules}, module) do
-    Enum.find_value(struct_modules, :error, fn {name, mod} -> if mod == module, do: {:ok, name} end)
+    Enum.find_value(struct_modules, :error, fn {name, mod} ->
+      if mod == module, do: {:ok, name}
+    end)
   end
 end

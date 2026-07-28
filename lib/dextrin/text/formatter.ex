@@ -1,15 +1,21 @@
 defmodule Dextrin.Text.Formatter do
   @moduledoc """
   Multi-line, indented `.dxn` rendering — `mix dextrin.format`'s
-  `--mode pretty` and `mix dextrin.decode`'s default output (DESIGN.md
-  §12.4). `--mode condense` needs no separate implementation at all:
-  it's exactly what `Dextrin.encode/2`/`Dextrin.Text.Printer` already
-  produce.
+  `--mode pretty` and `mix dextrin.decode`'s default output (a CLI
+  decode is a human reading the result, so `Dextrin.encode/2`'s own
+  single-line default isn't the right default there). `--mode condense`
+  needs no separate implementation at all: it's exactly what
+  `Dextrin.encode/2`/`Dextrin.Text.Printer` already produce.
 
-  Comments cannot be preserved here or anywhere else in this design —
-  `Dextrin.Text.Grammar`'s lexer discards them as trivia before the
-  parser (and therefore any value) ever exists (DESIGN.md §12.4). This
-  formatter only ever prints what survived decoding.
+  Comments cannot be preserved here, or by any formatter built on this
+  library's decode-then-reprint approach: `Dextrin.Text.Grammar`'s
+  lexer folds `#`-comments into the same auto-spliced trivia as
+  whitespace and discards them before the parser (and therefore any
+  value) ever exists. There is no comment text left to put back by the
+  time a value reaches this module. A genuine comment-preserving
+  formatter would need a second, independent re-lexing pipeline that
+  never goes through the value-producing parse at all — real,
+  separate work, not a flag on this one.
   """
 
   alias Dextrin.{Array, OrderedMap, SortedSet, Struct}
@@ -76,7 +82,10 @@ defmodule Dextrin.Text.Formatter do
     inner_indent = String.duplicate(@indent, inner_depth)
     outer_indent = String.duplicate(@indent, depth)
 
-    body = Enum.map_join(items, "\n", fn item -> inner_indent <> render_item.(item, inner_depth, opts) end)
+    body =
+      Enum.map_join(items, "\n", fn item ->
+        inner_indent <> render_item.(item, inner_depth, opts)
+      end)
 
     open <> "\n" <> body <> "\n" <> outer_indent <> close
   end
@@ -94,16 +103,21 @@ defmodule Dextrin.Text.Formatter do
     open <> "\n" <> body <> "\n" <> outer_indent <> close
   end
 
-  defp render_entry(%Dextrin.Keyword{name: name}, value, depth, opts), do: "#{name}: #{render(value, depth, opts)}"
+  defp render_entry(%Dextrin.Keyword{name: name}, value, depth, opts),
+    do: "#{name}: #{render(value, depth, opts)}"
+
   # Struct-keyed pairs use plain string names, not Keyword-wrapped
   # (Dextrin.Struct.keyed/2's own shape) — distinct from a map's keys.
-  defp render_entry(name, value, depth, opts) when is_binary(name), do: "#{name}: #{render(value, depth, opts)}"
-  defp render_entry(key, value, depth, opts), do: "#{print!(key, opts)} => #{render(value, depth, opts)}"
+  defp render_entry(name, value, depth, opts) when is_binary(name),
+    do: "#{name}: #{render(value, depth, opts)}"
 
-  # `Printer.print/2` returns `{:ok, _} | {:error, _}` (DESIGN.md
-  # §10); `pretty/2`'s own contract is unchanged (a bare `String.t()`,
-  # not part of what was asked when that changed) — so unwrap here,
-  # raising same as it always effectively did for an unencodable value.
+  defp render_entry(key, value, depth, opts),
+    do: "#{print!(key, opts)} => #{render(value, depth, opts)}"
+
+  # `Printer.print/2` returns `{:ok, _} | {:error, _}`; `pretty/2` keeps
+  # its own contract as a bare `String.t()`, so it unwraps here instead,
+  # raising for an unencodable value the same way it always effectively
+  # did before `print/2` gained an explicit error return.
   defp print!(value, opts) do
     case Printer.print(value, opts) do
       {:ok, printed} -> printed

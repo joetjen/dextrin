@@ -8,7 +8,7 @@ defmodule Mix.Tasks.Dextrin.Decode do
   Prints through `Dextrin.Text.Formatter`'s pretty (multi-line) mode by
   default — a CLI decode is a human reading the result, so the
   encoder's own single-line default (correct for `Dextrin.encode/2`'s
-  own API) isn't the right default here (DESIGN.md §12.2).
+  own API) isn't the right default here.
   """
 
   use Mix.Task

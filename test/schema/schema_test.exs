@@ -5,7 +5,7 @@ end
 
 defmodule Dextrin.SchemaTest do
   @moduledoc """
-  End-to-end schema tests (DESIGN.md §4.4): compile a `.dxns` document,
+  End-to-end schema tests: compile a `.dxns` document,
   then decode `.dxn`/`.dxnb` struct values against it, both the happy
   path and every documented violation (required/closed/forbidden).
   """
@@ -46,7 +46,9 @@ defmodule Dextrin.SchemaTest do
     assert {:ok, %{"x" => 1, "y" => 2}} = Dextrin.decode("%Point[1, 2]", registry: registry)
   end
 
-  test "keyed fields may be written in any order — names resolve them, not position", %{registry: registry} do
+  test "keyed fields may be written in any order — names resolve them, not position", %{
+    registry: registry
+  } do
     assert {:ok, %{"x" => 1, "y" => 2}} = Dextrin.decode("%Point{y: 2, x: 1}", registry: registry)
   end
 
@@ -67,27 +69,36 @@ defmodule Dextrin.SchemaTest do
 
   test "optional field may be present", %{registry: registry} do
     assert {:ok, %{"note" => "a gift"}} =
-             Dextrin.decode(~s(%Money{amount: 19.99M, currency: :usd, note: "a gift"}), registry: registry)
+             Dextrin.decode(~s(%Money{amount: 19.99M, currency: :usd, note: "a gift"}),
+               registry: registry
+             )
   end
 
   test "closed schema rejects an undeclared field", %{registry: registry} do
     assert {:error, %Dextrin.Error{}} =
-             Dextrin.decode(~s(%Money{amount: 19.99M, currency: :usd, extra: 1}), registry: registry)
+             Dextrin.decode(~s(%Money{amount: 19.99M, currency: :usd, extra: 1}),
+               registry: registry
+             )
   end
 
-  test "forbidden field is rejected even though the schema is closed with no such declared field", %{
-    registry: registry
-  } do
+  test "forbidden field is rejected even though the schema is closed with no such declared field",
+       %{
+         registry: registry
+       } do
     assert {:error, %Dextrin.Error{}} =
-             Dextrin.decode(~s(%Money{amount: 19.99M, currency: :usd, legacy_amount_cents: 1999}), registry: registry)
+             Dextrin.decode(~s(%Money{amount: 19.99M, currency: :usd, legacy_amount_cents: 1999}),
+               registry: registry
+             )
   end
 
   test "enum constraint rejects a value outside the given literals", %{registry: registry} do
-    assert {:error, %Dextrin.Error{}} = Dextrin.decode(~s(%Money{amount: 19.99M, currency: :gbx}), registry: registry)
+    assert {:error, %Dextrin.Error{}} =
+             Dextrin.decode(~s(%Money{amount: 19.99M, currency: :gbx}), registry: registry)
   end
 
   test "wrong field type is rejected", %{registry: registry} do
-    assert {:error, %Dextrin.Error{}} = Dextrin.decode(~s(%Point{x: "1", y: 2}), registry: registry)
+    assert {:error, %Dextrin.Error{}} =
+             Dextrin.decode(~s(%Point{x: "1", y: 2}), registry: registry)
   end
 
   test "wrong positional field count is rejected", %{registry: registry} do
@@ -108,9 +119,10 @@ defmodule Dextrin.SchemaTest do
     assert {:error, _reason} = Dextrin.Schema.validate(bad, registry, "Point")
   end
 
-  test "a registered materializer produces a nicer decoded shape instead of the generic field map", %{
-    registry: registry
-  } do
+  test "a registered materializer produces a nicer decoded shape instead of the generic field map",
+       %{
+         registry: registry
+       } do
     registry =
       Dextrin.Registry.put_struct_materializer(registry, "Point", fn %{x: x, y: y} ->
         {:ok, %Dextrin.SchemaTest.TestPointStruct{x: x, y: y}}

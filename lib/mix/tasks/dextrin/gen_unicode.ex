@@ -6,11 +6,13 @@ defmodule Mix.Tasks.Dextrin.Gen.Unicode do
   compares its version against the one last processed
   (`priv/unicode/VERSION`), and — if newer — regenerates the
   `IDENT_START`/`IDENT_CONT`/`IDENTIFIER` ranges spliced into
-  `priv/grammar/dxn.aether` (DESIGN.md §5.2/§10).
+  `priv/grammar/dxn.aether` (see `Dextrin.Unicode.RangeGenerator` for
+  the pure text-processing logic this task wraps with file/network I/O).
 
-  This is a deliberate, reviewed action, not something run at build
-  time (DESIGN.md §5.2) — review the resulting diff to
-  `priv/grammar/dxn.aether` before committing.
+  This is a deliberate, reviewed action, never run automatically at
+  build time or gated on by CI — a human invokes this task and reviews
+  the resulting diff to `priv/grammar/dxn.aether` before committing,
+  same as any other dependency version bump.
 
       $ mix dextrin.gen.unicode
       $ mix dextrin.gen.unicode --file /path/to/DerivedCoreProperties.txt

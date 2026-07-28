@@ -2,12 +2,39 @@ defmodule Dextrin.Binary.Encoder do
   @moduledoc """
   `.dxnb` encoder — a recursive walk over CBOR's major types plus a
   fixed tag dispatch table, matching `DXN.md` §2.2's table row order.
-  Hand-rolled rather than a generic CBOR library, for the reasons in
-  DESIGN.md §7.1 (bignum/timestamp precision, private tags).
+
+  Hand-rolled rather than built on a generic CBOR library, because
+  `.dxnb` needs several things no such library is likely to get right
+  by default — each one an integrity concern `DXN.md` §2.2 calls out
+  explicitly: bignums past 64 bits *must* use tag 2/3's two's-complement
+  byte form (a generic encoder more easily defaults to a float, or
+  refuses arbitrary-precision integers outright); timestamps/datetimes
+  *must* use tag 1's integer form, never the float form, which loses
+  microsecond precision at scale; and the private tag block (200–214)
+  plus the value-sharing extension (tags 28/29) aren't things a generic
+  library has any built-in concept of. Given both directions need
+  writing regardless, a direct recursive encoder/decoder pair working
+  over CBOR's major types (0–7) plus a fixed tag table is less code,
+  and less risk, than adapting a general-purpose library to every one
+  of these constraints.
+
+  Envelope (`magic` `version` `cbor_item`, `DXN.md` §2.1) is written
+  once, at `encode/2` itself; everything below that is `encode_item/2`,
+  one recursive function keyed on the Elixir value's own shape.
+
+  Determinism is explicitly not a goal: `DXN.md` doesn't require
+  canonical/deterministic CBOR (no sorted map keys, no shortest-form
+  mandate), and map key order isn't semantically meaningful for DXN's
+  own `map` type either. So this encoder makes reasonable choices
+  (shortest integer form, no forced key sorting) but two encodings of
+  an equal value aren't guaranteed byte-identical —
+  `decode(encode(v)) == v` is the contract, not byte-for-byte
+  reproducibility across runs.
   """
 
   alias Dextrin.Binary.Tags
   alias Dextrin.{Array, Bytes, CustomTag, OrderedMap, Rational, SortedSet, Struct, Uri, Uuid}
+  alias Ichor.Toolkit.Result
 
   # `Dextrin.Tuple` is deliberately not aliased to the bare name `Tuple`
   # — the built-in `Tuple` module (`Tuple.to_list/1`) is used below for
@@ -47,11 +74,12 @@ defmodule Dextrin.Binary.Encoder do
     end
   end
 
-  # ---- value sharing (DXN.md §2.5, DESIGN.md §7.3.1) -------------------------
+  # ---- value sharing (DXN.md §2.5) -------------------------------------------
   #
-  # `share: true` opts in; off by default (§7.4 — a "share: true" and a
+  # `share: true` opts in; off by default — a "share: true" and a
   # "share: false" encoding of the same value are both conformant, just
-  # different sizes).
+  # different sizes, so leaving it off keeps the default encode path a
+  # single straightforward recursive walk with no counting pass.
   #
   # Whether a *given* repeated value is worth sharing is fully
   # calculable, not a heuristic or a guess: tag 28's header is always
@@ -66,12 +94,11 @@ defmodule Dextrin.Binary.Encoder do
   # `shareable?/1` only excludes `nil`/booleans, which are always
   # exactly 1 byte and so provably can never clear that bar regardless
   # of count — kept as a cheap skip, not a correctness boundary). This
-  # also means a long,
-  # frequently-repeated *string* is now correctly shareable too, not
-  # excluded by type the way an earlier version of this design did —
-  # exactly the DXN.md §2.4 string-sharing use case this mechanism was
-  # always meant to subsume (§7.2's "no real case where you'd want the
-  # narrower mechanism but not the general one").
+  # also means a long, frequently-repeated *string* is correctly
+  # shareable too — nothing here excludes strings by type — which is
+  # what lets this one mechanism subsume `DXN.md` §2.4's narrower
+  # string-only sharing: there's no real case where you'd want that
+  # narrower form but not this general one.
   #
   # Uses the process dictionary to thread the occurrence counts and
   # "have I seen this value before, and at what index" through the
@@ -100,13 +127,22 @@ defmodule Dextrin.Binary.Encoder do
   defp shareable_children(list) when is_list(list), do: list
   defp shareable_children(%Dextrin.Tuple{items: items}), do: items
   defp shareable_children(%Array{items: items}), do: Tuple.to_list(items)
-  defp shareable_children(%OrderedMap{pairs: pairs}), do: Enum.flat_map(pairs, fn {k, v} -> [k, v] end)
+
+  defp shareable_children(%OrderedMap{pairs: pairs}),
+    do: Enum.flat_map(pairs, fn {k, v} -> [k, v] end)
+
   defp shareable_children(%MapSet{} = set), do: MapSet.to_list(set)
   defp shareable_children(%SortedSet{items: items}), do: items
-  defp shareable_children(%Struct{fields: {:keyed, pairs}}), do: Enum.map(pairs, fn {_k, v} -> v end)
+
+  defp shareable_children(%Struct{fields: {:keyed, pairs}}),
+    do: Enum.map(pairs, fn {_k, v} -> v end)
+
   defp shareable_children(%Struct{fields: {:positional, items}}), do: items
   defp shareable_children(%CustomTag{value: value}), do: [value]
-  defp shareable_children(%{} = map) when not is_struct(map), do: Enum.flat_map(map, fn {k, v} -> [k, v] end)
+
+  defp shareable_children(%{} = map) when not is_struct(map),
+    do: Enum.flat_map(map, fn {k, v} -> [k, v] end)
+
   defp shareable_children(_), do: []
 
   defp encode_maybe_shared(value, opts) do
@@ -147,8 +183,12 @@ defmodule Dextrin.Binary.Encoder do
   defp encode_item_dispatch(true, _opts), do: {:ok, head(7, 21)}
 
   defp encode_item_dispatch(:nan, _opts), do: {:ok, float_head() <> <<0x7FF8000000000000::64>>}
-  defp encode_item_dispatch(:positive_infinity, _opts), do: {:ok, float_head() <> <<0x7FF0000000000000::64>>}
-  defp encode_item_dispatch(:negative_infinity, _opts), do: {:ok, float_head() <> <<0xFFF0000000000000::64>>}
+
+  defp encode_item_dispatch(:positive_infinity, _opts),
+    do: {:ok, float_head() <> <<0x7FF0000000000000::64>>}
+
+  defp encode_item_dispatch(:negative_infinity, _opts),
+    do: {:ok, float_head() <> <<0xFFF0000000000000::64>>}
 
   defp encode_item_dispatch(i, _opts) when is_integer(i), do: {:ok, encode_integer(i)}
   defp encode_item_dispatch(f, _opts) when is_float(f), do: {:ok, float_head() <> <<f::float>>}
@@ -173,8 +213,11 @@ defmodule Dextrin.Binary.Encoder do
     with {:ok, item} <- encode_item(cp, opts), do: {:ok, tag(Tags.t_char(), item)}
   end
 
-  defp encode_item_dispatch(%Dextrin.Symbol{name: name}, _opts), do: {:ok, tag(Tags.t_symbol(), text(name))}
-  defp encode_item_dispatch(%Dextrin.Keyword{name: name}, _opts), do: {:ok, tag(Tags.t_keyword(), text(name))}
+  defp encode_item_dispatch(%Dextrin.Symbol{name: name}, _opts),
+    do: {:ok, tag(Tags.t_symbol(), text(name))}
+
+  defp encode_item_dispatch(%Dextrin.Keyword{name: name}, _opts),
+    do: {:ok, tag(Tags.t_keyword(), text(name))}
 
   # ---- collections ------------------------------------------------------------
 
@@ -183,11 +226,13 @@ defmodule Dextrin.Binary.Encoder do
   end
 
   defp encode_item_dispatch(%Dextrin.Tuple{items: items}, opts) do
-    with {:ok, encoded} <- encode_all(items, opts), do: {:ok, tag(Tags.t_tuple(), array_of(encoded))}
+    with {:ok, encoded} <- encode_all(items, opts),
+         do: {:ok, tag(Tags.t_tuple(), array_of(encoded))}
   end
 
   defp encode_item_dispatch(%Array{items: items}, opts) do
-    with {:ok, encoded} <- encode_all(Tuple.to_list(items), opts), do: {:ok, tag(Tags.t_array(), array_of(encoded))}
+    with {:ok, encoded} <- encode_all(Tuple.to_list(items), opts),
+         do: {:ok, tag(Tags.t_array(), array_of(encoded))}
   end
 
   defp encode_item_dispatch(%{} = map, opts) when not is_struct(map), do: encode_map(map, opts)
@@ -199,11 +244,13 @@ defmodule Dextrin.Binary.Encoder do
   end
 
   defp encode_item_dispatch(%MapSet{} = set, opts) do
-    with {:ok, items} <- encode_all(MapSet.to_list(set), opts), do: {:ok, tag(Tags.t_set(), array_of(items))}
+    with {:ok, items} <- encode_all(MapSet.to_list(set), opts),
+         do: {:ok, tag(Tags.t_set(), array_of(items))}
   end
 
   defp encode_item_dispatch(%SortedSet{items: items}, opts) do
-    with {:ok, encoded} <- encode_all(items, opts), do: {:ok, tag(Tags.t_sorted_set(), array_of(encoded))}
+    with {:ok, encoded} <- encode_all(items, opts),
+         do: {:ok, tag(Tags.t_sorted_set(), array_of(encoded))}
   end
 
   # ---- struct (opaque only, for now — schema-driven encoding lands with Dextrin.Schema) ----
@@ -213,18 +260,19 @@ defmodule Dextrin.Binary.Encoder do
   end
 
   defp encode_item_dispatch(%Struct{name: name, fields: {:keyed, pairs}}, opts) do
-    # No compiled schema wired in yet (Dextrin.Schema is a later task) —
-    # falls back to the keyed pairs' own iteration order, which is a
-    # real, documented limitation (DESIGN.md §9): an opaque struct with
-    # no schema can't be encoded to .dxnb losslessly regardless, since
-    # the wire form has no field names to consult in the first place.
+    # No schema registered for `name` — falls back to the keyed pairs'
+    # own iteration order. A real, unavoidable limitation: an opaque
+    # struct with no schema can't be encoded to .dxnb losslessly
+    # regardless, since the positional wire form has no field names to
+    # consult in the first place (see `Dextrin.Struct`'s own moduledoc).
     encode_struct(name, Enum.map(pairs, fn {_k, v} -> v end), opts)
   end
 
   # ---- temporal ---------------------------------------------------------------
 
   defp encode_item_dispatch(%Date{} = date, opts) do
-    with {:ok, item} <- encode_item(Date.diff(date, @epoch), opts), do: {:ok, tag(Tags.t_date(), item)}
+    with {:ok, item} <- encode_item(Date.diff(date, @epoch), opts),
+         do: {:ok, tag(Tags.t_date(), item)}
   end
 
   defp encode_item_dispatch(%Time{} = time, opts) do
@@ -285,7 +333,7 @@ defmodule Dextrin.Binary.Encoder do
 
   # Reached only for a struct none of the clauses above recognized —
   # i.e. a genuine application struct, the case `put_tag_encoder/4`
-  # exists for (DESIGN.md §10's custom-tag encode-side gap, closed).
+  # exists for: look it up by module and encode it as that tag instead.
   defp encode_item_dispatch(%module{} = other, opts) do
     with %Dextrin.Registry{} = registry <- Keyword.get(opts, :registry, :none),
          {:ok, {name, encoder}} <- Dextrin.Registry.fetch_tag_encoder(registry, module) do
@@ -294,15 +342,21 @@ defmodule Dextrin.Binary.Encoder do
         {:ok, tag(Tags.t_custom(), array_of([text(name), item]))}
       else
         {:error, reason} ->
-          {:error, Dextrin.Error.binary("tag encoder for #{inspect(module)} (#{name}) failed: #{inspect(reason)}")}
+          {:error,
+           Dextrin.Error.binary(
+             "tag encoder for #{inspect(module)} (#{name}) failed: #{inspect(reason)}"
+           )}
       end
     else
-      _ -> {:error, Dextrin.Error.binary("cannot encode value with no DXN representation: #{inspect(other)}")}
+      _ ->
+        {:error,
+         Dextrin.Error.binary("cannot encode value with no DXN representation: #{inspect(other)}")}
     end
   end
 
   defp encode_item_dispatch(other, _opts) do
-    {:error, Dextrin.Error.binary("cannot encode value with no DXN representation: #{inspect(other)}")}
+    {:error,
+     Dextrin.Error.binary("cannot encode value with no DXN representation: #{inspect(other)}")}
   end
 
   # ---- helpers -------------------------------------------------------------
@@ -315,10 +369,10 @@ defmodule Dextrin.Binary.Encoder do
   end
 
   defp encode_all(values, opts) do
-    Enum.reduce_while(values, {:ok, []}, fn value, {:ok, acc} ->
+    Result.reduce_ok(values, [], fn value, acc ->
       case encode_item(value, opts) do
-        {:ok, item} -> {:cont, {:ok, [item | acc]}}
-        {:error, _} = err -> {:halt, err}
+        {:ok, item} -> {:ok, [item | acc]}
+        {:error, _} = err -> err
       end
     end)
     |> case do
@@ -328,12 +382,10 @@ defmodule Dextrin.Binary.Encoder do
   end
 
   defp encode_pairs(pairs, opts) do
-    Enum.reduce_while(pairs, {:ok, []}, fn {k, v}, {:ok, acc} ->
+    Result.reduce_ok(pairs, [], fn {k, v}, acc ->
       with {:ok, key_item} <- encode_item(k, opts),
            {:ok, val_item} <- encode_item(v, opts) do
-        {:cont, {:ok, [{key_item, val_item} | acc]}}
-      else
-        {:error, _} = err -> {:halt, err}
+        {:ok, [{key_item, val_item} | acc]}
       end
     end)
     |> case do
@@ -399,6 +451,9 @@ defmodule Dextrin.Binary.Encoder do
 
   defp encode_integer(i) when i >= 0 and i <= @bignum_max, do: head(0, i)
   defp encode_integer(i) when i < 0 and i >= @bignum_min, do: head(1, -1 - i)
-  defp encode_integer(i) when i >= 0, do: tag(Tags.t_bignum_pos(), bytes(:binary.encode_unsigned(i)))
+
+  defp encode_integer(i) when i >= 0,
+    do: tag(Tags.t_bignum_pos(), bytes(:binary.encode_unsigned(i)))
+
   defp encode_integer(i), do: tag(Tags.t_bignum_neg(), bytes(:binary.encode_unsigned(-1 - i)))
 end

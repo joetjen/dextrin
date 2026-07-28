@@ -1,7 +1,7 @@
 defmodule Dextrin.Binary.ValueSharingTest do
   @moduledoc """
-  DXN.md §2.5 / DESIGN.md §7.3.1's general value-sharing extension
-  (CBOR tags 28/29) — decode support is spec-mandatory regardless of
+  `DXN.md` §2.5's general value-sharing extension (CBOR tags 28/29) —
+  decode support is spec-mandatory regardless of
   which encoder produced the bytes; encode support is opt-in
   (`share: true`, default `false`).
   """
@@ -32,7 +32,11 @@ defmodule Dextrin.Binary.ValueSharingTest do
   end
 
   test "sharing works nested inside other collections" do
-    value = %{Dextrin.Keyword.new("x") => @repeated, Dextrin.Keyword.new("y") => [@repeated, @repeated]}
+    value = %{
+      Dextrin.Keyword.new("x") => @repeated,
+      Dextrin.Keyword.new("y") => [@repeated, @repeated]
+    }
+
     assert {:ok, shared} = Dextrin.encode_binary(value, share: true)
     assert {:ok, decoded} = Dextrin.decode_binary(shared)
     assert decoded == value
@@ -101,7 +105,11 @@ defmodule Dextrin.Binary.ValueSharingTest do
     end
 
     test "share: true is never larger than share: false, across a range of sizes and counts" do
-      keyed_map = %{Dextrin.Keyword.new("a") => 1, Dextrin.Keyword.new("b") => 2, Dextrin.Keyword.new("c") => 3}
+      keyed_map = %{
+        Dextrin.Keyword.new("a") => 1,
+        Dextrin.Keyword.new("b") => 2,
+        Dextrin.Keyword.new("c") => 3
+      }
 
       samples = [
         List.duplicate([1, 2], 20),

@@ -1,14 +1,35 @@
 defmodule Dextrin do
   @moduledoc """
   Public API for DXN (Data eXchange Notation) — `.dxn` text and
-  `.dxnb` binary, per `DXN.md` (the normative spec) and `DESIGN.md`
-  (this library's implementation plan, §8).
+  `.dxnb` binary, per `DXN.md` (the normative format specification).
 
-  `.dxnb`'s private CBOR tag block (200–214, `DXN.md` §2.3) is not
-  IANA-registered — collision-free only within `dextrin`-produced
-  documents. Don't assume interop with some *other* CBOR-based format
-  that happens to also use a tag in that range; it isn't reserved for
-  DXN outside this library's own output.
+  Four functions, one shared error type (`Dextrin.Error`):
+
+    * `decode/2` / `encode/2` — `.dxn` text.
+    * `decode_binary/2` / `encode_binary/2` — `.dxnb` binary.
+
+  Every DXN type decodes to a plain Elixir value where one exists
+  (integer, float, list, a plain map, ...) and to a small wrapper
+  struct where Elixir has nothing that fits without losing information
+  (`Dextrin.Symbol`, `Dextrin.Tuple`, `Dextrin.OrderedMap`, ...) — see
+  each value module under `Dextrin.Value` for the full list. `symbol`
+  and `keyword` in particular always wrap a `String.t()`, never an
+  Elixir atom: decoding untrusted DXN data can never be used to exhaust
+  the atom table.
+
+  `struct` is schema-dependent: without a compiled `.dxns` schema for a
+  given name it decodes to an opaque `Dextrin.Struct`; with one
+  (`Dextrin.Schema.compile/3`, passed in as `registry:`), field
+  enforcement happens automatically in both decode functions, and a
+  violation is an ordinary `{:error, %Dextrin.Error{}}`, never a raised
+  exception. `encode/2`/`encode_binary/2` validate the other
+  direction the same way, automatically — see `encode/2`'s own doc.
+
+  `.dxnb`'s private CBOR tag block (200–214, mirrored in
+  `Dextrin.Binary.Tags`) is not IANA-registered — collision-free only
+  within `dextrin`-produced documents. Don't assume interop with some
+  *other* CBOR-based format that happens to also use a tag in that
+  range; it isn't reserved for DXN outside this library's own output.
   """
 
   alias Dextrin.Registry
@@ -21,15 +42,24 @@ defmodule Dextrin do
     registry = Keyword.get(opts, :registry, Registry.new())
 
     case Dextrin.Text.Grammar.run(text, registry) do
-      {:ok, value} -> {:ok, Dextrin.Schema.Validated.strip(value)}
-      {:error, %Ichor.Error{} = error} -> {:error, Dextrin.Error.from_ichor(error)}
-      {:error, errors} when is_list(errors) -> {:error, Enum.map(errors, &Dextrin.Error.from_ichor/1)}
+      {:ok, value} ->
+        {:ok, Dextrin.Schema.Validated.strip(value)}
+
+      {:error, %Ichor.Error{} = error} ->
+        {:error, Dextrin.Error.from_ichor(error)}
+
+      {:error, errors} when is_list(errors) ->
+        {:error, Enum.map(errors, &Dextrin.Error.from_ichor/1)}
     end
   end
 
   @doc """
-  Encodes a value back to `.dxn` text (single-line, minimal
-  whitespace — DESIGN.md §8).
+  Encodes a value back to `.dxn` text.
+
+  A printer, not a formatter: single-line, minimal-whitespace output,
+  with no line-wrapping or indentation policy — use
+  `Dextrin.Text.Formatter.pretty/2` for multi-line, human-readable
+  output (e.g. for `mix dextrin.format`).
 
   Automatically validates every `Dextrin.Struct` or registered
   application struct found anywhere in `value` against its own schema
@@ -68,6 +98,12 @@ defmodule Dextrin do
     end
   end
 
+  # Two independent checks, both must pass: the automatic whole-tree
+  # walk (every named struct anywhere in `value`, driven by whether a
+  # schema is registered for its name) and, only if `schema:` was
+  # given, a check of `value` itself against that one named schema —
+  # the only way to validate a nameless top-level map or unregistered
+  # struct, which the whole-tree walk has nothing to key off of.
   defp maybe_validate_encode(value, opts) do
     registry = Keyword.get(opts, :registry, Registry.new())
 
@@ -80,8 +116,12 @@ defmodule Dextrin do
     case Keyword.fetch(opts, :schema) do
       {:ok, schema_name} ->
         case Dextrin.Schema.validate_encode(value, registry, schema_name) do
-          :ok -> :ok
-          {:error, reason} -> {:error, Dextrin.Error.action("value violates schema #{inspect(schema_name)}: #{reason}")}
+          :ok ->
+            :ok
+
+          {:error, reason} ->
+            {:error,
+             Dextrin.Error.action("value violates schema #{inspect(schema_name)}: #{reason}")}
         end
 
       :error ->

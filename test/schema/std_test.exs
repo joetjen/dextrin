@@ -1,8 +1,8 @@
 defmodule Dextrin.Schema.StdTest do
   @moduledoc """
   `Dextrin.Schema.Std` — the standard library of common named types
-  (`priv/schema/std.dxns`, DESIGN.md §4.4.1), opt-in via
-  `Std.registry/1` as `compile/3`'s `base_registry`.
+  (`priv/schema/std.dxns`), opt-in via `Std.registry/1` as
+  `compile/3`'s `base_registry`.
   """
 
   use ExUnit.Case, async: true
@@ -28,27 +28,57 @@ defmodule Dextrin.Schema.StdTest do
 
   test "a value satisfying every standard type decodes cleanly", %{registry: registry} do
     assert {:ok, %{"count" => 3, "name" => "x", "ratio" => 50.0, "tags" => [1]}} =
-             Dextrin.decode(~s(%Widget{count: 3, name: "x", ratio: 50.0, tags: [1]}), registry: registry)
+             Dextrin.decode(~s(%Widget{count: 3, name: "x", ratio: 50.0, tags: [1]}),
+               registry: registry
+             )
   end
 
   test "PositiveInteger rejects zero and negative integers", %{registry: registry} do
-    assert {:error, _} = Dextrin.decode(~s(%Widget{count: 0, name: "x", ratio: 1.0, tags: [1]}), registry: registry)
-    assert {:error, _} = Dextrin.decode(~s(%Widget{count: -1, name: "x", ratio: 1.0, tags: [1]}), registry: registry)
+    assert {:error, _} =
+             Dextrin.decode(~s(%Widget{count: 0, name: "x", ratio: 1.0, tags: [1]}),
+               registry: registry
+             )
+
+    assert {:error, _} =
+             Dextrin.decode(~s(%Widget{count: -1, name: "x", ratio: 1.0, tags: [1]}),
+               registry: registry
+             )
   end
 
   test "NonEmptyString rejects the empty string", %{registry: registry} do
-    assert {:error, _} = Dextrin.decode(~s(%Widget{count: 1, name: "", ratio: 1.0, tags: [1]}), registry: registry)
+    assert {:error, _} =
+             Dextrin.decode(~s(%Widget{count: 1, name: "", ratio: 1.0, tags: [1]}),
+               registry: registry
+             )
   end
 
   test "Percentage rejects values outside 0.0..100.0", %{registry: registry} do
-    assert {:error, _} = Dextrin.decode(~s(%Widget{count: 1, name: "x", ratio: -0.1, tags: [1]}), registry: registry)
-    assert {:error, _} = Dextrin.decode(~s(%Widget{count: 1, name: "x", ratio: 100.1, tags: [1]}), registry: registry)
-    assert {:ok, _} = Dextrin.decode(~s(%Widget{count: 1, name: "x", ratio: 0.0, tags: [1]}), registry: registry)
-    assert {:ok, _} = Dextrin.decode(~s(%Widget{count: 1, name: "x", ratio: 100.0, tags: [1]}), registry: registry)
+    assert {:error, _} =
+             Dextrin.decode(~s(%Widget{count: 1, name: "x", ratio: -0.1, tags: [1]}),
+               registry: registry
+             )
+
+    assert {:error, _} =
+             Dextrin.decode(~s(%Widget{count: 1, name: "x", ratio: 100.1, tags: [1]}),
+               registry: registry
+             )
+
+    assert {:ok, _} =
+             Dextrin.decode(~s(%Widget{count: 1, name: "x", ratio: 0.0, tags: [1]}),
+               registry: registry
+             )
+
+    assert {:ok, _} =
+             Dextrin.decode(~s(%Widget{count: 1, name: "x", ratio: 100.0, tags: [1]}),
+               registry: registry
+             )
   end
 
   test "NonEmptyList rejects an empty list", %{registry: registry} do
-    assert {:error, _} = Dextrin.decode(~s(%Widget{count: 1, name: "x", ratio: 1.0, tags: []}), registry: registry)
+    assert {:error, _} =
+             Dextrin.decode(~s(%Widget{count: 1, name: "x", ratio: 1.0, tags: []}),
+               registry: registry
+             )
   end
 
   test "the remaining standard types are registered and behave as documented" do

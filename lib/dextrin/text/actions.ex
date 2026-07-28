@@ -1,13 +1,26 @@
 defmodule Dextrin.Text.Actions do
   @moduledoc """
-  `Ichor.Actions` implementation for `Dextrin.Text.Grammar`
-  (DESIGN.md §6). `context` is a `Dextrin.Registry.t()` — text parsing
-  never mutates it.
+  `Ichor.Actions` implementation for `Dextrin.Text.Grammar` — turns
+  the raw capture tree `Grammar.Native` produces while matching
+  `priv/grammar/dxn.aether` into actual `Dextrin.Value.t()` values.
+  `context` is a `Dextrin.Registry.t()` — text parsing only ever reads
+  it (to resolve struct schemas and custom tags), never mutates it.
+
+  `handle_token/3` covers every scalar (numbers via
+  `String.to_integer`/`Float.parse`/`Decimal.new`/a manual rational
+  split; strings/chars through the shared escape-decoding in
+  `Dextrin.Text.Escapes` so string bodies and char literals never
+  duplicate escape logic); `handle_rule/3` covers every collection and
+  `tag_form` (a dispatch table: built-in tag names from `DXN.md` §1.3
+  go to a hardcoded handler in `dispatch_tag/3`, anything else falls
+  through to a `Dextrin.Registry` lookup, then to `Dextrin.CustomTag`
+  as the last resort).
   """
 
   @behaviour Ichor.Actions
 
   alias Dextrin.Text.Escapes
+  alias Ichor.Toolkit.Result
 
   alias Dextrin.{
     Array,
@@ -110,8 +123,11 @@ defmodule Dextrin.Text.Actions do
     inner = text |> String.trim_leading("~D[") |> String.trim_trailing("]")
 
     case Date.from_iso8601(inner) do
-      {:ok, date} -> {:ok, date}
-      {:error, reason} -> {:error, action_error("invalid date #{inspect(inner)}: #{inspect(reason)}")}
+      {:ok, date} ->
+        {:ok, date}
+
+      {:error, reason} ->
+        {:error, action_error("invalid date #{inspect(inner)}: #{inspect(reason)}")}
     end
   end
 
@@ -119,8 +135,11 @@ defmodule Dextrin.Text.Actions do
     inner = text |> String.trim_leading("~T[") |> String.trim_trailing("]")
 
     case Time.from_iso8601(inner) do
-      {:ok, time} -> {:ok, normalize_microsecond(time)}
-      {:error, reason} -> {:error, action_error("invalid time #{inspect(inner)}: #{inspect(reason)}")}
+      {:ok, time} ->
+        {:ok, normalize_microsecond(time)}
+
+      {:error, reason} ->
+        {:error, action_error("invalid time #{inspect(inner)}: #{inspect(reason)}")}
     end
   end
 
@@ -144,8 +163,11 @@ defmodule Dextrin.Text.Actions do
         # string form triggers a deprecation warning for "r" (Elixir
         # prefers /U), even though "r" is DXN.md's own valid flag letter.
         case Regex.compile(pattern, Dextrin.Binary.Tags.regex_flags_to_opts(flags)) do
-          {:ok, regex} -> {:ok, regex}
-          {:error, reason} -> {:error, action_error("invalid regex #{inspect(text)}: #{inspect(reason)}")}
+          {:ok, regex} ->
+            {:ok, regex}
+
+          {:error, reason} ->
+            {:error, action_error("invalid regex #{inspect(text)}: #{inspect(reason)}")}
         end
 
       nil ->
@@ -272,16 +294,7 @@ defmodule Dextrin.Text.Actions do
   end
 
   defp eval_list(caps, ctx) when is_list(caps) do
-    Enum.reduce_while(caps, {:ok, [], ctx}, fn cap, {:ok, acc, ctx} ->
-      case cap.eval.(ctx) do
-        {:ok, value, ctx} -> {:cont, {:ok, [value | acc], ctx}}
-        {:error, _} = err -> {:halt, err}
-      end
-    end)
-    |> case do
-      {:ok, acc, ctx} -> {:ok, Enum.reverse(acc), ctx}
-      {:error, _} = err -> err
-    end
+    Result.map_ok(caps, ctx, fn cap, ctx -> cap.eval.(ctx) end)
   end
 
   # A single (non-list) capture can arrive unwrapped when its
@@ -291,10 +304,14 @@ defmodule Dextrin.Text.Actions do
   defp eval_list(cap, ctx), do: eval_list([cap], ctx)
 
   defp struct_field_names(pairs) do
-    Enum.reduce_while(pairs, {:ok, []}, fn {key, val}, {:ok, acc} ->
+    Result.reduce_ok(pairs, [], fn {key, val}, acc ->
       case field_name(key) do
-        {:ok, name} -> {:cont, {:ok, [{name, val} | acc]}}
-        :error -> {:halt, {:error, action_error("struct field name must be an identifier or string, got #{inspect(key)}")}}
+        {:ok, name} ->
+          {:ok, [{name, val} | acc]}
+
+        :error ->
+          {:error,
+           action_error("struct field name must be an identifier or string, got #{inspect(key)}")}
       end
     end)
     |> case do
@@ -321,10 +338,13 @@ defmodule Dextrin.Text.Actions do
 
             # Fail-fast, decode-time enforcement — a schema violation
             # is an ordinary decode error, same channel as bad syntax,
-            # with no lenient escape hatch (DESIGN.md §4.4.5).
+            # with no lenient escape hatch to get the value anyway.
             case Dextrin.Schema.Validator.materialize(compiled, fields, materializer, registry) do
-              {:ok, materialized} -> {:ok, materialized, registry}
-              {:error, reason} -> {:error, action_error("struct #{inspect(name)} violates its schema: #{reason}")}
+              {:ok, materialized} ->
+                {:ok, materialized, registry}
+
+              {:error, reason} ->
+                {:error, action_error("struct #{inspect(name)} violates its schema: #{reason}")}
             end
 
           {:unknown, registry} ->
@@ -341,10 +361,17 @@ defmodule Dextrin.Text.Actions do
 
   defp decode_char_escape("\\" <> rest) do
     case Escapes.decode_escape(rest) do
-      {:ok, <<cp::utf8>>, ""} -> {:ok, Char.new(cp)}
-      {:ok, _multi, ""} -> {:error, action_error("char escape must decode to exactly one codepoint")}
-      {:ok, _, _leftover} -> {:error, action_error("trailing characters after char escape")}
-      {:error, reason} -> {:error, action_error("invalid char escape: #{reason}")}
+      {:ok, <<cp::utf8>>, ""} ->
+        {:ok, Char.new(cp)}
+
+      {:ok, _multi, ""} ->
+        {:error, action_error("char escape must decode to exactly one codepoint")}
+
+      {:ok, _, _leftover} ->
+        {:error, action_error("trailing characters after char escape")}
+
+      {:error, reason} ->
+        {:error, action_error("invalid char escape: #{reason}")}
     end
   end
 
@@ -421,7 +448,8 @@ defmodule Dextrin.Text.Actions do
           {:ok, decoded, ctx}
         else
           :error ->
-            with {:ok, inner, ctx} <- value_cap.eval.(ctx), do: {:ok, CustomTag.new(name, inner), ctx}
+            with {:ok, inner, ctx} <- value_cap.eval.(ctx),
+                 do: {:ok, CustomTag.new(name, inner), ctx}
 
           {:error, _} = err ->
             err
@@ -438,20 +466,22 @@ defmodule Dextrin.Text.Actions do
   # would destroy exactly the information `@ordered` exists to keep.
   # `Ichor.evaluate_node/3` lets us re-enter the parse tree for each
   # map_entry directly, bypassing map_lit's own (order-discarding)
-  # handler (DESIGN.md's discussion of `Dextrin.OrderedMap`, §4.4.2).
+  # handler, so pair order in the source text survives into
+  # `Dextrin.OrderedMap.pairs`.
   defp eval_ordered_map(value_cap, ctx) do
     case value_cap.node do
-      {:rule, :value, %{value_body: {:rule, :value_body, %{map_lit: {:rule, :map_lit, %{map_entry: raw_entries}}}}}} ->
+      {:rule, :value,
+       %{
+         value_body:
+           {:rule, :value_body, %{map_lit: {:rule, :map_lit, %{map_entry: raw_entries}}}}
+       }} ->
         raw_entries
         |> List.wrap()
-        |> Enum.reduce_while({:ok, [], ctx}, fn raw_entry, {:ok, acc, ctx} ->
-          case Ichor.evaluate_node(raw_entry, __MODULE__, ctx) do
-            {:ok, pair, ctx} -> {:cont, {:ok, [pair | acc], ctx}}
-            {:error, _} = err -> {:halt, err}
-          end
+        |> Result.map_ok(ctx, fn raw_entry, ctx ->
+          Ichor.evaluate_node(raw_entry, __MODULE__, ctx)
         end)
         |> case do
-          {:ok, acc, ctx} -> {:ok, OrderedMap.new(Enum.reverse(acc)), ctx}
+          {:ok, pairs, ctx} -> {:ok, OrderedMap.new(pairs), ctx}
           {:error, _} = err -> err
         end
 
@@ -462,7 +492,11 @@ defmodule Dextrin.Text.Actions do
 
   defp from_elixir_duration(%Duration{} = d) do
     {micro, precision} = d.microsecond || {0, 0}
-    total_micro = if d.second == 0 and micro == 0 and precision == 0, do: nil, else: d.second * 1_000_000 + micro
+
+    total_micro =
+      if d.second == 0 and micro == 0 and precision == 0,
+        do: nil,
+        else: d.second * 1_000_000 + micro
 
     %Dextrin.Duration{
       years: zero_to_nil(d.year),

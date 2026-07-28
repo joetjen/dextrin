@@ -1,25 +1,27 @@
 defmodule Dextrin.Schema.FileResolver do
   @moduledoc """
-  An optional convenience `struct_resolver` (DESIGN.md §4.3) resolving
-  `Namespace/Name` references to `.dxns` files on disk.
+  An optional convenience `struct_resolver` resolving `Namespace/Name`
+  references to `.dxns` files on disk.
 
-  This is *one* reasonable, swappable answer to DESIGN.md §4.4.6/§10's
-  "automatically resolving a bare `Namespace/Name` to a file path is
-  real, undesigned policy work" — not a mandated convention baked into
-  `Dextrin.Registry`/`Dextrin.Schema` itself. Anyone with a different
-  convention in mind writes their own `struct_resolver` function
-  directly against `put_resolver/2`; this module exists only because
-  the convention below is a common, unsurprising default, not because
-  it's the only correct one.
+  Composing multiple compiled schemas into one registry needs no
+  special mechanism at all — `Dextrin.Schema.compile/3`'s
+  `base_registry` parameter threads across repeated calls. What
+  genuinely needs a policy decision is *automatically* resolving a
+  bare `Namespace/Name` reference to a file path, and this module is
+  *one* reasonable, swappable answer to that — not a mandated
+  convention baked into `Dextrin.Registry`/`Dextrin.Schema` itself.
+  Anyone with a different convention in mind writes their own
+  `struct_resolver` function directly against `put_resolver/2`; this
+  module exists only because the convention below is a common,
+  unsurprising default, not because it's the only correct one.
 
   **Convention**: `Namespace/Name` resolves to `<search_path>/Namespace.dxns`,
   read for the specific entry named `Name` — a `.dxns` file is already
-  a map of possibly-many schema names (DESIGN.md §4.4), so "Namespace"
-  names the *file*, "Name" one schema defined inside it. A bare
-  reference with no `/` (`Name`) resolves to `<search_path>/Name.dxns`,
-  read for the entry also named `Name` — the same rule, just with the
-  file and the entry sharing one name when there's no namespace to
-  separate them.
+  a map of possibly-many schema names, so "Namespace" names the
+  *file*, "Name" one schema defined inside it. A bare reference with
+  no `/` (`Name`) resolves to `<search_path>/Name.dxns`, read for the
+  entry also named `Name` — the same rule, just with the file and the
+  entry sharing one name when there's no namespace to separate them.
   """
 
   @doc """

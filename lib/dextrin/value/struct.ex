@@ -8,9 +8,12 @@ defmodule Dextrin.Struct do
   single common one — `.dxn`'s keyed literal form carries field
   *names*; `.dxnb`'s wire form is always positional (DXN.md §2.1) and
   never carries names at all. Without a schema there is no way to
-  recover one shape from the other, so `Dextrin.Struct` says which
-  shape it actually is rather than pretend they're interchangeable
-  (DESIGN.md §9's "cross-format equivalence" note).
+  recover one shape from the other (a positional `.dxnb` struct has no
+  names to reconstruct), so `Dextrin.Struct` says which shape it
+  actually is rather than pretend they're interchangeable. This is
+  also why an opaque struct decoded from `.dxnb` can't be
+  cross-checked against the same struct decoded from `.dxn` without a
+  schema in hand — there's nothing to compare field-by-field yet.
   """
 
   @type fields :: {:keyed, [{String.t(), term()}]} | {:positional, [term()]}

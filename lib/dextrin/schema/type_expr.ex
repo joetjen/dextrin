@@ -1,12 +1,32 @@
 defmodule Dextrin.Schema.TypeExpr do
   @moduledoc """
-  Internal, compiled representation of a `.dxns` type expression
-  (DESIGN.md §4.4.1's 13-form vocabulary) — what
-  `Dextrin.Schema.Compiler` turns a parsed `.dxns` value into, and
-  what `matches?/2` below checks a decoded value against.
+  Internal, compiled representation of a `.dxns` type expression — the
+  13-form vocabulary (`any`, `primitive`, `reference`, `list-of`,
+  `set-of`, `tuple-of`, `map-of`, `enum`, `one-of`, `all-of`,
+  `nilable`, `refine`, `struct`) `Dextrin.Schema.Compiler` turns a
+  parsed `.dxns` value into, and what `matches?/2` below checks a
+  decoded value against. This vocabulary is fixed, not extensible from
+  outside an actual library change — what schema *authors* extend
+  instead is composing these forms into a reusable named type (see
+  `Dextrin.Schema.Compiler`'s own moduledoc), which needs no new form
+  at all.
   """
 
-  alias Dextrin.{Array, Bytes, Char, Duration, Keyword, OrderedMap, Rational, SortedSet, Symbol, Tuple, Uri, Uuid}
+  alias Dextrin.{
+    Array,
+    Bytes,
+    Char,
+    Duration,
+    Keyword,
+    OrderedMap,
+    Rational,
+    SortedSet,
+    Symbol,
+    Tuple,
+    Uri,
+    Uuid
+  }
+
   alias Dextrin.Schema.Validated
 
   @type t ::
@@ -26,8 +46,8 @@ defmodule Dextrin.Schema.TypeExpr do
   @doc """
   Whether `value` matches `type` — shared by both decode
   (`Dextrin.Schema.Validator.materialize/4`) and encode-time
-  validation (DESIGN.md §10/§12): the same recursive check, the same
-  function, for both directions.
+  validation (`Dextrin.Schema.Validator.validate_for_encode/3`): the
+  same recursive check, the same function, for both directions.
 
   `{:reference, name}` checks the *originating schema's* name, not
   the value's own shape — which is how it correctly rejects a
@@ -38,8 +58,8 @@ defmodule Dextrin.Schema.TypeExpr do
   -time validation alike) carries it via `Validated` — `materialize/4`
   wraps every result in one regardless of materializer shape, and
   encode-time validation wraps every recognized struct the same way
-  before checking it (`Dextrin.Schema.Validator.wrap_and_check/2`),
-  specifically so this one function can check both without needing
+  before checking it (`Dextrin.Schema.Validator`'s internal
+  `wrap_and_check` helper), specifically so this one function can check both without needing
   two implementations. The third, encode-only source: `registry`
   (`nil` for decode, which never needs it) lets a *real, unwrapped*
   application struct's `__struct__` be checked against whatever module
@@ -52,10 +72,15 @@ defmodule Dextrin.Schema.TypeExpr do
   def matches?(type, value, registry \\ nil)
 
   def matches?(:any, _value, _registry), do: true
-  def matches?({:reference, name}, %Dextrin.Struct{name: struct_name}, _registry), do: struct_name == name
-  def matches?({:reference, name}, %Validated{name: validated_name}, _registry), do: validated_name == name
 
-  def matches?({:reference, name}, value, registry) when not is_nil(registry) and is_struct(value) do
+  def matches?({:reference, name}, %Dextrin.Struct{name: struct_name}, _registry),
+    do: struct_name == name
+
+  def matches?({:reference, name}, %Validated{name: validated_name}, _registry),
+    do: validated_name == name
+
+  def matches?({:reference, name}, value, registry)
+      when not is_nil(registry) and is_struct(value) do
     case Dextrin.Registry.fetch_struct_module(registry, name) do
       {:ok, module} -> value.__struct__ == module
       :error -> true
@@ -79,21 +104,28 @@ defmodule Dextrin.Schema.TypeExpr do
   def matches?({:set_of, _}, _value, _registry), do: false
 
   def matches?({:tuple_of, types}, %Tuple{items: items}, registry) do
-    length(types) == length(items) and Enum.all?(Enum.zip(types, items), fn {t, v} -> matches?(t, v, registry) end)
+    length(types) == length(items) and
+      Enum.all?(Enum.zip(types, items), fn {t, v} -> matches?(t, v, registry) end)
   end
 
   def matches?({:tuple_of, _}, _value, _registry), do: false
 
-  def matches?({:map_of, key_type, val_type}, value, registry) when is_map(value) and not is_struct(value) do
-    Enum.all?(value, fn {k, v} -> matches?(key_type, k, registry) and matches?(val_type, v, registry) end)
+  def matches?({:map_of, key_type, val_type}, value, registry)
+      when is_map(value) and not is_struct(value) do
+    Enum.all?(value, fn {k, v} ->
+      matches?(key_type, k, registry) and matches?(val_type, v, registry)
+    end)
   end
 
   def matches?({:map_of, _, _}, _value, _registry), do: false
 
   def matches?({:enum, literals}, value, _registry), do: value in literals
 
-  def matches?({:one_of, types}, value, registry), do: Enum.any?(types, &matches?(&1, value, registry))
-  def matches?({:all_of, types}, value, registry), do: Enum.all?(types, &matches?(&1, value, registry))
+  def matches?({:one_of, types}, value, registry),
+    do: Enum.any?(types, &matches?(&1, value, registry))
+
+  def matches?({:all_of, types}, value, registry),
+    do: Enum.all?(types, &matches?(&1, value, registry))
 
   def matches?({:nilable, _type}, nil, _registry), do: true
   def matches?({:nilable, type}, value, registry), do: matches?(type, value, registry)
@@ -107,7 +139,10 @@ defmodule Dextrin.Schema.TypeExpr do
   defp primitive_matches?("nil", value), do: is_nil(value)
   defp primitive_matches?("boolean", value), do: is_boolean(value)
   defp primitive_matches?("integer", value), do: is_integer(value)
-  defp primitive_matches?("float", value), do: is_float(value) or value in [:nan, :positive_infinity, :negative_infinity]
+
+  defp primitive_matches?("float", value),
+    do: is_float(value) or value in [:nan, :positive_infinity, :negative_infinity]
+
   defp primitive_matches?("decimal", value), do: match?(%Decimal{}, value)
   defp primitive_matches?("rational", value), do: match?(%Rational{}, value)
   defp primitive_matches?("string", value), do: is_binary(value)
@@ -123,7 +158,10 @@ defmodule Dextrin.Schema.TypeExpr do
   defp primitive_matches?("array", value), do: match?(%Array{}, value)
   defp primitive_matches?("date", value), do: match?(%Date{}, value)
   defp primitive_matches?("time", value), do: match?(%Time{}, value)
-  defp primitive_matches?("timestamp", value), do: match?(%DateTime{utc_offset: 0, std_offset: 0}, value)
+
+  defp primitive_matches?("timestamp", value),
+    do: match?(%DateTime{utc_offset: 0, std_offset: 0}, value)
+
   defp primitive_matches?("datetime", %DateTime{utc_offset: 0, std_offset: 0}), do: false
   defp primitive_matches?("datetime", value), do: match?(%DateTime{}, value)
   defp primitive_matches?("duration", value), do: match?(%Duration{}, value)
@@ -133,7 +171,7 @@ defmodule Dextrin.Schema.TypeExpr do
   defp primitive_matches?("regex", value), do: match?(%Regex{}, value)
   defp primitive_matches?(_name, _value), do: false
 
-  # ---- refine constraints (DESIGN.md §4.4.3) ---------------------------------
+  # ---- refine constraints -----------------------------------------------------
 
   defp satisfies_constraints?(value, constraints) do
     Enum.all?(constraints, fn {key, arg} -> satisfies_constraint?(key, arg, value) end)
@@ -143,7 +181,10 @@ defmodule Dextrin.Schema.TypeExpr do
   defp satisfies_constraint?("max", max, value), do: to_number(value) <= to_number(max)
   defp satisfies_constraint?("exclusive-min", min, value), do: to_number(value) > to_number(min)
   defp satisfies_constraint?("exclusive-max", max, value), do: to_number(value) < to_number(max)
-  defp satisfies_constraint?("multiple-of", n, value), do: rem_zero?(to_number(value), to_number(n))
+
+  defp satisfies_constraint?("multiple-of", n, value),
+    do: rem_zero?(to_number(value), to_number(n))
+
   defp satisfies_constraint?("min-length", n, value), do: String.length(value) >= n
   defp satisfies_constraint?("max-length", n, value), do: String.length(value) <= n
   defp satisfies_constraint?("pattern", %Regex{} = re, value), do: Regex.match?(re, value)

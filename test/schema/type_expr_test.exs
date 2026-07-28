@@ -1,10 +1,9 @@
 defmodule Dextrin.Schema.TypeExprTest do
   @moduledoc """
-  Exercises all 13 `type_expr` forms (DESIGN.md §4.4.1) and all 10
-  `refine` constraints (§4.4.3), each with a passing and a failing
-  value — the exact coverage DESIGN.md §9's testing strategy calls
-  for, implemented in `Dextrin.Schema.TypeExpr`/`Compiler` but never
-  actually exercised by a test until now.
+  Exercises all 13 `type_expr` forms and all 10 `refine` constraints,
+  each with a passing and a failing value — coverage implemented in
+  `Dextrin.Schema.TypeExpr`/`Compiler` but never actually exercised by
+  a test until now.
   """
 
   use ExUnit.Case, async: true

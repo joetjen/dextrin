@@ -13,7 +13,8 @@ defmodule Mix.Tasks.Dextrin.Format do
   lexer discards them as trivia before the parser (and therefore any
   value this formatter could reprint) ever sees them. There is no mode
   that preserves them; that would need a second, independent
-  re-lexing pipeline this design doesn't have (DESIGN.md §12.4).
+  re-lexing pipeline this library doesn't have (see
+  `Dextrin.Text.Formatter`'s own moduledoc).
   """
 
   use Mix.Task
@@ -51,11 +52,14 @@ defmodule Mix.Tasks.Dextrin.Format do
     end
   end
 
-  defp render(other, _value), do: Mix.raise("unrecognized --mode #{inspect(other)} — expected \"pretty\" or \"condense\"")
+  defp render(other, _value),
+    do: Mix.raise("unrecognized --mode #{inspect(other)} — expected \"pretty\" or \"condense\"")
 
   defp write_output(text, _path, in_place) when in_place != true, do: Mix.shell().info(text)
   defp write_output(text, path, true), do: File.write!(path, text <> "\n")
 
-  defp format_error(errors) when is_list(errors), do: Enum.map_join(errors, "\n", &Dextrin.Error.format/1)
+  defp format_error(errors) when is_list(errors),
+    do: Enum.map_join(errors, "\n", &Dextrin.Error.format/1)
+
   defp format_error(error), do: Dextrin.Error.format(error)
 end

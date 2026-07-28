@@ -1,9 +1,9 @@
 defmodule Dextrin.CustomTagRoundtripTest do
   @moduledoc """
   `Dextrin.Registry.put_tag_encoder/4` closes the custom-tag
-  encode-side gap DESIGN.md §10 tracked as deliberately deferred: a
-  value decoded via `put_tag/3` into an application struct now has a
-  defined way back to `@name value`, symmetric across both the text
+  encode-side gap `put_tag/3` alone leaves open: a value decoded via
+  `put_tag/3` into an application struct now has a defined way back to
+  `@name value`, symmetric across both the text
   (`Dextrin.encode/2`, `Dextrin.Text.Formatter.pretty/2`) and binary
   (`Dextrin.encode_binary/2`) pipelines.
   """
@@ -44,8 +44,12 @@ defmodule Dextrin.CustomTagRoundtripTest do
     assert {:ok, ^decoded} = Dextrin.decode_binary(bin, registry: registry)
   end
 
-  test "Dextrin.Text.Formatter.pretty/2 also consults the registry", %{registry: registry, decoded: decoded} do
-    assert Dextrin.Text.Formatter.pretty(decoded, registry: registry) == "@my-app/money {19.99M :usd}"
+  test "Dextrin.Text.Formatter.pretty/2 also consults the registry", %{
+    registry: registry,
+    decoded: decoded
+  } do
+    assert Dextrin.Text.Formatter.pretty(decoded, registry: registry) ==
+             "@my-app/money {19.99M :usd}"
   end
 
   test "encode_binary/2 without a registry fails clearly instead of crashing", %{decoded: decoded} do

@@ -1,25 +1,33 @@
 defmodule Dextrin.Schema.Compiler do
   @moduledoc """
-  Compiles a parsed `.dxns` document (an ordinary decoded DXN value,
-  DESIGN.md §4.4) into `Dextrin.Schema.Compiled` entries.
+  Compiles a parsed `.dxns` document (an ordinary decoded DXN value —
+  a `.dxns` file is valid `.dxn`, no new grammar; what makes it a
+  *schema* document is purely the shape of the value it parses to: a
+  map from name to type expression) into `Dextrin.Schema.Compiled`
+  entries.
 
   `%schema{}`/`%field{}` are recognized here directly, as
   `Dextrin.Struct{name: "schema" | "field"}` opaque shapes straight out
   of `Dextrin.decode/1` — they're never looked up in a registry, the
   same way built-in tags are recognized by name in
-  `Dextrin.Text.Actions` rather than registered (§4.4's bootstrapping
-  note: parsing `.dxns` can't itself depend on a compiled schema).
+  `Dextrin.Text.Actions` rather than registered. This sidesteps an
+  obvious bootstrapping question (doesn't parsing a `.dxns` file need
+  a schema for its own `schema`/`field` structs?) the same way JSON
+  Schema's own vocabulary is fixed tooling knowledge rather than
+  itself validated against a schema.
 
   An entry whose value *isn't* a `%schema{}` is a **named type**
-  (DESIGN.md §4.4.1) instead: a reusable name for some combination of
-  the fixed type_expr vocabulary, e.g. `PositiveInt: {:refine :integer
-  {min: 1}}`. Purely data — no Elixir code, no registry callback — so
-  any conformant reader in any language can resolve it the same way it
-  already resolves `refine`/`list-of`/etc.
+  instead: a reusable name for some combination of the fixed type_expr
+  vocabulary, e.g. `PositiveInt: {:refine :integer {min: 1}}` — the
+  same move Clojure's Malli makes with `[:map [:x :int]]`-style plain
+  data instead of a bespoke schema DSL. Purely data — no Elixir code,
+  no registry callback — so any conformant reader in any language can
+  resolve it the same way it already resolves `refine`/`list-of`/etc.
   """
 
   alias Dextrin.{Keyword, OrderedMap, Registry, Struct, Symbol, Tuple}
   alias Dextrin.Schema.{Compiled, Field}
+  alias Ichor.Toolkit.Result
 
   @primitives ~w(nil boolean integer float decimal rational string char symbol keyword
                  list tuple map ordered-map set sorted-set array
@@ -28,10 +36,9 @@ defmodule Dextrin.Schema.Compiler do
   @doc """
   Compiles every entry of a decoded `.dxns` document into
   `base_registry` — a struct schema for each `%schema{}` entry, a
-  named type_expr (§4.4.1) for every other entry. `predicates`
-  resolves `refine-fn:` names (DESIGN.md §4.4.4) — a plain map, not
-  the struct registry itself, since a refine-fn is a validity check,
-  not a decoder.
+  named type_expr for every other entry. `predicates` resolves
+  `refine-fn:` names — a plain map, not the struct registry itself,
+  since a refine-fn is a validity check, not a decoder.
 
   Named types defined in *this* document may reference any type
   already known to `base_registry` (from an earlier `compile/3` call),
@@ -45,16 +52,18 @@ defmodule Dextrin.Schema.Compiler do
           {:ok, Dextrin.Registry.t()} | {:error, term()}
   def compile(schema_doc, base_registry, predicates \\ %{}) when is_map(schema_doc) do
     named_entries = Enum.map(schema_doc, fn {k, v} -> {entry_name(k), v} end)
-    {schema_entries, alias_entries} = Enum.split_with(named_entries, fn {_name, v} -> match?(%Struct{name: "schema"}, v) end)
+
+    {schema_entries, alias_entries} =
+      Enum.split_with(named_entries, fn {_name, v} -> match?(%Struct{name: "schema"}, v) end)
 
     with {:ok, registry} <- compile_aliases(alias_entries, base_registry) do
-      Enum.reduce_while(schema_entries, {:ok, registry}, fn {name, entry}, {:ok, registry} ->
+      Result.reduce_ok(schema_entries, registry, fn {name, entry}, registry ->
         case compile_entry(entry, predicates, registry.type_aliases) do
           {:ok, %Compiled{} = compiled} ->
-            {:cont, {:ok, Registry.put_struct_schema(registry, name, %{compiled | name: name})}}
+            {:ok, Registry.put_struct_schema(registry, name, %{compiled | name: name})}
 
           {:error, _} = err ->
-            {:halt, err}
+            err
         end
       end)
     end
@@ -70,10 +79,10 @@ defmodule Dextrin.Schema.Compiler do
     # iteration order instead of being a deterministic yes-or-no.
     base_aliases = registry.type_aliases
 
-    Enum.reduce_while(alias_entries, {:ok, registry}, fn {name, raw_value}, {:ok, registry} ->
+    Result.reduce_ok(alias_entries, registry, fn {name, raw_value}, registry ->
       case compile_type_expr(raw_value, base_aliases) do
-        {:ok, type_expr} -> {:cont, {:ok, Registry.put_type_alias(registry, name, type_expr)}}
-        {:error, reason} -> {:halt, {:error, "named type #{inspect(name)}: #{reason}"}}
+        {:ok, type_expr} -> {:ok, Registry.put_type_alias(registry, name, type_expr)}
+        {:error, reason} -> {:error, "named type #{inspect(name)}: #{reason}"}
       end
     end)
   end
@@ -99,10 +108,10 @@ defmodule Dextrin.Schema.Compiler do
   end
 
   defp compile_fields(%OrderedMap{pairs: pairs}, aliases) do
-    Enum.reduce_while(pairs, {:ok, []}, fn {key, value}, {:ok, acc} ->
+    Result.reduce_ok(pairs, [], fn {key, value}, acc ->
       case compile_field(key, value, aliases) do
-        {:ok, field} -> {:cont, {:ok, [field | acc]}}
-        {:error, _} = err -> {:halt, err}
+        {:ok, field} -> {:ok, [field | acc]}
+        {:error, _} = err -> err
       end
     end)
     |> case do
@@ -112,12 +121,15 @@ defmodule Dextrin.Schema.Compiler do
   end
 
   defp compile_fields(other, _aliases) do
-    {:error, "expected fields: to be an @ordered %{...} (field order is load-bearing for .dxnb, DESIGN.md §4.4.2), got #{inspect(other)}"}
+    {:error,
+     "expected fields: to be an @ordered %{...} (field order is load-bearing for .dxnb's positional encoding), got #{inspect(other)}"}
   end
 
   defp compile_field(%Keyword{name: raw_name}, value, aliases) do
     {name, required} =
-      if String.ends_with?(raw_name, "?"), do: {String.trim_trailing(raw_name, "?"), false}, else: {raw_name, true}
+      if String.ends_with?(raw_name, "?"),
+        do: {String.trim_trailing(raw_name, "?"), false},
+        else: {raw_name, true}
 
     case value do
       %Struct{name: "field", fields: {:keyed, field_pairs}} ->
@@ -139,11 +151,13 @@ defmodule Dextrin.Schema.Compiler do
     end
   end
 
-  # ---- type expressions (DESIGN.md §4.4.1) -----------------------------------
+  # ---- type expressions -------------------------------------------------------
 
   defp compile_type_expr(%Keyword{name: "any"}, _aliases), do: {:ok, :any}
   defp compile_type_expr(:any_keyword, _aliases), do: {:ok, :any}
-  defp compile_type_expr(%Keyword{name: name}, _aliases) when name in @primitives, do: {:ok, {:primitive, name}}
+
+  defp compile_type_expr(%Keyword{name: name}, _aliases) when name in @primitives,
+    do: {:ok, {:primitive, name}}
 
   defp compile_type_expr(%Symbol{name: name}, aliases) do
     case Map.fetch(aliases, name) do
@@ -165,12 +179,14 @@ defmodule Dextrin.Schema.Compiler do
   end
 
   defp compile_type_expr(%Tuple{items: [%Keyword{name: "map-of"}, key_type, val_type]}, aliases) do
-    with {:ok, kt} <- compile_type_expr(key_type, aliases), {:ok, vt} <- compile_type_expr(val_type, aliases) do
+    with {:ok, kt} <- compile_type_expr(key_type, aliases),
+         {:ok, vt} <- compile_type_expr(val_type, aliases) do
       {:ok, {:map_of, kt, vt}}
     end
   end
 
-  defp compile_type_expr(%Tuple{items: [%Keyword{name: "enum"} | literals]}, _aliases), do: {:ok, {:enum, literals}}
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "enum"} | literals]}, _aliases),
+    do: {:ok, {:enum, literals}}
 
   defp compile_type_expr(%Tuple{items: [%Keyword{name: "one-of"} | elems]}, aliases) do
     with {:ok, ts} <- map_compile(elems, aliases), do: {:ok, {:one_of, ts}}
@@ -184,19 +200,21 @@ defmodule Dextrin.Schema.Compiler do
     with {:ok, t} <- compile_type_expr(elem, aliases), do: {:ok, {:nilable, t}}
   end
 
-  defp compile_type_expr(%Tuple{items: [%Keyword{name: "refine"}, elem, constraints]}, aliases) when is_map(constraints) do
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "refine"}, elem, constraints]}, aliases)
+       when is_map(constraints) do
     with {:ok, t} <- compile_type_expr(elem, aliases) do
       {:ok, {:refine, t, Map.new(constraints, fn {%Keyword{name: k}, v} -> {k, v} end)}}
     end
   end
 
-  defp compile_type_expr(other, _aliases), do: {:error, "unrecognized type expression: #{inspect(other)}"}
+  defp compile_type_expr(other, _aliases),
+    do: {:error, "unrecognized type expression: #{inspect(other)}"}
 
   defp map_compile(values, aliases) do
-    Enum.reduce_while(values, {:ok, []}, fn v, {:ok, acc} ->
+    Result.reduce_ok(values, [], fn v, acc ->
       case compile_type_expr(v, aliases) do
-        {:ok, t} -> {:cont, {:ok, [t | acc]}}
-        {:error, _} = err -> {:halt, err}
+        {:ok, t} -> {:ok, [t | acc]}
+        {:error, _} = err -> err
       end
     end)
     |> case do
@@ -224,8 +242,11 @@ defmodule Dextrin.Schema.Compiler do
     name = literal_name(name_value)
 
     case Map.fetch(predicates, name) do
-      {:ok, fun} -> {:ok, fun}
-      :error -> {:error, "refine-fn #{inspect(name)} not found in the predicates given to compile/3"}
+      {:ok, fun} ->
+        {:ok, fun}
+
+      :error ->
+        {:error, "refine-fn #{inspect(name)} not found in the predicates given to compile/3"}
     end
   end
 end

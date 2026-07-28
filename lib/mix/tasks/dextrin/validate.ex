@@ -5,7 +5,7 @@ defmodule Mix.Tasks.Dextrin.Validate do
   Decodes `PATH` (format sniffed from its extension, or forced with
   `--format text|binary`), reporting success or a rendered
   `Dextrin.Error` — non-zero exit on failure, so this is meant for CI
-  as much as interactive use (DESIGN.md §12.1).
+  as much as interactive use.
 
       $ mix dextrin.validate data.dxn
       $ mix dextrin.validate data.dxnb --format binary
@@ -16,11 +16,17 @@ defmodule Mix.Tasks.Dextrin.Validate do
 
   @impl Mix.Task
   def run(argv) do
-    {opts, args, _} = OptionParser.parse(argv, strict: [schema: :string, as: :string, format: :string])
+    {opts, args, _} =
+      OptionParser.parse(argv, strict: [schema: :string, as: :string, format: :string])
 
     case args do
-      [path] -> validate(path, opts)
-      _ -> Mix.raise("usage: mix dextrin.validate PATH [--format text|binary] [--schema SCHEMA.dxns --as NAME]")
+      [path] ->
+        validate(path, opts)
+
+      _ ->
+        Mix.raise(
+          "usage: mix dextrin.validate PATH [--format text|binary] [--schema SCHEMA.dxns --as NAME]"
+        )
     end
   end
 
@@ -56,7 +62,9 @@ defmodule Mix.Tasks.Dextrin.Validate do
   defp report_success(path, format, value, registry, schema_name) do
     case Dextrin.Schema.validate(value, registry, schema_name) do
       :ok ->
-        Mix.shell().info("OK: #{path} is valid .dxn#{if format == :binary, do: "b"} and satisfies schema #{schema_name}")
+        Mix.shell().info(
+          "OK: #{path} is valid .dxn#{if format == :binary, do: "b"} and satisfies schema #{schema_name}"
+        )
 
       {:error, reason} ->
         Mix.raise("#{path} does not satisfy schema #{schema_name}: #{inspect(reason)}")
@@ -65,8 +73,12 @@ defmodule Mix.Tasks.Dextrin.Validate do
 
   defp detect_format(_path, "text"), do: :text
   defp detect_format(_path, "binary"), do: :binary
-  defp detect_format(path, nil), do: if(String.ends_with?(path, ".dxnb"), do: :binary, else: :text)
 
-  defp format_error(errors) when is_list(errors), do: Enum.map_join(errors, "\n", &Dextrin.Error.format/1)
+  defp detect_format(path, nil),
+    do: if(String.ends_with?(path, ".dxnb"), do: :binary, else: :text)
+
+  defp format_error(errors) when is_list(errors),
+    do: Enum.map_join(errors, "\n", &Dextrin.Error.format/1)
+
   defp format_error(error), do: Dextrin.Error.format(error)
 end

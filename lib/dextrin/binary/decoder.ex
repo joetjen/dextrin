@@ -1,13 +1,27 @@
 defmodule Dextrin.Binary.Decoder do
   @moduledoc """
-  `.dxnb` decoder — the mirror image of `Dextrin.Binary.Encoder`
-  (DESIGN.md §7). Envelope checked once at the top; everything below
-  that is a single recursive item reader keyed on CBOR major type
-  first, then on tag.
+  `.dxnb` decoder — the mirror image of `Dextrin.Binary.Encoder`.
+  Envelope (`magic` `version` `cbor_item`) checked once at the top;
+  everything below that is a single recursive `decode_item/2`, keyed
+  on CBOR major type first, then on tag — matching `DXN.md` §2.2's
+  table row order the same way the encoder does.
   """
 
   alias Dextrin.Binary.Tags
-  alias Dextrin.{Array, Bytes, CustomTag, OrderedMap, Rational, Registry, SortedSet, Struct, Tuple, Uri, Uuid}
+
+  alias Dextrin.{
+    Array,
+    Bytes,
+    CustomTag,
+    OrderedMap,
+    Rational,
+    Registry,
+    SortedSet,
+    Struct,
+    Tuple,
+    Uri,
+    Uuid
+  }
 
   @magic "DX"
   @version 1
@@ -27,7 +41,10 @@ defmodule Dextrin.Binary.Decoder do
         {:ok, Dextrin.Schema.Validated.strip(value)}
       else
         {:ok, _value, leftover} ->
-          {:error, Dextrin.Error.binary("trailing bytes after top-level value (#{byte_size(leftover)} left over)")}
+          {:error,
+           Dextrin.Error.binary(
+             "trailing bytes after top-level value (#{byte_size(leftover)} left over)"
+           )}
 
         {:error, _} = err ->
           err
@@ -38,7 +55,10 @@ defmodule Dextrin.Binary.Decoder do
   end
 
   def decode(bin, _opts) when is_binary(bin) do
-    {:error, Dextrin.Error.binary("missing or invalid .dxnb envelope (expected magic \"DX\" + version #{@version})")}
+    {:error,
+     Dextrin.Error.binary(
+       "missing or invalid .dxnb envelope (expected magic \"DX\" + version #{@version})"
+     )}
   end
 
   # ---- item reader ------------------------------------------------------------
@@ -107,11 +127,11 @@ defmodule Dextrin.Binary.Decoder do
   # it never gets collapsed to a plain Map in the first place.)
 
   # `@ordered %{...}` needs the raw pair *list* (order intact), not a
-  # plain Map — the same order-preservation problem the encoder side
-  # has (DESIGN.md's discussion of `Dextrin.OrderedMap`), mirrored
-  # here: reads the major-5 payload directly rather than going through
-  # `decode_by_major(5, ...)`'s own Map-collapsing path, which would
-  # destroy the order this tag exists to keep.
+  # plain Map — the same order-preservation requirement
+  # `Dextrin.OrderedMap` exists for on the text side: reads the major-5
+  # payload directly rather than going through `decode_by_major(5,
+  # ...)`'s own Map-collapsing path, which would destroy the order
+  # this tag exists to keep.
   defp decode_by_major(6, tag_number, rest, opts) do
     cond do
       tag_number == Tags.t_ordered() ->
@@ -119,8 +139,12 @@ defmodule Dextrin.Binary.Decoder do
              {:ok, pairs, rest3} <- decode_map_pairs(pair_count, rest2, opts) do
           {:ok, OrderedMap.new(pairs), rest3}
         else
-          {:ok, _major, _arg, _rest} -> {:error, Dextrin.Error.binary("@ordered (tag #{Tags.t_ordered()}) requires a map payload")}
-          {:error, _} = err -> err
+          {:ok, _major, _arg, _rest} ->
+            {:error,
+             Dextrin.Error.binary("@ordered (tag #{Tags.t_ordered()}) requires a map payload")}
+
+          {:error, _} = err ->
+            err
         end
 
       tag_number == Tags.t_shareable() ->
@@ -167,11 +191,20 @@ defmodule Dextrin.Binary.Decoder do
     with {:ok, index, rest2} <- decode_item(rest, opts) do
       if is_integer(index) do
         case Map.fetch(Process.get(:dextrin_shared_items, %{}), index) do
-          {:ok, value} -> {:ok, value, rest2}
-          :error -> {:error, Dextrin.Error.binary("shared value reference (tag #{Tags.t_shared_ref()}) index #{index} refers to a not-yet-seen item")}
+          {:ok, value} ->
+            {:ok, value, rest2}
+
+          :error ->
+            {:error,
+             Dextrin.Error.binary(
+               "shared value reference (tag #{Tags.t_shared_ref()}) index #{index} refers to a not-yet-seen item"
+             )}
         end
       else
-        {:error, Dextrin.Error.binary("shared value reference (tag #{Tags.t_shared_ref()}) payload must be an integer index, got #{inspect(index)}")}
+        {:error,
+         Dextrin.Error.binary(
+           "shared value reference (tag #{Tags.t_shared_ref()}) payload must be an integer index, got #{inspect(index)}"
+         )}
       end
     end
   end
@@ -194,31 +227,74 @@ defmodule Dextrin.Binary.Decoder do
 
   defp build_tagged(tag, value, opts) do
     cond do
-      tag == Tags.t_bignum_pos() -> with %Bytes{data: raw} <- value, do: {:ok, :binary.decode_unsigned(raw)}
-      tag == Tags.t_bignum_neg() -> with %Bytes{data: raw} <- value, do: {:ok, -1 - :binary.decode_unsigned(raw)}
-      tag == Tags.t_decimal() -> build_decimal(value)
-      tag == Tags.t_timestamp() -> {:ok, DateTime.from_unix!(value, :microsecond)}
-      tag == Tags.t_rational() -> build_rational(value)
-      tag == Tags.t_uri() -> {:ok, Uri.new(value)}
-      tag == Tags.t_uuid() -> with %Bytes{data: raw} <- value, do: {:ok, Uuid.new(raw)}
-      tag == Tags.t_char() -> {:ok, Dextrin.Char.new(value)}
-      tag == Tags.t_symbol() -> {:ok, Dextrin.Symbol.new(value)}
-      tag == Tags.t_keyword() -> {:ok, Dextrin.Keyword.new(value)}
-      tag == Tags.t_tuple() -> {:ok, Tuple.new(value)}
-      tag == Tags.t_array() -> {:ok, Array.new(value)}
+      tag == Tags.t_bignum_pos() ->
+        with %Bytes{data: raw} <- value, do: {:ok, :binary.decode_unsigned(raw)}
+
+      tag == Tags.t_bignum_neg() ->
+        with %Bytes{data: raw} <- value, do: {:ok, -1 - :binary.decode_unsigned(raw)}
+
+      tag == Tags.t_decimal() ->
+        build_decimal(value)
+
+      tag == Tags.t_timestamp() ->
+        {:ok, DateTime.from_unix!(value, :microsecond)}
+
+      tag == Tags.t_rational() ->
+        build_rational(value)
+
+      tag == Tags.t_uri() ->
+        {:ok, Uri.new(value)}
+
+      tag == Tags.t_uuid() ->
+        with %Bytes{data: raw} <- value, do: {:ok, Uuid.new(raw)}
+
+      tag == Tags.t_char() ->
+        {:ok, Dextrin.Char.new(value)}
+
+      tag == Tags.t_symbol() ->
+        {:ok, Dextrin.Symbol.new(value)}
+
+      tag == Tags.t_keyword() ->
+        {:ok, Dextrin.Keyword.new(value)}
+
+      tag == Tags.t_tuple() ->
+        {:ok, Tuple.new(value)}
+
+      tag == Tags.t_array() ->
+        {:ok, Array.new(value)}
+
       # t_ordered is intercepted earlier, in decode_by_major(6, ...) —
       # never reaches build_tagged (it needs the raw pair list before
       # Map-collapsing, see the comment there).
-      tag == Tags.t_set() -> {:ok, MapSet.new(value)}
-      tag == Tags.t_sorted_set() -> {:ok, SortedSet.new(value)}
-      tag == Tags.t_struct() -> build_struct(value, opts)
-      tag == Tags.t_date() -> {:ok, Date.add(@epoch, value)}
-      tag == Tags.t_time() -> {:ok, build_time(value)}
-      tag == Tags.t_datetime_offset() -> build_datetime_offset(value)
-      tag == Tags.t_duration() -> build_duration(value)
-      tag == Tags.t_regex() -> build_regex(value)
-      tag == Tags.t_custom() -> build_custom(value, opts)
-      true -> {:error, Dextrin.Error.binary("unrecognized CBOR tag #{tag}")}
+      tag == Tags.t_set() ->
+        {:ok, MapSet.new(value)}
+
+      tag == Tags.t_sorted_set() ->
+        {:ok, SortedSet.new(value)}
+
+      tag == Tags.t_struct() ->
+        build_struct(value, opts)
+
+      tag == Tags.t_date() ->
+        {:ok, Date.add(@epoch, value)}
+
+      tag == Tags.t_time() ->
+        {:ok, build_time(value)}
+
+      tag == Tags.t_datetime_offset() ->
+        build_datetime_offset(value)
+
+      tag == Tags.t_duration() ->
+        build_duration(value)
+
+      tag == Tags.t_regex() ->
+        build_regex(value)
+
+      tag == Tags.t_custom() ->
+        build_custom(value, opts)
+
+      true ->
+        {:error, Dextrin.Error.binary("unrecognized CBOR tag #{tag}")}
     end
   end
 
@@ -233,7 +309,8 @@ defmodule Dextrin.Binary.Decoder do
     {:ok, Rational.new(num, den)}
   end
 
-  defp build_rational(_), do: {:error, Dextrin.Error.binary("malformed rational (tag 30) payload")}
+  defp build_rational(_),
+    do: {:error, Dextrin.Error.binary("malformed rational (tag 30) payload")}
 
   defp build_struct([name | fields], opts) when is_binary(name) do
     case Keyword.get(opts, :registry) do
@@ -247,11 +324,20 @@ defmodule Dextrin.Binary.Decoder do
               end
 
             # Same fail-fast, decode-time enforcement as the text
-            # pipeline (DESIGN.md §4.4.5) — .dxnb structs are always
-            # positional (§2.1), so this is the only shape possible here.
-            case Dextrin.Schema.Validator.materialize(compiled, {:positional, fields}, materializer, registry) do
-              {:ok, materialized} -> {:ok, materialized}
-              {:error, reason} -> {:error, Dextrin.Error.binary("struct #{inspect(name)} violates its schema: #{reason}")}
+            # pipeline — .dxnb structs are always positional (`DXN.md`
+            # §2.1), so this is the only shape possible here.
+            case Dextrin.Schema.Validator.materialize(
+                   compiled,
+                   {:positional, fields},
+                   materializer,
+                   registry
+                 ) do
+              {:ok, materialized} ->
+                {:ok, materialized}
+
+              {:error, reason} ->
+                {:error,
+                 Dextrin.Error.binary("struct #{inspect(name)} violates its schema: #{reason}")}
             end
 
           {:unknown, _registry} ->
@@ -263,7 +349,8 @@ defmodule Dextrin.Binary.Decoder do
     end
   end
 
-  defp build_struct(_, _opts), do: {:error, Dextrin.Error.binary("malformed struct (tag #{Tags.t_struct()}) payload")}
+  defp build_struct(_, _opts),
+    do: {:error, Dextrin.Error.binary("malformed struct (tag #{Tags.t_struct()}) payload")}
 
   defp build_time(total_micro) when is_integer(total_micro) and total_micro >= 0 do
     {microsecond, rem1} = {rem(total_micro, 1_000_000), div(total_micro, 1_000_000)}
@@ -294,29 +381,40 @@ defmodule Dextrin.Binary.Decoder do
      }}
   end
 
-  defp build_datetime_offset(_), do: {:error, Dextrin.Error.binary("malformed datetime (tag #{Tags.t_datetime_offset()}) payload")}
+  defp build_datetime_offset(_),
+    do:
+      {:error,
+       Dextrin.Error.binary("malformed datetime (tag #{Tags.t_datetime_offset()}) payload")}
 
   defp build_duration([bitmask | field_values]) when is_integer(bitmask) do
     fields = Tags.duration_bits() |> Enum.filter(fn field -> bit_set?(bitmask, field) end)
 
     if length(fields) == length(field_values) do
       base = %Dextrin.Duration{}
-      {:ok, Enum.zip(fields, field_values) |> Enum.reduce(base, fn {field, value}, acc -> Map.put(acc, field, value) end)}
+
+      {:ok,
+       Enum.zip(fields, field_values)
+       |> Enum.reduce(base, fn {field, value}, acc -> Map.put(acc, field, value) end)}
     else
       {:error, Dextrin.Error.binary("duration bitmask doesn't match field count")}
     end
   end
 
-  defp build_duration(_), do: {:error, Dextrin.Error.binary("malformed duration (tag #{Tags.t_duration()}) payload")}
+  defp build_duration(_),
+    do: {:error, Dextrin.Error.binary("malformed duration (tag #{Tags.t_duration()}) payload")}
 
   defp build_regex([source, flags_byte]) when is_binary(source) and is_integer(flags_byte) do
     case Regex.compile(source, Tags.regex_byte_to_opts(flags_byte)) do
-      {:ok, regex} -> {:ok, regex}
-      {:error, reason} -> {:error, Dextrin.Error.binary("invalid regex in .dxnb: #{inspect(reason)}")}
+      {:ok, regex} ->
+        {:ok, regex}
+
+      {:error, reason} ->
+        {:error, Dextrin.Error.binary("invalid regex in .dxnb: #{inspect(reason)}")}
     end
   end
 
-  defp build_regex(_), do: {:error, Dextrin.Error.binary("malformed regex (tag #{Tags.t_regex()}) payload")}
+  defp build_regex(_),
+    do: {:error, Dextrin.Error.binary("malformed regex (tag #{Tags.t_regex()}) payload")}
 
   defp build_custom([name, value], opts) when is_binary(name) do
     case Keyword.get(opts, :registry) do
@@ -331,7 +429,8 @@ defmodule Dextrin.Binary.Decoder do
     end
   end
 
-  defp build_custom(_, _opts), do: {:error, Dextrin.Error.binary("malformed custom tag (tag #{Tags.t_custom()}) payload")}
+  defp build_custom(_, _opts),
+    do: {:error, Dextrin.Error.binary("malformed custom tag (tag #{Tags.t_custom()}) payload")}
 
   defp bit_set?(bitmask, field) do
     index = Enum.find_index(Tags.duration_bits(), &(&1 == field))
@@ -343,6 +442,7 @@ defmodule Dextrin.Binary.Decoder do
     abs_s = abs(seconds)
     h = div(abs_s, 3600)
     m = div(rem(abs_s, 3600), 60)
+
     "#{sign}#{String.pad_leading(Integer.to_string(h), 2, "0")}:#{String.pad_leading(Integer.to_string(m), 2, "0")}"
   end
 
@@ -374,11 +474,18 @@ defmodule Dextrin.Binary.Decoder do
     <<sign::1, exponent::11, mantissa::52>> = <<bits::64>>
 
     cond do
-      exponent == 0x7FF and mantissa != 0 -> :nan
-      exponent == 0x7FF and sign == 0 -> :positive_infinity
-      exponent == 0x7FF and sign == 1 -> :negative_infinity
-      true -> <<f::float>> = <<bits::64>>
-              f
+      exponent == 0x7FF and mantissa != 0 ->
+        :nan
+
+      exponent == 0x7FF and sign == 0 ->
+        :positive_infinity
+
+      exponent == 0x7FF and sign == 1 ->
+        :negative_infinity
+
+      true ->
+        <<f::float>> = <<bits::64>>
+        f
     end
   end
 
@@ -395,5 +502,6 @@ defmodule Dextrin.Binary.Decoder do
     {:ok, taken, rest}
   end
 
-  defp take(_bin, _len), do: {:error, Dextrin.Error.binary("unexpected end of input (truncated item)")}
+  defp take(_bin, _len),
+    do: {:error, Dextrin.Error.binary("unexpected end of input (truncated item)")}
 end

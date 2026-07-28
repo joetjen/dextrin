@@ -1,23 +1,23 @@
 defmodule Dextrin.Schema.Validator do
   @moduledoc """
   Checks a value's fields against a `Dextrin.Schema.Compiled` schema
-  (required/closed/forbidden/refine, DESIGN.md §4.4.2) — shared by
-  decode (`materialize/4`, which also produces a materialized result)
-  and encode-time validation (`validate_for_encode/3`/
-  `validate_tree_for_encode/2`, which never transforms `value`;
-  DESIGN.md §10/§12). Both directions reuse the exact same
+  (required/closed/forbidden/refine) — shared by decode (`materialize/4`,
+  which also produces a materialized result) and encode-time validation
+  (`validate_for_encode/3`/`validate_tree_for_encode/2`, which never
+  transforms `value`). Both directions reuse the exact same
   `resolve_fields/3`/`TypeExpr.matches?/3` field-checking — encode's
   own values are wrapped in the same internal `Dextrin.Schema.
   Validated` marker decode already uses, via `wrap_and_check/2`, so
   there's one type-checking implementation, not two that could drift.
 
   Enforcement is decode-time and fail-fast, with no lenient escape
-  hatch (DESIGN.md §4.4.5's explicit decision) — a violation is always
-  an error, never a value handed back anyway.
+  hatch to get the materialized value anyway — a violation is always
+  an error, on the same channel an ordinary syntax error already uses.
   """
 
   alias Dextrin.Schema.{Compiled, Field, TypeExpr, Validated}
   alias Dextrin.{Array, CustomTag, OrderedMap, Registry, SortedSet, Struct}
+  alias Ichor.Toolkit.Result
 
   @type fields :: {:keyed, [{String.t(), term()}]} | {:positional, [term()]}
 
@@ -26,11 +26,16 @@ defmodule Dextrin.Schema.Validator do
   `materializer` if given. On success, the result is wrapped in a
   `Validated` (name: `compiled.name`) — internal bookkeeping so an
   *outer* schema's `{:reference, name}` field can verify this value's
-  origin even after materialization (DESIGN.md §10); callers that
-  aren't another schema check (the true top of decoding) must call
-  `Validated.strip/1` on the final result.
+  origin even after materialization; callers that aren't another
+  schema check (the true top of decoding) must call `Validated.strip/1`
+  on the final result.
   """
-  @spec materialize(Compiled.t(), fields(), Dextrin.Registry.struct_materializer() | nil, Registry.t()) ::
+  @spec materialize(
+          Compiled.t(),
+          fields(),
+          Dextrin.Registry.struct_materializer() | nil,
+          Registry.t()
+        ) ::
           {:ok, Validated.t()} | {:error, String.t()}
   def materialize(%Compiled{} = compiled, fields, materializer, registry) do
     with {:ok, given} <- to_name_map(compiled, fields),
@@ -74,15 +79,19 @@ defmodule Dextrin.Schema.Validator do
   end
 
   defp resolve_fields(%Compiled{fields: fields}, given, registry) do
-    Enum.reduce_while(fields, {:ok, %{}}, fn %Field{} = field, {:ok, acc} ->
+    Result.reduce_ok(fields, %{}, fn %Field{} = field, acc ->
       case resolve_field(field, given, registry) do
-        {:ok, value} -> {:cont, {:ok, Map.put(acc, String.to_atom(field.name), value)}}
-        {:error, _} = err -> {:halt, err}
+        {:ok, value} -> {:ok, Map.put(acc, String.to_atom(field.name), value)}
+        {:error, _} = err -> err
       end
     end)
   end
 
-  defp resolve_field(%Field{name: name, required: required, default: default, type: type}, given, registry) do
+  defp resolve_field(
+         %Field{name: name, required: required, default: default, type: type},
+         given,
+         registry
+       ) do
     case Map.fetch(given, name) do
       {:ok, value} -> check_type(name, value, type, registry)
       :error when default != :none -> {:ok, default}
@@ -106,10 +115,12 @@ defmodule Dextrin.Schema.Validator do
   defp run_refine_fn(%Compiled{refine_fn: nil}, _resolved), do: :ok
   defp run_refine_fn(%Compiled{refine_fn: fun}, resolved), do: fun.(resolved)
 
-  defp materialize_result(resolved, nil), do: {:ok, Map.new(resolved, fn {k, v} -> {Atom.to_string(k), v} end)}
+  defp materialize_result(resolved, nil),
+    do: {:ok, Map.new(resolved, fn {k, v} -> {Atom.to_string(k), v} end)}
+
   defp materialize_result(resolved, materializer), do: materializer.(resolved)
 
-  # ---- encode-time validation (DESIGN.md §10/§12) ---------------------------
+  # ---- encode-time validation -------------------------------------------------
   #
   # The mirror image of `materialize/4`, for data on its way *out*:
   # `value` here is ordinary Elixir data you're about to encode — a
@@ -136,7 +147,8 @@ defmodule Dextrin.Schema.Validator do
   transformed.
   """
   @spec validate_for_encode(Compiled.t(), term(), Registry.t()) :: :ok | {:error, String.t()}
-  def validate_for_encode(%Compiled{} = compiled, value, registry), do: check_compiled(compiled, value, registry)
+  def validate_for_encode(%Compiled{} = compiled, value, registry),
+    do: check_compiled(compiled, value, registry)
 
   @doc """
   Walks `value` looking for every `Dextrin.Struct` or registered
@@ -166,9 +178,12 @@ defmodule Dextrin.Schema.Validator do
     end
   end
 
-  defp to_name_map_for_encode(_compiled, %Struct{fields: {:keyed, pairs}}), do: {:ok, Map.new(pairs)}
+  defp to_name_map_for_encode(_compiled, %Struct{fields: {:keyed, pairs}}),
+    do: {:ok, Map.new(pairs)}
 
-  defp to_name_map_for_encode(%Compiled{fields: schema_fields}, %Struct{fields: {:positional, items}}) do
+  defp to_name_map_for_encode(%Compiled{fields: schema_fields}, %Struct{
+         fields: {:positional, items}
+       }) do
     names = Enum.map(schema_fields, & &1.name)
 
     if length(names) == length(items) do
@@ -232,10 +247,10 @@ defmodule Dextrin.Schema.Validator do
   defp schema_name_for(_value, _registry), do: :unknown
 
   defp wrap_given(given, registry) do
-    Enum.reduce_while(given, {:ok, %{}}, fn {k, v}, {:ok, acc} ->
+    Result.reduce_ok(given, %{}, fn {k, v}, acc ->
       case wrap_and_check(v, registry) do
-        {:ok, wrapped} -> {:cont, {:ok, Map.put(acc, k, wrapped)}}
-        {:error, _} = err -> {:halt, err}
+        {:ok, wrapped} -> {:ok, Map.put(acc, k, wrapped)}
+        {:error, _} = err -> err
       end
     end)
   end
@@ -257,7 +272,8 @@ defmodule Dextrin.Schema.Validator do
   end
 
   defp wrap_children(%MapSet{} = set, registry) do
-    with {:ok, wrapped} <- set |> MapSet.to_list() |> wrap_all(registry), do: {:ok, MapSet.new(wrapped)}
+    with {:ok, wrapped} <- set |> MapSet.to_list() |> wrap_all(registry),
+         do: {:ok, MapSet.new(wrapped)}
   end
 
   defp wrap_children(%SortedSet{items: items} = ss, registry) do
@@ -265,11 +281,13 @@ defmodule Dextrin.Schema.Validator do
   end
 
   defp wrap_children(%Struct{fields: {:keyed, pairs}} = s, registry) do
-    with {:ok, wrapped} <- wrap_pairs(pairs, registry), do: {:ok, %{s | fields: {:keyed, wrapped}}}
+    with {:ok, wrapped} <- wrap_pairs(pairs, registry),
+         do: {:ok, %{s | fields: {:keyed, wrapped}}}
   end
 
   defp wrap_children(%Struct{fields: {:positional, items}} = s, registry) do
-    with {:ok, wrapped} <- wrap_all(items, registry), do: {:ok, %{s | fields: {:positional, wrapped}}}
+    with {:ok, wrapped} <- wrap_all(items, registry),
+         do: {:ok, %{s | fields: {:positional, wrapped}}}
   end
 
   defp wrap_children(%CustomTag{value: value} = c, registry) do
@@ -291,10 +309,10 @@ defmodule Dextrin.Schema.Validator do
   defp wrap_children(other, _registry), do: {:ok, other}
 
   defp wrap_all(values, registry) do
-    Enum.reduce_while(values, {:ok, []}, fn v, {:ok, acc} ->
+    Result.reduce_ok(values, [], fn v, acc ->
       case wrap_and_check(v, registry) do
-        {:ok, wrapped} -> {:cont, {:ok, [wrapped | acc]}}
-        {:error, _} = err -> {:halt, err}
+        {:ok, wrapped} -> {:ok, [wrapped | acc]}
+        {:error, _} = err -> err
       end
     end)
     |> case do
@@ -304,10 +322,10 @@ defmodule Dextrin.Schema.Validator do
   end
 
   defp wrap_pairs(pairs, registry) do
-    Enum.reduce_while(pairs, {:ok, []}, fn {k, v}, {:ok, acc} ->
+    Result.reduce_ok(pairs, [], fn {k, v}, acc ->
       case wrap_and_check(v, registry) do
-        {:ok, wrapped} -> {:cont, {:ok, [{k, wrapped} | acc]}}
-        {:error, _} = err -> {:halt, err}
+        {:ok, wrapped} -> {:ok, [{k, wrapped} | acc]}
+        {:error, _} = err -> err
       end
     end)
     |> case do

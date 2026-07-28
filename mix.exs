@@ -34,7 +34,7 @@ defmodule Dextrin.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ichor, path: "../ichor"},
+      {:ichor, "~> 0.1.1"},
       {:decimal, "~> 2.1"},
       {:ex_doc, "~> 0.40", only: :dev, runtime: false}
     ]
@@ -48,14 +48,103 @@ defmodule Dextrin.MixProject do
   defp package do
     [
       licenses: ["MIT"],
-      files: ~w(lib priv/grammar priv/unicode priv/schema .formatter.exs mix.exs README.md DXN.md DESIGN.md LICENSE)
+      links: %{"GitHub" => "https://github.com/joetjen/dextrin"},
+      files:
+        ~w(lib priv/grammar priv/unicode priv/schema .formatter.exs mix.exs README.md CHANGELOG.md LICENSE.txt)
     ]
   end
 
   defp docs do
     [
       main: "readme",
-      extras: ["README.md", "DXN.md", "DESIGN.md"]
+      source_url: "https://github.com/joetjen/dextrin",
+      source_ref: "v#{@version}",
+      extras: extras(),
+      groups_for_extras: groups_for_extras(),
+      groups_for_modules: groups_for_modules()
+    ]
+  end
+
+  defp extras do
+    [
+      "README.md",
+      "guides/TUTORIAL.md",
+      "guides/EXAMPLES.md",
+      "guides/CHEATSHEET.md",
+      "guides/dxn/TUTORIAL.md",
+      "guides/dxn/DXN.md",
+      "guides/dxn/DXN_EXAMPLES.md",
+      "guides/dxn/DXN_CHEATSHEET.md",
+      "CHANGELOG.md",
+      "CONTRIBUTION.md",
+      "LICENSE.txt"
+    ]
+  end
+
+  defp groups_for_extras do
+    [
+      DXN: Path.wildcard("guides/dxn/*.md")
+    ]
+  end
+
+  defp groups_for_modules do
+    [
+      Core: [
+        Dextrin,
+        Dextrin.Value,
+        Dextrin.Registry,
+        Dextrin.Error
+      ],
+      "Value types": [
+        Dextrin.Array,
+        Dextrin.Bytes,
+        Dextrin.Char,
+        Dextrin.CustomTag,
+        Dextrin.Duration,
+        Dextrin.Keyword,
+        Dextrin.OrderedMap,
+        Dextrin.Rational,
+        Dextrin.SortedSet,
+        Dextrin.Struct,
+        Dextrin.Symbol,
+        Dextrin.Tuple,
+        Dextrin.Uri,
+        Dextrin.Uuid
+      ],
+      "Text pipeline (.dxn)": [
+        Dextrin.Text.Grammar,
+        Dextrin.Text.Actions,
+        Dextrin.Text.Printer,
+        Dextrin.Text.Formatter,
+        Dextrin.Text.Escapes
+      ],
+      "Binary pipeline (.dxnb)": [
+        Dextrin.Binary.Encoder,
+        Dextrin.Binary.Decoder,
+        Dextrin.Binary.Tags
+      ],
+      "Schema (.dxns)": [
+        Dextrin.Schema,
+        Dextrin.Schema.Compiler,
+        Dextrin.Schema.Compiled,
+        Dextrin.Schema.Field,
+        Dextrin.Schema.TypeExpr,
+        Dextrin.Schema.Validator,
+        Dextrin.Schema.Validated,
+        Dextrin.Schema.Std,
+        Dextrin.Schema.FileResolver
+      ],
+      Unicode: [
+        Dextrin.Unicode.RangeGenerator
+      ],
+      "Mix tasks": [
+        Mix.Tasks.Dextrin.Validate,
+        Mix.Tasks.Dextrin.Encode,
+        Mix.Tasks.Dextrin.Decode,
+        Mix.Tasks.Dextrin.Format,
+        Mix.Tasks.Dextrin.Gen.Schema,
+        Mix.Tasks.Dextrin.Gen.Unicode
+      ]
     ]
   end
 end

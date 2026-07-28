@@ -1,8 +1,9 @@
 defmodule Dextrin.Text.GrammarHazardsTest do
   @moduledoc """
-  Regression tests for the two lexer hazards DESIGN.md §5.5/§5.6 found
-  and resolved — exactly the two places a future grammar edit is most
-  likely to silently reintroduce ambiguity (DESIGN.md §9).
+  Regression tests for the two lexer hazards found and resolved while
+  writing `priv/grammar/dxn.aether` (see the `MAP_KEY`/`AT_DISCARD`
+  comments there) — exactly the two places a future grammar edit is
+  most likely to silently reintroduce ambiguity.
   """
 
   use ExUnit.Case, async: true

@@ -2,9 +2,11 @@
 
 Implementation-ready grammar and binary encoding for DXN (Data eXchange
 Notation), `.dxn` (text) and `.dxnb` (binary). This document is
-normative and terse by design — for the reasoning behind each decision,
-see `DXN_SPEC.md` (the design log). Nothing here should require reading
-that document to implement a conforming parser, encoder, or decoder.
+normative and terse by design. Nothing beyond it should be required to
+implement a conforming parser, encoder, or decoder — see the
+[DXN tutorial](TUTORIAL.md), [examples](DXN_EXAMPLES.md), and
+[cheatsheet](DXN_CHEATSHEET.md) for a gentler introduction, and
+`dextrin`'s own module docs for one particular implementation's choices.
 
 Grammar is ISO/IEC 14977 EBNF. Reference tables are [TOON](https://toon.sh)
 (`name[N]{fields}:` header, one comma-separated row per record) for

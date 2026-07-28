@@ -41,22 +41,31 @@ defmodule DextrinTest do
 
     test "decodes temporal and extended types" do
       assert {:ok, ~D[1990-01-01]} = Dextrin.decode("~D[1990-01-01]")
-      # Precision normalized to 6 always (DESIGN.md §4.0-adjacent fix)
-      # — .dxnb is always integer-microsecond granularity, so a value
+      # Precision normalized to 6 always — .dxnb is always
+      # integer-microsecond granularity, so a value
       # decoded from text must match that shape regardless of how many
       # fractional digits the source happened to write.
       assert {:ok, ~T[12:00:00.000000]} = Dextrin.decode("~T[12:00:00]")
       assert {:ok, %DateTime{utc_offset: 0}} = Dextrin.decode("~U[1990-01-01 00:00:00Z]")
-      assert {:ok, %DateTime{utc_offset: 7200}} = Dextrin.decode(~s(@datetime "1990-01-01T13:00:00+02:00"))
+
+      assert {:ok, %DateTime{utc_offset: 7200}} =
+               Dextrin.decode(~s(@datetime "1990-01-01T13:00:00+02:00"))
+
       assert {:ok, %Dextrin.Duration{years: 1}} = Dextrin.decode(~s(@duration "P1Y"))
-      assert {:ok, %Dextrin.Uuid{}} = Dextrin.decode(~s(@uuid "550e8400-e29b-41d4-a716-446655440000"))
-      assert {:ok, %Dextrin.Uri{value: "https://example.com"}} = Dextrin.decode(~s(@uri "https://example.com"))
+
+      assert {:ok, %Dextrin.Uuid{}} =
+               Dextrin.decode(~s(@uuid "550e8400-e29b-41d4-a716-446655440000"))
+
+      assert {:ok, %Dextrin.Uri{value: "https://example.com"}} =
+               Dextrin.decode(~s(@uri "https://example.com"))
+
       assert {:ok, %Dextrin.Bytes{data: "hello"}} = Dextrin.decode(~s(@bytes "aGVsbG8="))
       assert {:ok, %Regex{}} = Dextrin.decode("~r/a+/i")
     end
 
     test "custom tags fall back to Dextrin.CustomTag with no registered decoder" do
-      assert {:ok, %Dextrin.CustomTag{name: "my-app/money", value: 100}} = Dextrin.decode("@my-app/money 100")
+      assert {:ok, %Dextrin.CustomTag{name: "my-app/money", value: 100}} =
+               Dextrin.decode("@my-app/money 100")
     end
 
     test "discard produces nothing" do

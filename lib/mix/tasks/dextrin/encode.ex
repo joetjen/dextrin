@@ -6,10 +6,11 @@ defmodule Mix.Tasks.Dextrin.Encode do
       $ mix dextrin.encode data.dxn --out data.dxnb
       $ mix dextrin.encode data.dxn --share
 
-  Writes to stdout by default (DESIGN.md §12.2). `--share` opts into
-  DXN.md §2.5's general value-sharing extension (CBOR tags 28/29) —
-  only genuinely repeated compound values get wrapped, never a
-  one-off value or a bare scalar (DESIGN.md §7.3.1).
+  Writes to stdout by default. `--share` opts into `DXN.md` §2.5's
+  general value-sharing extension (CBOR tags 28/29) —
+  `Dextrin.Binary.Encoder` only ever wraps a value when the byte-count
+  math actually favors it, so a one-off value or a bare scalar is
+  never wrapped regardless of this flag.
   """
 
   use Mix.Task
@@ -39,6 +40,8 @@ defmodule Mix.Tasks.Dextrin.Encode do
   defp write_output(bytes, nil), do: IO.binwrite(bytes)
   defp write_output(bytes, out_path), do: File.write!(out_path, bytes)
 
-  defp format_error(errors) when is_list(errors), do: Enum.map_join(errors, "\n", &Dextrin.Error.format/1)
+  defp format_error(errors) when is_list(errors),
+    do: Enum.map_join(errors, "\n", &Dextrin.Error.format/1)
+
   defp format_error(error), do: Dextrin.Error.format(error)
 end

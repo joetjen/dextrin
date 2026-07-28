@@ -1,8 +1,9 @@
 defmodule Dextrin.Char do
   @moduledoc """
   DXN `char` (`?c`) — a single Unicode codepoint. Kept distinct from a
-  1-grapheme `String.t()` so `char` and `string` never collapse to the
-  same Elixir value and silently fail to round-trip (DESIGN.md §4.2).
+  1-grapheme `String.t()` so `char` and `string` (`?a` vs `"a"`, two
+  distinct DXN types) never collapse to the same Elixir value and
+  silently fail to round-trip.
   """
 
   @type t :: %__MODULE__{codepoint: non_neg_integer()}

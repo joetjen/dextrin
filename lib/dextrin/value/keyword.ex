@@ -2,7 +2,9 @@ defmodule Dextrin.Keyword do
   @moduledoc """
   DXN `keyword` (`:name` in value position). Wraps a plain
   `String.t()`, never an Elixir atom, for the same reason as
-  `Dextrin.Symbol` — see DESIGN.md §4.2.
+  `Dextrin.Symbol`: atoms are never garbage collected on the BEAM, and
+  decoding untrusted, attacker-controlled data must never be able to
+  exhaust the atom table.
   """
 
   @type t :: %__MODULE__{name: String.t()}

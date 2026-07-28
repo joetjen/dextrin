@@ -1,15 +1,16 @@
 defmodule Dextrin.Schema.Compiled do
   @moduledoc """
   The result of compiling one `%schema{}` entry from a `.dxns`
-  document (`Dextrin.Schema.compile/2`, DESIGN.md §4.4.5) — enough to
-  both validate a decoded value and convert it both directions between
-  `.dxnb`'s always-positional wire shape and a named field map
-  (DESIGN.md §4.3/§4.4.2).
+  document (`Dextrin.Schema.Compiler.compile/3`) — enough to both
+  validate a decoded value and convert it both directions between
+  `.dxnb`'s always-positional wire shape and a named field map.
 
   `fields` is ordered — that order is the canonical position ↔ name
-  mapping `.dxnb`'s positional struct encoding needs (§4.4.2's own
-  reasoning for why the schema's own `fields:` has to be an
-  `@ordered %{...}`, not a plain map).
+  mapping `.dxnb`'s positional struct encoding needs, which is exactly
+  why a schema's own `fields:` has to be an `@ordered %{...}` in the
+  source document, not a plain map (`.dxn`'s `map` type makes no
+  ordering guarantee, but field order here is semantically
+  load-bearing, not incidental).
   """
 
   alias Dextrin.Schema.Field

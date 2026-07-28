@@ -5,7 +5,9 @@ defmodule Dextrin.SortedSet do
   `new/1` is the *only* way to build one, precisely so that structural
   `==` between two `Dextrin.SortedSet`s is valid set-equality rather
   than something that happens to work only when both were built the
-  same way (DESIGN.md §4/§10).
+  same way — every construction site (decode, encode, public API)
+  goes through `new/1`, so the sorted/deduplicated invariant can never
+  be bypassed.
   """
 
   @type t :: %__MODULE__{items: [term()]}

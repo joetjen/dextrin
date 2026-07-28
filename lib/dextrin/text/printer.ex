@@ -1,18 +1,35 @@
 defmodule Dextrin.Text.Printer do
   @moduledoc """
   `.dxn` printer — the reverse of `Dextrin.Text.Actions`. Single-line,
-  minimal-whitespace output (DESIGN.md §8: a printer, not a
-  formatter — `mix dextrin.format` owns pretty-printing).
+  minimal-whitespace output: a printer, not a formatter (no
+  line-wrapping or indentation policy is specified anywhere in
+  `DXN.md`) — `Dextrin.Text.Formatter.pretty/2` owns multi-line,
+  human-readable rendering, built on top of this module.
 
   Returns `{:ok, _} | {:error, _}` rather than raising, matching
-  `Dextrin.Binary.Encoder`'s equivalent path (DESIGN.md §10) — the
-  only way this can fail is a struct with no `tag_encoder` registered
-  (or one that itself returns `{:error, _}`), never any of the
-  built-in DXN value types.
+  `Dextrin.Binary.Encoder`'s equivalent path — the only way this can
+  fail is a struct with no `tag_encoder` registered (or one that
+  itself returns `{:error, _}`), never any of the built-in DXN value
+  types.
   """
 
-  alias Dextrin.{Array, Bytes, Char, CustomTag, OrderedMap, Rational, Registry, SortedSet, Struct, Symbol, Uri, Uuid}
+  alias Dextrin.{
+    Array,
+    Bytes,
+    Char,
+    CustomTag,
+    OrderedMap,
+    Rational,
+    Registry,
+    SortedSet,
+    Struct,
+    Symbol,
+    Uri,
+    Uuid
+  }
+
   alias Dextrin.Binary.Tags
+  alias Ichor.Toolkit.Result
 
   # `Dextrin.Keyword` deliberately not aliased to the bare name
   # `Keyword` — the built-in `Keyword` module (`Keyword.get/3`, used
@@ -38,7 +55,9 @@ defmodule Dextrin.Text.Printer do
   def print(%Rational{numerator: n, denominator: d}, _opts), do: {:ok, "#{n}/#{d}"}
 
   def print(s, _opts) when is_binary(s), do: {:ok, quote_string(s)}
-  def print(%Bytes{data: data}, _opts), do: {:ok, tag_form("bytes", quote_string(Base.encode64(data)))}
+
+  def print(%Bytes{data: data}, _opts),
+    do: {:ok, tag_form("bytes", quote_string(Base.encode64(data)))}
 
   def print(%Char{codepoint: cp}, _opts), do: {:ok, "?" <> print_char_body(cp)}
 
@@ -50,7 +69,8 @@ defmodule Dextrin.Text.Printer do
   end
 
   def print(%Dextrin.Tuple{items: items}, opts) do
-    with {:ok, printed} <- print_all(items, opts), do: {:ok, "{" <> Enum.join(printed, " ") <> "}"}
+    with {:ok, printed} <- print_all(items, opts),
+         do: {:ok, "{" <> Enum.join(printed, " ") <> "}"}
   end
 
   def print(%Array{items: items}, opts) do
@@ -72,30 +92,39 @@ defmodule Dextrin.Text.Printer do
   end
 
   def print(%OrderedMap{pairs: pairs}, opts) do
-    with {:ok, entries} <- print_entries(pairs, opts), do: {:ok, tag_form("ordered", "%{" <> entries <> "}")}
+    with {:ok, entries} <- print_entries(pairs, opts),
+         do: {:ok, tag_form("ordered", "%{" <> entries <> "}")}
   end
 
   def print(%{} = map, opts) when not is_struct(map) do
-    with {:ok, entries} <- print_entries(Map.to_list(map), opts), do: {:ok, "%{" <> entries <> "}"}
+    with {:ok, entries} <- print_entries(Map.to_list(map), opts),
+         do: {:ok, "%{" <> entries <> "}"}
   end
 
   def print(%Struct{name: name, fields: {:keyed, pairs}}, opts) do
     keyed = Enum.map(pairs, fn {k, v} -> {Dextrin.Keyword.new(k), v} end)
-    with {:ok, entries} <- print_entries(keyed, opts), do: {:ok, "%" <> name <> "{" <> entries <> "}"}
+
+    with {:ok, entries} <- print_entries(keyed, opts),
+         do: {:ok, "%" <> name <> "{" <> entries <> "}"}
   end
 
   def print(%Struct{name: name, fields: {:positional, items}}, opts) do
-    with {:ok, printed} <- print_all(items, opts), do: {:ok, "%" <> name <> "[" <> Enum.join(printed, ", ") <> "]"}
+    with {:ok, printed} <- print_all(items, opts),
+         do: {:ok, "%" <> name <> "[" <> Enum.join(printed, ", ") <> "]"}
   end
 
   def print(%Date{} = date, _opts), do: {:ok, "~D[" <> Date.to_iso8601(date) <> "]"}
   def print(%Time{} = time, _opts), do: {:ok, "~T[" <> Time.to_iso8601(time) <> "]"}
 
   def print(%DateTime{utc_offset: 0, std_offset: 0} = dt, _opts) do
-    {:ok, "~U[" <> Date.to_iso8601(DateTime.to_date(dt)) <> " " <> Time.to_iso8601(DateTime.to_time(dt)) <> "Z]"}
+    {:ok,
+     "~U[" <>
+       Date.to_iso8601(DateTime.to_date(dt)) <>
+       " " <> Time.to_iso8601(DateTime.to_time(dt)) <> "Z]"}
   end
 
-  def print(%DateTime{} = dt, _opts), do: {:ok, tag_form("datetime", quote_string(DateTime.to_iso8601(dt)))}
+  def print(%DateTime{} = dt, _opts),
+    do: {:ok, tag_form("datetime", quote_string(DateTime.to_iso8601(dt)))}
 
   def print(%Dextrin.Duration{} = d, _opts) do
     fields = Tags.duration_bits() |> Enum.map(&Map.get(d, &1))
@@ -117,7 +146,8 @@ defmodule Dextrin.Text.Printer do
   # Reached only for a struct none of the clauses above recognized —
   # i.e. a genuine application struct, the symmetric text-side
   # counterpart of `Dextrin.Binary.Encoder`'s own `put_tag_encoder/4`
-  # fallback (DESIGN.md §10's custom-tag encode-side gap, closed).
+  # fallback: any struct none of `Dextrin`'s own built-in clauses
+  # recognize is looked up by module in the registry's tag encoders.
   def print(%module{} = other, opts) do
     with %Registry{} = registry <- Keyword.get(opts, :registry, :none),
          {:ok, {name, encoder}} <- Registry.fetch_tag_encoder(registry, module) do
@@ -126,10 +156,13 @@ defmodule Dextrin.Text.Printer do
         {:ok, tag_form(name, printed)}
       else
         {:error, reason} ->
-          {:error, Dextrin.Error.action("tag encoder for #{inspect(module)} failed: #{inspect(reason)}")}
+          {:error,
+           Dextrin.Error.action("tag encoder for #{inspect(module)} failed: #{inspect(reason)}")}
       end
     else
-      _ -> {:error, Dextrin.Error.action("cannot encode value with no DXN representation: #{inspect(other)}")}
+      _ ->
+        {:error,
+         Dextrin.Error.action("cannot encode value with no DXN representation: #{inspect(other)}")}
     end
   end
 
@@ -138,10 +171,10 @@ defmodule Dextrin.Text.Printer do
   defp tag_form(name, printed_value), do: "@" <> name <> " " <> printed_value
 
   defp print_all(values, opts) do
-    Enum.reduce_while(values, {:ok, []}, fn value, {:ok, acc} ->
+    Result.reduce_ok(values, [], fn value, acc ->
       case print(value, opts) do
-        {:ok, printed} -> {:cont, {:ok, [printed | acc]}}
-        {:error, _} = err -> {:halt, err}
+        {:ok, printed} -> {:ok, [printed | acc]}
+        {:error, _} = err -> err
       end
     end)
     |> case do
@@ -151,19 +184,17 @@ defmodule Dextrin.Text.Printer do
   end
 
   defp print_entries(pairs, opts) do
-    Enum.reduce_while(pairs, {:ok, []}, fn
-      {%Dextrin.Keyword{name: name}, value}, {:ok, acc} ->
+    Result.reduce_ok(pairs, [], fn
+      {%Dextrin.Keyword{name: name}, value}, acc ->
         case print(value, opts) do
-          {:ok, printed} -> {:cont, {:ok, [keyword_name(name) <> ": " <> printed | acc]}}
-          {:error, _} = err -> {:halt, err}
+          {:ok, printed} -> {:ok, [keyword_name(name) <> ": " <> printed | acc]}
+          {:error, _} = err -> err
         end
 
-      {key, value}, {:ok, acc} ->
+      {key, value}, acc ->
         with {:ok, printed_key} <- print(key, opts),
              {:ok, printed_value} <- print(value, opts) do
-          {:cont, {:ok, [printed_key <> " => " <> printed_value | acc]}}
-        else
-          {:error, _} = err -> {:halt, err}
+          {:ok, [printed_key <> " => " <> printed_value | acc]}
         end
     end)
     |> case do
@@ -204,7 +235,7 @@ defmodule Dextrin.Text.Printer do
        |> Enum.map_join(&escape_char/1)) <> "\""
   end
 
-  defp escape_char(?\") , do: "\\\""
+  defp escape_char(?\"), do: "\\\""
   defp escape_char(?\\), do: "\\\\"
   defp escape_char(?\n), do: "\\n"
   defp escape_char(?\t), do: "\\t"
@@ -218,14 +249,29 @@ defmodule Dextrin.Text.Printer do
   defp build_elixir_duration(fields, values) do
     Enum.zip(fields, values)
     |> Enum.reduce(%Duration{}, fn
-      {_field, nil}, acc -> acc
-      {:years, v}, acc -> %{acc | year: v}
-      {:months, v}, acc -> %{acc | month: v}
-      {:weeks, v}, acc -> %{acc | week: v}
-      {:days, v}, acc -> %{acc | day: v}
-      {:hours, v}, acc -> %{acc | hour: v}
-      {:minutes, v}, acc -> %{acc | minute: v}
-      {:microseconds, micro}, acc -> %{acc | second: div(micro, 1_000_000), microsecond: {rem(micro, 1_000_000), 6}}
+      {_field, nil}, acc ->
+        acc
+
+      {:years, v}, acc ->
+        %{acc | year: v}
+
+      {:months, v}, acc ->
+        %{acc | month: v}
+
+      {:weeks, v}, acc ->
+        %{acc | week: v}
+
+      {:days, v}, acc ->
+        %{acc | day: v}
+
+      {:hours, v}, acc ->
+        %{acc | hour: v}
+
+      {:minutes, v}, acc ->
+        %{acc | minute: v}
+
+      {:microseconds, micro}, acc ->
+        %{acc | second: div(micro, 1_000_000), microsecond: {rem(micro, 1_000_000), 6}}
     end)
   end
 end
