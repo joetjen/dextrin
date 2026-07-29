@@ -135,4 +135,29 @@ defmodule Dextrin.Binary.ValueSharingTest do
       assert {:ok, ^value} = Dextrin.decode_binary(shared)
     end
   end
+
+  describe "the occurrence-counting walk descends into every collection type's children" do
+    # `share: true`'s first pass (count_occurrences/2) walks every
+    # compound value's children via shareable_children/1, regardless of
+    # whether that particular value ends up shared -- so encoding any
+    # document containing one of these types with share: true is enough
+    # to exercise its shareable_children/1 clause, with no repetition
+    # required.
+    test "tuple, array, ordered-map, set, sorted-set, struct (keyed and positional), custom tag" do
+      value = [
+        Dextrin.Tuple.new([1, 2]),
+        Dextrin.Array.new([1, 2]),
+        %Dextrin.OrderedMap{pairs: [{Dextrin.Keyword.new("a"), 1}]},
+        MapSet.new([1, 2]),
+        Dextrin.SortedSet.new([2, 1]),
+        Dextrin.Struct.keyed("Point", [{"x", 1}]),
+        Dextrin.Struct.positional("Point", [1, 2]),
+        Dextrin.CustomTag.new("my-app/money", 100)
+      ]
+
+      assert {:ok, encoded} = Dextrin.encode_binary(value, share: true)
+      assert {:ok, decoded} = Dextrin.decode_binary(encoded)
+      assert length(decoded) == length(value)
+    end
+  end
 end

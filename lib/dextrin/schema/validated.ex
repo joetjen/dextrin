@@ -19,11 +19,11 @@ defmodule Dextrin.Schema.Validated do
   begin with.
   """
 
+  alias Dextrin.{Array, CustomTag, OrderedMap, SortedSet, Struct}
+
   @type t :: %__MODULE__{name: String.t(), value: term()}
 
   defstruct [:name, :value]
-
-  alias Dextrin.{Array, CustomTag, OrderedMap, SortedSet, Struct}
 
   @doc "Recursively removes every Validated wrapper from a decoded value tree."
   @spec strip(term()) :: term()

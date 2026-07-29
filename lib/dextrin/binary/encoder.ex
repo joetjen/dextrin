@@ -431,8 +431,6 @@ defmodule Dextrin.Binary.Encoder do
   defp bit_for(:minutes), do: 1 <<< 5
   defp bit_for(:microseconds), do: 1 <<< 6
 
-  import Bitwise
-
   # ---- raw CBOR item builders -----------------------------------------------
 
   defp head(major, n) when n < 24, do: <<major::3, n::5>>

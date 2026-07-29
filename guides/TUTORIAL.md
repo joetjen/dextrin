@@ -12,11 +12,21 @@ focuses on the Elixir API around it.
 
 ```elixir
 {:ok, value} = Dextrin.decode(~s(%{name: "Ada", active: true, score: 19.99M}))
-#=> {:ok, %{"name" => "Ada", "active" => true, "score" => #Decimal<19.99>}}
+#=> {:ok, %{
+#=>   %Dextrin.Keyword{name: "name"} => "Ada",
+#=>   %Dextrin.Keyword{name: "active"} => true,
+#=>   %Dextrin.Keyword{name: "score"} => Decimal.new("19.99")
+#=> }}
 
 Dextrin.encode(value)
 #=> {:ok, "%{name: \"Ada\", active: true, score: 19.99M}"}
 ```
+
+Notice the map's keys: a plain map's shorthand keys (`name:`) are
+themselves DXN `keyword`s, not bare strings — `%{name: "Ada"}` and
+`%{:name => "Ada"}` are the exact same value. A schema-backed `struct`'s
+fields are the one place names *do* come back as plain strings (§6
+below), since a schema always knows its field names up front.
 
 Both directions return `{:ok, _} | {:error, %Dextrin.Error{}}` —
 `decode/2` never raises on malformed input, and `encode/2` never
@@ -321,7 +331,7 @@ end
 %Server{
   host: "localhost"
   port: 4000
-  tags: [:dev :local]
+  tags: [dev local]
 }
 ```
 

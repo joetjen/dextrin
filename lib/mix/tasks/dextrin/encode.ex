@@ -1,6 +1,4 @@
 defmodule Mix.Tasks.Dextrin.Encode do
-  @shortdoc "Encodes .dxn text to .dxnb binary"
-
   @moduledoc """
       $ mix dextrin.encode data.dxn
       $ mix dextrin.encode data.dxn --out data.dxnb
@@ -14,6 +12,8 @@ defmodule Mix.Tasks.Dextrin.Encode do
   """
 
   use Mix.Task
+
+  @shortdoc "Encodes .dxn text to .dxnb binary"
 
   @impl Mix.Task
   def run(argv) do

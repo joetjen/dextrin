@@ -1,6 +1,4 @@
 defmodule Mix.Tasks.Dextrin.Gen.Schema do
-  @shortdoc "Generates a .dxns scaffold from an already-compiled Elixir struct module"
-
   @moduledoc """
       $ mix dextrin.gen.schema MyApp.Point
       $ mix dextrin.gen.schema MyApp.Point --out point.dxns --name Point
@@ -20,6 +18,8 @@ defmodule Mix.Tasks.Dextrin.Gen.Schema do
   """
 
   use Mix.Task
+
+  @shortdoc "Generates a .dxns scaffold from an already-compiled Elixir struct module"
 
   @impl Mix.Task
   def run(argv) do

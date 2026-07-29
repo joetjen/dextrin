@@ -36,8 +36,14 @@ defmodule Dextrin do
 
   @type opts :: [registry: Registry.t(), schema: String.t(), validate: boolean()]
 
-  @doc "Decodes `.dxn` text into a value."
-  @spec decode(String.t(), opts()) :: {:ok, term()} | {:error, Dextrin.Error.t()}
+  @doc """
+  Decodes `.dxn` text into a value. `{:error, _}` carries a single
+  `Dextrin.Error` normally, but a list when the underlying grammar
+  engine reports more than one (`Ichor.Actions.evaluate/5`'s own
+  `Ichor.Error.t() | [Ichor.Error.t()]`).
+  """
+  @spec decode(String.t(), opts()) ::
+          {:ok, term()} | {:error, Dextrin.Error.t() | [Dextrin.Error.t()]}
   def decode(text, opts \\ []) when is_binary(text) do
     registry = Keyword.get(opts, :registry, Registry.new())
 

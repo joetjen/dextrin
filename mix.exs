@@ -7,15 +7,22 @@ defmodule Dextrin.MixProject do
     [
       app: :dextrin,
       version: @version,
-      elixir: "~> 1.18",
+      elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       description: description(),
       package: package(),
       name: "Dextrin",
-      docs: docs()
+      docs: docs(),
+      aliases: aliases(),
+      test_coverage: [tool: ExCoveralls],
+      dialyzer: [plt_add_apps: [:mix]]
     ]
+  end
+
+  def cli do
+    [preferred_envs: [precommit: :test]]
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
@@ -34,9 +41,54 @@ defmodule Dextrin.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ichor, "~> 0.1.1"},
-      {:decimal, "~> 2.1"},
-      {:ex_doc, "~> 0.40", only: :dev, runtime: false}
+      # === CODE QUALITY & STATIC ANALYSIS ===
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:sobelow, "~> 0.14", only: [:dev, :test], runtime: false},
+      {:excoveralls, "~> 0.18", only: [:dev, :test], runtime: false},
+      # Credo is invoked via `MIX_ENV=test mix credo`
+      # Dialyzer is invoked via `MIX_ENV=test mix dialyzer`
+      # Sobelow is invoked via `MIX_ENV=test mix sobelow`
+      # Coveralls is invoked via `MIX_ENV=test mix coveralls
+
+      # === TESTING ===
+      {:mox, "~> 1.2", only: [:dev, :test]},
+      {:faker, "~> 0.19", only: [:test]},
+      {:stream_data, "~> 1.4", only: [:test]},
+
+      # === DEVELOPMENT TOOLING ===
+      # Mix, and Hex are built-in (no deps needed)
+      {:ex_doc, "~> 0.40", only: [:dev], runtime: false},
+      # ExDoc is invoked via `MIX_ENV=dev mix docs`
+
+      # === RUNTIME ===
+      # ichor_runtime is the only actual runtime dependency -- the ~18
+      # modules a generated parser (from `mix ichor.gen`) calls at
+      # runtime (Ichor.Actions, Ichor.Error, the compiled Tokenizer/
+      # Parser combinators, the LR/GLR runtime). ichor proper (the
+      # Aether front-end, format importers, Grammar.Analysis, both
+      # codegen backends) is only ever needed by `mix ichor.gen`, which
+      # generates lib/dextrin/text/grammar/native.ex ahead of time --
+      # it's never referenced by any code that ships, hence `only:
+      # :dev, runtime: false`.
+      {:ichor_runtime, "~> 0.1.0"},
+      {:ichor, "~> 0.2.1", only: :dev, runtime: false},
+      {:decimal, "~> 2.1"}
+    ]
+  end
+
+  # Fast/cheap checks first so a broken commit fails quickly; dialyzer
+  # (slowest, especially its first PLT build) runs last.
+  defp aliases do
+    [
+      precommit: [
+        "format",
+        "compile --warnings-as-errors",
+        "credo --strict",
+        "sobelow",
+        "test",
+        "dialyzer"
+      ]
     ]
   end
 

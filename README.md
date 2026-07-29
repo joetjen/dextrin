@@ -16,15 +16,26 @@ Dextrin.encode(value)
 
 {:ok, bytes} = Dextrin.encode_binary(value)
 Dextrin.decode_binary(bytes)
-#=> {:ok, %{"x" => 1, "y" => 2}}
+#=> {:ok, %{%Dextrin.Keyword{name: "x"} => 1, %Dextrin.Keyword{name: "y"} => 2}}
 ```
 
-`.dxn`'s text grammar is compiled by [Ichor](https://hex.pm/packages/ichor)
+A plain map's shorthand keys (`x:`) are themselves DXN `keyword`s, not bare
+strings — `%{x: 1}` and `%{:x => 1}` are the exact same value. A
+schema-backed `struct`'s fields are the one place names *do* come back
+as plain strings — see the [tutorial](guides/TUTORIAL.md) — since a
+schema always knows its field names up front.
+
+`.dxn`'s text grammar is compiled by [Ichor](https://github.com/joetjen/ichor)
 — write the grammar once (`priv/grammar/dxn.aether`), get a lexer,
 parser, and (via `Dextrin.Text.Actions`) an evaluator with no
-hand-written parsing code. `.dxnb` has no grammar to speak of — it's a
-direct, hand-rolled CBOR codec — so it's plain recursive Elixir working
-over the same shared value type.
+hand-written parsing code. That compilation happens ahead of time
+(`mix ichor.gen`, checked in as generated source), not at
+`dextrin`'s own build time, so only the small `ichor_runtime` support
+library the generated code actually calls ships as a real dependency —
+`ichor` proper (the Aether front-end, analysis, codegen) is dev-tooling
+only. `.dxnb` has no grammar to speak of — it's a direct, hand-rolled
+CBOR codec — so it's plain recursive Elixir working over the same
+shared value type.
 
 ## Why
 
@@ -56,7 +67,8 @@ readability happens to matter for a given use.
   else (integers, floats, strings, lists, plain maps, sets, dates,
   regexes, ...) decodes to the obvious native Elixir value.
 - **`Dextrin.Text.Grammar`/`Actions`/`Printer`/`Formatter`** — the
-  `.dxn` pipeline: an Ichor-compiled grammar, an `Ichor.Actions`
+  `.dxn` pipeline: an Ichor-compiled grammar (`Grammar` is a thin
+  wrapper around the pregenerated `Grammar.Native`), an `Ichor.Actions`
   implementation that turns a parse into real values, a single-line
   printer (the reverse direction), and a multi-line pretty-formatter
   on top of it.
@@ -109,6 +121,12 @@ end
 
 ## Development
 
+`ichor` and `ichor_runtime` aren't published to Hex separately yet —
+`mix.exs` references both via `git:` (the `feature/runtime` branch of
+[`ichor`](https://github.com/joetjen/ichor), `ichor_runtime` via
+`sparse: "packages/ichor_runtime"`), so nothing extra needs to be
+checked out locally:
+
 ```sh
 mix deps.get
 mix test
@@ -120,7 +138,9 @@ mix docs
 `priv/grammar/dxn.aether`'s generated Unicode identifier ranges are
 regenerated with `mix dextrin.gen.unicode` — a deliberate, reviewed
 action on a Unicode version bump, never run automatically at build
-time (see that task's own docs).
+time (see that task's own docs). Either way, changing the grammar
+itself requires a `mix ichor.gen` step afterward — see
+[CONTRIBUTION.md](CONTRIBUTION.md).
 
 See [CONTRIBUTION.md](CONTRIBUTION.md) for how to propose changes, and
 [CHANGELOG.md](CHANGELOG.md) for release history.

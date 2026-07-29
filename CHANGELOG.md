@@ -32,8 +32,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `ichor` is now a Hex dependency (`~> 0.1.1`) instead of a sibling
-  path dependency, now that it's published.
+- Adopted ichor's new `mix ichor.gen`/`ichor_runtime` split: the `.dxn`
+  lexer/parser is now generated ahead of time into
+  `lib/dextrin/text/grammar/native.ex` (checked in, regenerated via
+  `mix ichor.gen` whenever `priv/grammar/dxn.aether` changes) instead
+  of being produced by `use Ichor` at `dextrin`'s own compile time.
+  `Dextrin.Text.Grammar` is now a thin, hand-documented wrapper around
+  the generated `Grammar.Native`. This lets `mix.exs` depend on the
+  small `ichor_runtime` package (the only thing the generated code
+  actually calls) as an ordinary runtime dependency, while `ichor`
+  proper (the Aether front-end, format importers, `Grammar.Analysis`,
+  both codegen backends) moves to `only: :dev, runtime: false` — the
+  bulk of Ichor no longer ships in a `dextrin` release. Both are
+  referenced via `git:` (branch `feature/runtime`, `ichor_runtime` via
+  `sparse: "packages/ichor_runtime"`, with `override: true` since
+  `ichor`'s own `mix.exs` also depends on `ichor_runtime` via a plain
+  `path:` that only resolves inside its own checkout) for now, since
+  neither half of the split is published to Hex separately yet.
+  Migrating surfaced a genuine gap in that split, fixed upstream: the
+  raw-capture-node re-evaluation entry point needed by
+  `Dextrin.Text.Actions` at actual decode time (for `@ordered %{...}`)
+  had stayed on the top-level, dev-only `Ichor` module instead of
+  moving to `ichor_runtime`; it's now `Ichor.Actions.evaluate_node/3`.
+- `ichor` was a Hex dependency (`~> 0.1.1`) for one release, before the
+  above.
 - Every hand-rolled "walk a collection, thread an accumulator, halt on
   the first non-`{:ok, _}` step result" reduce across
   `Dextrin.Schema.Compiler`, `Dextrin.Schema.Validator`,

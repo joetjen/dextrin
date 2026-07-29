@@ -71,10 +71,40 @@ defmodule Dextrin.Text.Formatter do
     "%" <> name <> bracketed("[", items, "]", depth, opts, &render/3)
   end
 
+  # A struct none of the clauses above recognized — could be a genuine
+  # application struct registered via `put_struct_module/3`, or one of
+  # the many built-in scalar/extended structs `Dextrin.Text.Printer`
+  # already handles directly (`Regex`, `Date`, `Decimal`, `Dextrin.Uuid`,
+  # ...). Mirrors `Dextrin.Text.Printer`/`Dextrin.Binary.Encoder`'s own
+  # struct-module fallback: only a schema-registered module gets
+  # rebuilt as the equivalent keyed `Dextrin.Struct` and re-rendered
+  # through that existing clause above — so it gets exactly the same
+  # multi-line treatment as an opaque `Dextrin.Struct` with the same
+  # shape, rather than inconsistently squashing to single-line just
+  # because a materializer happens to be registered for this one name.
+  # Everything else (no module match at all) falls through to the
+  # scalar/`print!` path below unchanged.
+  defp render(%module{} = value, depth, opts) do
+    registry = Keyword.get(opts, :registry, Dextrin.Registry.new())
+
+    case Dextrin.Registry.fetch_schema_name_for_module(registry, module) do
+      {:ok, name} ->
+        {:ok, compiled, _registry} = Dextrin.Registry.fetch_struct_schema(registry, name)
+
+        render(
+          Struct.keyed(name, Dextrin.Schema.Compiled.field_values(compiled, value)),
+          depth,
+          opts
+        )
+
+      :error ->
+        print!(value, opts)
+    end
+  end
+
   # Anything left — scalars, and every empty-collection case that
   # doesn't need multi-line treatment at all — the single-line printer
-  # already handles correctly (including its own registry-consulting
-  # fallback for an unrecognized application struct).
+  # already handles correctly.
   defp render(value, _depth, opts), do: print!(value, opts)
 
   defp bracketed(open, items, close, depth, opts, render_item) do

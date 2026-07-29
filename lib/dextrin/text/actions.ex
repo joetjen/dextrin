@@ -17,8 +17,6 @@ defmodule Dextrin.Text.Actions do
   as the last resort).
   """
 
-  @behaviour Ichor.Actions
-
   alias Dextrin.Text.Escapes
   alias Ichor.Toolkit.Result
 
@@ -37,6 +35,8 @@ defmodule Dextrin.Text.Actions do
     Uri,
     Uuid
   }
+
+  @behaviour Ichor.Actions
 
   # Elixir's own built-in `Duration` module (ISO 8601 parsing, referenced
   # bare below) is deliberately not aliased here — `Dextrin.Duration`
@@ -451,8 +451,8 @@ defmodule Dextrin.Text.Actions do
             with {:ok, inner, ctx} <- value_cap.eval.(ctx),
                  do: {:ok, CustomTag.new(name, inner), ctx}
 
-          {:error, _} = err ->
-            err
+          {:error, reason} ->
+            {:error, action_error("tag #{inspect(name)} decoder failed: #{inspect(reason)}")}
         end
 
       _ ->
@@ -464,8 +464,8 @@ defmodule Dextrin.Text.Actions do
   # map_lit evaluation always collapses to a plain Map (losing write
   # order), which is correct for the common bare-`%{...}` case but
   # would destroy exactly the information `@ordered` exists to keep.
-  # `Ichor.evaluate_node/3` lets us re-enter the parse tree for each
-  # map_entry directly, bypassing map_lit's own (order-discarding)
+  # `Ichor.Actions.evaluate_node/3` lets us re-enter the parse tree for
+  # each map_entry directly, bypassing map_lit's own (order-discarding)
   # handler, so pair order in the source text survives into
   # `Dextrin.OrderedMap.pairs`.
   defp eval_ordered_map(value_cap, ctx) do
@@ -478,7 +478,7 @@ defmodule Dextrin.Text.Actions do
         raw_entries
         |> List.wrap()
         |> Result.map_ok(ctx, fn raw_entry, ctx ->
-          Ichor.evaluate_node(raw_entry, __MODULE__, ctx)
+          Ichor.Actions.evaluate_node(raw_entry, __MODULE__, ctx)
         end)
         |> case do
           {:ok, pairs, ctx} -> {:ok, OrderedMap.new(pairs), ctx}
@@ -491,7 +491,7 @@ defmodule Dextrin.Text.Actions do
   end
 
   defp from_elixir_duration(%Duration{} = d) do
-    {micro, precision} = d.microsecond || {0, 0}
+    {micro, precision} = d.microsecond
 
     total_micro =
       if d.second == 0 and micro == 0 and precision == 0,

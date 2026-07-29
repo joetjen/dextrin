@@ -205,8 +205,16 @@ defmodule Dextrin.Schema.Validator do
     {:error, "expected a map or struct to validate against a schema, got #{inspect(other)}"}
   end
 
+  # A plain map decoded straight from `.dxn` source (as opposed to one
+  # a caller builds by hand before encoding) keys its shorthand entries
+  # with `Dextrin.Keyword`/`Dextrin.Symbol` structs, never bare atoms
+  # or strings -- the same three shapes `Dextrin.Text.Actions.field_name/1`
+  # already resolves a struct's own field names from.
+  defp stringify_key({%Dextrin.Keyword{name: name}, v}), do: {name, v}
+  defp stringify_key({%Dextrin.Symbol{name: name}, v}), do: {name, v}
   defp stringify_key({k, v}) when is_atom(k), do: {Atom.to_string(k), v}
   defp stringify_key({k, v}) when is_binary(k), do: {k, v}
+  defp stringify_key({k, v}), do: {k, v}
 
   # `wrap_and_check/2` is the recursive core: for any value that's a
   # named struct with a registered schema, check it (`check_compiled/3`)

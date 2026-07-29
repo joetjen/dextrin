@@ -1,6 +1,4 @@
 defmodule Mix.Tasks.Dextrin.Format do
-  @shortdoc "Reformats a .dxn file (pretty multi-line, or condensed single-line)"
-
   @moduledoc """
       $ mix dextrin.format data.dxn --mode pretty
       $ mix dextrin.format data.dxn --mode condense
@@ -18,6 +16,8 @@ defmodule Mix.Tasks.Dextrin.Format do
   """
 
   use Mix.Task
+
+  @shortdoc "Reformats a .dxn file (pretty multi-line, or condensed single-line)"
 
   @impl Mix.Task
   def run(argv) do

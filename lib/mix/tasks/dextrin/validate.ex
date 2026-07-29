@@ -1,6 +1,4 @@
 defmodule Mix.Tasks.Dextrin.Validate do
-  @shortdoc "Validates a .dxn/.dxnb file, optionally against a compiled .dxns schema"
-
   @moduledoc """
   Decodes `PATH` (format sniffed from its extension, or forced with
   `--format text|binary`), reporting success or a rendered
@@ -13,6 +11,8 @@ defmodule Mix.Tasks.Dextrin.Validate do
   """
 
   use Mix.Task
+
+  @shortdoc "Validates a .dxn/.dxnb file, optionally against a compiled .dxns schema"
 
   @impl Mix.Task
   def run(argv) do
@@ -59,8 +59,18 @@ defmodule Mix.Tasks.Dextrin.Validate do
     Mix.shell().info("OK: #{path} is valid .dxn#{if format == :binary, do: "b"}")
   end
 
+  # Deliberately validate_encode/3, not validate/3: `value` here has
+  # already gone through decode/2's own automatic, registry-driven
+  # validation and materialization -- by the time it reaches this
+  # function it's whatever shape the schema's materializer (or the
+  # default plain-map fallback) produced, never a bare, unmaterialized
+  # Dextrin.Struct. validate/3 only ever accepts the latter (it exists
+  # for checking an *opaque* struct against a schema that wasn't
+  # available at decode time); validate_encode/3 accepts any shape --
+  # struct, materialized map, or real Elixir struct -- which is what
+  # "does this decoded value satisfy schema NAME" actually needs here.
   defp report_success(path, format, value, registry, schema_name) do
-    case Dextrin.Schema.validate(value, registry, schema_name) do
+    case Dextrin.Schema.validate_encode(value, registry, schema_name) do
       :ok ->
         Mix.shell().info(
           "OK: #{path} is valid .dxn#{if format == :binary, do: "b"} and satisfies schema #{schema_name}"

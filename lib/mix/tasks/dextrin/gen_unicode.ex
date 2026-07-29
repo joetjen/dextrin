@@ -1,6 +1,4 @@
 defmodule Mix.Tasks.Dextrin.Gen.Unicode do
-  @shortdoc "Updates the generated Unicode identifier ranges from the latest UCD data"
-
   @moduledoc """
   Fetches the latest Unicode Character Database `DerivedCoreProperties.txt`,
   compares its version against the one last processed
@@ -29,6 +27,8 @@ defmodule Mix.Tasks.Dextrin.Gen.Unicode do
   use Mix.Task
 
   alias Dextrin.Unicode.RangeGenerator
+
+  @shortdoc "Updates the generated Unicode identifier ranges from the latest UCD data"
 
   @ucd_url ~c"https://unicode.org/Public/UCD/latest/ucd/DerivedCoreProperties.txt"
 
