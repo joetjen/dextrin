@@ -1,9 +1,9 @@
 defmodule Dextrin.Unicode.RangeGeneratorTest do
   @moduledoc """
   `Dextrin.Unicode.RangeGenerator` — the pure text-processing core
-  behind `mix dextrin.gen.unicode` (DESIGN.md §5.2/§10). Exercised
-  against small in-memory fixtures shaped like real
-  `DerivedCoreProperties.txt` lines, not the ~1MB real file.
+  behind `mix dextrin.gen.unicode`. Exercised against small in-memory
+  fixtures shaped like real `DerivedCoreProperties.txt` lines, not the
+  ~1MB real file.
   """
 
   use ExUnit.Case, async: true
@@ -77,7 +77,8 @@ defmodule Dextrin.Unicode.RangeGeneratorTest do
       document := value
       """
 
-      generated = "; BEGIN GENERATED UNICODE RANGES (mix dextrin.gen.unicode, Unicode 2.0.0)\nIDENT_START := [_\\u{42}]\n; END GENERATED UNICODE RANGES\n"
+      generated =
+        "; BEGIN GENERATED UNICODE RANGES (mix dextrin.gen.unicode, Unicode 2.0.0)\nIDENT_START := [_\\u{42}]\n; END GENERATED UNICODE RANGES\n"
 
       updated = RangeGenerator.splice(source, generated)
 
@@ -88,7 +89,9 @@ defmodule Dextrin.Unicode.RangeGeneratorTest do
 
     test "appends the block when no marked region exists yet" do
       source = "@grammar \"dxn\"\n"
-      generated = "; BEGIN GENERATED UNICODE RANGES (mix dextrin.gen.unicode, Unicode 1.0.0)\n; END GENERATED UNICODE RANGES\n"
+
+      generated =
+        "; BEGIN GENERATED UNICODE RANGES (mix dextrin.gen.unicode, Unicode 1.0.0)\n; END GENERATED UNICODE RANGES\n"
 
       updated = RangeGenerator.splice(source, generated)
 

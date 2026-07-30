@@ -2,9 +2,11 @@
 
 Implementation-ready grammar and binary encoding for DXN (Data eXchange
 Notation), `.dxn` (text) and `.dxnb` (binary). This document is
-normative and terse by design — for the reasoning behind each decision,
-see `DXN_SPEC.md` (the design log). Nothing here should require reading
-that document to implement a conforming parser, encoder, or decoder.
+normative and terse by design. Nothing beyond it should be required to
+implement a conforming parser, encoder, or decoder — see the
+[DXN tutorial](TUTORIAL.md), [examples](DXN_EXAMPLES.md), and
+[cheatsheet](DXN_CHEATSHEET.md) for a gentler introduction, and
+`dextrin`'s own module docs for one particular implementation's choices.
 
 Grammar is ISO/IEC 14977 EBNF. Reference tables are [TOON](https://toon.sh)
 (`name[N]{fields}:` header, one comma-separated row per record) for
@@ -336,5 +338,163 @@ with any tag number cited normatively here.
 Every construct above is fully specified by §1.2 + §1.3; every field
 round-trips through §2 without loss (§2.2's `integrity_note` column
 records the two places — bignum and timestamp precision — where that
-took a specific encoding choice to guarantee, per the design log's §7.8
-audit).
+took a specific encoding choice to guarantee).
+
+---
+
+## 4. Schema documents (`.dxns`)
+
+A `.dxns` file is valid `.dxn` — §1's grammar, unchanged, no schema
+-specific syntax. What makes a document a *schema* document is purely
+the shape of the value it decodes to: a `map` whose values are either
+`%schema{...}` (a struct schema) or a `type_expr` (a **named type**,
+§4.5). `%schema{}`/`%field{}` (§4.4) are recognized by name directly,
+the same way a built-in tag name is (§1.2) — not looked up against a
+schema of their own, which would be circular.
+
+### 4.1 `type_expr` forms
+
+```toon
+type_expr[13]{form,dxn_shape,meaning}:
+  any,":any","matches any value at all"
+  primitive,":integer / :string / ...","one keyword per §1.3 type name"
+  reference,"bare symbol, e.g. Address","names a struct schema or a named type in this document (or Ns/Name, §4.6)"
+  list-of,"{:list-of elem}","list whose every element matches elem"
+  set-of,"{:set-of elem}","set whose every element matches elem"
+  tuple-of,"{:tuple-of a b c}","fixed-arity positional tuple, one type_expr per slot"
+  map-of,"{:map-of key-type val-type}","every key matches key-type, every value matches val-type"
+  enum,"{:enum lit lit ...}","value must equal one of the given literals (any type)"
+  one-of,"{:one-of a b}","union — value must match at least one variant"
+  all-of,"{:all-of a b}","intersection — value must match every variant"
+  nilable,"{:nilable t}","sugar for {:one-of :nil t}"
+  refine,"{:refine t %{constraints}}","base type plus constraints, §4.2"
+  struct,"%schema{fields: @ordered %{...}}","struct/record shape, §4.4"
+```
+
+A bare `type_expr` (no wrapping tuple/struct) is always a `primitive`
+or a `reference` — the tuple form is only needed once a constructor
+takes arguments.
+
+### 4.2 `refine` constraints
+
+```toon
+refine_constraints[10]{key,applies_to,meaning}:
+  min,"integer/float/decimal/rational","value >= given number"
+  max,"integer/float/decimal/rational","value <= given number"
+  exclusive-min,"integer/float/decimal/rational","value > given number"
+  exclusive-max,"integer/float/decimal/rational","value < given number"
+  multiple-of,"integer/float/decimal/rational","value is an exact multiple of given number"
+  min-length,string,"codepoint count >= given integer"
+  max-length,string,"codepoint count <= given integer"
+  pattern,string,"value matches given regex (§1.3's regex type)"
+  min-count,"list/set/tuple","element count >= given integer"
+  max-count,"list/set/tuple","element count <= given integer"
+```
+
+`{:refine t %{k: v, ...}}`'s constraint map may combine any number of
+these keys; a value must satisfy `t` itself *and* every listed
+constraint.
+
+### 4.3 Required vs. optional fields
+
+No separate flag: a field key ending in `?` is optional; any other key
+is required. `?` is already a legal `ident_char` (§1.1) — no grammar
+addition. The `?` itself is not part of the field's name.
+
+### 4.4 Struct schemas (`%schema{}`/`%field{}`)
+
+```ebnf
+schema_entry = identifier , ":" , schema_form ;
+schema_form  = "%schema{" ,
+                 [ "closed:" , boolean ] ,
+                 [ "forbidden:" , "[" , { identifier } , "]" ] ,
+                 [ "refine-fn:" , identifier ] ,
+                 "fields:" , "@ordered" , "%{" , { field_entry } , "}" ,
+               "}" ;
+field_entry  = ( identifier , [ "?" ] , ":" , type_expr )
+             | ( identifier , [ "?" ] , ":" , field_form ) ;
+field_form   = "%field{" , "type:" , type_expr ,
+                 [ "default:" , value ] , [ "description:" , string ] ,
+               "}" ;
+```
+
+```toon
+schema_keys[3]{key,default,meaning}:
+  closed,false,"if true, no field outside fields: may be present at all"
+  forbidden,[],"explicit deny-list of field names, checked even on an open schema"
+  refine-fn,none,"names a cross-field/whole-value predicate, resolved outside this document (implementation-defined mechanism)"
+```
+
+`fields:` MUST be `@ordered %{...}`, not a plain `map` — field order
+is the canonical position ↔ name mapping a struct's positional wire
+form (§2.1) needs; a plain `map`'s "no ordering guarantee" (§1.4) would
+leave that mapping undefined. A keyed `%Name{...}` text literal may
+still list its own fields in any order — names alone resolve those —
+this requirement is on the *schema's* `fields:` only.
+
+`closed` and `forbidden` are independent: `closed` alone rejects any
+field not listed in `fields:`, reported generically ("unknown field");
+`forbidden` rejects specific named fields even when the schema is
+otherwise open, reported by name specifically — the distinction matters
+because a deprecated/renamed field deserves a more specific error than
+"never heard of this field."
+
+`%field{type:, default:, description:}` is reached only when a field
+needs metadata beyond a bare `type_expr` — a default value (used when
+the field is absent; independent of `?`, which controls whether
+*absence itself* is an error) or a human-readable description. It never
+carries its own optionality flag — that's always the key's `?` suffix.
+
+### 4.5 Named types
+
+Any top-level entry whose value is not a `%schema{}` defines a **named
+type**: a reusable name for a `type_expr`, e.g.
+`PositiveInt: {:refine :integer %{min: 1}}`. It's referenced exactly
+like a struct name — a bare symbol (§4.1's `reference` form) — since
+both are resolved the same way: by name, against whatever this
+document (or an already-known document, §4.6) defines.
+
+A named type's own body MAY reference another named type. Whether it
+may reference one declared *alongside* it in the same document (a
+same-document forward or sibling reference) is implementation-defined:
+a `.dxns` document's top-level `map` carries no ordering guarantee
+(§1.4), so there is no normative order to resolve such a reference
+against. A conforming reader MAY refuse same-document sibling
+references outright, MAY resolve them via some deterministic pass
+(e.g. two-phase compilation), or MAY support arbitrary forward
+reference — implementations are free to differ here, and a schema
+author SHOULD NOT rely on behavior beyond "a named type can reference
+one already known before this document was processed."
+
+### 4.6 Cross-file references
+
+`identifier`'s own grammar already supports one `/` (§1.1),
+`Namespace/Name` — the mechanism this document uses for referencing a
+struct schema or named type defined in a separate `.dxns` file/unit.
+Resolving `Namespace/Name` to an actual document (a file path, a
+registry lookup, a network fetch, ...) is entirely reader-defined; this
+specification fixes only the reference *syntax*, not a resolution
+convention.
+
+### 4.7 Enforcement
+
+A struct value decoded without a schema for its name is an opaque
+tagged value (§1.4) — never an error. Once a schema is known for a
+given name, a conforming reader MUST enforce, for every value of that
+struct:
+
+- every required field (§4.3) is present;
+- every present field's value matches its declared `type_expr`
+  (§4.1/§4.2);
+- if `closed: true`, no field outside `fields:` is present at all;
+- no field named in `forbidden:` is present, regardless of `closed`.
+
+A violation of any of these MUST be reported as an error, distinctly
+from a value that simply fails to parse at all — but *how* it's
+reported (exception, error tuple, a validation-result value, ...) is
+implementation-defined. Whether `refine-fn:` predicates run at all,
+and how a predicate name is resolved to actual executable logic, is
+also implementation-defined — `.dxns` documents themselves are
+normatively cross-implementation because a schema *shape* is plain
+data; a `refine-fn:` name is deliberately an escape hatch to logic that
+isn't.

@@ -2,8 +2,7 @@ defmodule Dextrin.Text.Escapes do
   @moduledoc """
   Shared escape-decoding for DXN's `string`/`char`/quoted-`keyword`
   bodies (`DXN.md` §1.1's `escape` production) — one implementation so
-  none of the token handlers in `Dextrin.Text.Actions` duplicate it
-  (DESIGN.md §6).
+  none of the token handlers in `Dextrin.Text.Actions` duplicate it.
   """
 
   @doc "Decodes a full string/keyword body (text between quotes, quotes already stripped)."

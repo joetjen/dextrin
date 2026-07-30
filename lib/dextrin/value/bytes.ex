@@ -4,10 +4,9 @@ defmodule Dextrin.Bytes do
   Wraps a plain Elixir `binary()` — needed because `string` is *also*
   a plain Elixir `binary()` (`String.t()` is not a distinct runtime
   type), so a bare binary can't otherwise tell "UTF-8 text" and "raw
-  bytes that happen to be valid UTF-8" apart on re-encode (the same
-  kind of ambiguity §4.2 already wraps `char`/`symbol`/`keyword` to
-  avoid — this one was missed in the original design and found while
-  implementing the encoder).
+  bytes that happen to be valid UTF-8" apart on re-encode. The same
+  kind of ambiguity `Dextrin.Char`/`Dextrin.Symbol`/`Dextrin.Keyword`
+  each wrap a bare value to avoid.
   """
 
   @type t :: %__MODULE__{data: binary()}

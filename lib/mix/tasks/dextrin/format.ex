@@ -1,6 +1,4 @@
 defmodule Mix.Tasks.Dextrin.Format do
-  @shortdoc "Reformats a .dxn file (pretty multi-line, or condensed single-line)"
-
   @moduledoc """
       $ mix dextrin.format data.dxn --mode pretty
       $ mix dextrin.format data.dxn --mode condense
@@ -13,10 +11,13 @@ defmodule Mix.Tasks.Dextrin.Format do
   lexer discards them as trivia before the parser (and therefore any
   value this formatter could reprint) ever sees them. There is no mode
   that preserves them; that would need a second, independent
-  re-lexing pipeline this design doesn't have (DESIGN.md §12.4).
+  re-lexing pipeline this library doesn't have (see
+  `Dextrin.Text.Formatter`'s own moduledoc).
   """
 
   use Mix.Task
+
+  @shortdoc "Reformats a .dxn file (pretty multi-line, or condensed single-line)"
 
   @impl Mix.Task
   def run(argv) do
@@ -42,20 +43,21 @@ defmodule Mix.Tasks.Dextrin.Format do
     end
   end
 
-  defp render("pretty", value), do: Dextrin.Text.Formatter.pretty(value)
-
-  defp render("condense", value) do
-    case Dextrin.encode(value) do
+  defp render(mode, value) when mode in ["pretty", "condense"] do
+    case Dextrin.encode(value, pretty: mode == "pretty") do
       {:ok, text} -> text
       {:error, error} -> Mix.raise(format_error(error))
     end
   end
 
-  defp render(other, _value), do: Mix.raise("unrecognized --mode #{inspect(other)} — expected \"pretty\" or \"condense\"")
+  defp render(other, _value),
+    do: Mix.raise("unrecognized --mode #{inspect(other)} — expected \"pretty\" or \"condense\"")
 
   defp write_output(text, _path, in_place) when in_place != true, do: Mix.shell().info(text)
   defp write_output(text, path, true), do: File.write!(path, text <> "\n")
 
-  defp format_error(errors) when is_list(errors), do: Enum.map_join(errors, "\n", &Dextrin.Error.format/1)
+  defp format_error(errors) when is_list(errors),
+    do: Enum.map_join(errors, "\n", &Dextrin.Error.format/1)
+
   defp format_error(error), do: Dextrin.Error.format(error)
 end

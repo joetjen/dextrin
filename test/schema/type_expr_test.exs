@@ -1,10 +1,9 @@
 defmodule Dextrin.Schema.TypeExprTest do
   @moduledoc """
-  Exercises all 13 `type_expr` forms (DESIGN.md §4.4.1) and all 10
-  `refine` constraints (§4.4.3), each with a passing and a failing
-  value — the exact coverage DESIGN.md §9's testing strategy calls
-  for, implemented in `Dextrin.Schema.TypeExpr`/`Compiler` but never
-  actually exercised by a test until now.
+  Exercises all 13 `type_expr` forms and all 10 `refine` constraints,
+  each with a passing and a failing value — coverage implemented in
+  `Dextrin.Schema.TypeExpr`/`Compiler` but never actually exercised by
+  a test until now.
   """
 
   use ExUnit.Case, async: true
@@ -81,7 +80,7 @@ defmodule Dextrin.Schema.TypeExprTest do
 
     test "{:enum literal...}" do
       r = registry_for("{:enum :a :b :c}")
-      assert {:ok, %{"v" => %Dextrin.Keyword{name: "a"}}} = field(r, ":a")
+      assert {:ok, %{"v" => :a}} = field(r, ":a")
       assert {:error, %Dextrin.Error{}} = field(r, ":d")
     end
 
@@ -177,6 +176,135 @@ defmodule Dextrin.Schema.TypeExprTest do
       r = registry_for("{:refine :list %{max-count: 2}}")
       assert {:ok, _} = field(r, "[1, 2]")
       assert {:error, %Dextrin.Error{}} = field(r, "[1, 2, 3]")
+    end
+
+    test "min-count/max-count also work over tuple, set, and sorted-set" do
+      r = registry_for("{:refine :tuple %{min-count: 2, max-count: 2}}")
+      assert {:ok, _} = field(r, "{1, 2}")
+      assert {:error, %Dextrin.Error{}} = field(r, "{1}")
+
+      r = registry_for("{:refine :set %{min-count: 2}}")
+      assert {:ok, _} = field(r, "@{1, 2}")
+      assert {:error, %Dextrin.Error{}} = field(r, "@{1}")
+
+      r = registry_for("{:refine :sorted-set %{max-count: 1}}")
+      assert {:ok, _} = field(r, "@sorted-set @{1}")
+      assert {:error, %Dextrin.Error{}} = field(r, "@sorted-set @{1, 2}")
+    end
+
+    test "min/max also work over decimal and rational, not just plain numbers" do
+      r = registry_for("{:refine :decimal %{min: 1.0}}")
+      assert {:ok, _} = field(r, "1.5M")
+      assert {:error, %Dextrin.Error{}} = field(r, "0.5M")
+
+      r = registry_for("{:refine :rational %{max: 1.0}}")
+      assert {:ok, _} = field(r, "1/2")
+      assert {:error, %Dextrin.Error{}} = field(r, "3/2")
+    end
+
+    test "multiple-of over a float uses the fmod fallback, not integer rem" do
+      r = registry_for("{:refine :float %{multiple-of: 0.5}}")
+      assert {:ok, _} = field(r, "1.5")
+      assert {:error, %Dextrin.Error{}} = field(r, "1.3")
+    end
+  end
+
+  describe "every primitive type name" do
+    # One row per DXN.md §1.3 type, each with one value that matches
+    # and one that doesn't -- primitive_matches?/2's own 24 clauses,
+    # only ever exercised for :integer above (indirectly for a handful
+    # of others through the type_expr tests, but never all 24 directly).
+    for {type, good, bad} <- [
+          {"nil", "nil", "1"},
+          {"boolean", "true", "1"},
+          {"integer", "1", ~s("x")},
+          {"float", "1.5", ~s("x")},
+          {"decimal", "1.5M", "1"},
+          {"rational", "1/2", "1"},
+          {"string", ~s("x"), "1"},
+          {"char", "?a", "1"},
+          {"symbol", "some-symbol", "1"},
+          {"keyword", ":ok", "1"},
+          {"list", "[1]", "1"},
+          {"tuple", "{1}", "1"},
+          {"map", "%{a: 1}", "1"},
+          {"ordered-map", "@ordered %{a: 1}", "1"},
+          {"set", "@{1}", "1"},
+          {"sorted-set", "@sorted-set @{1}", "1"},
+          {"array", "@array[1]", "1"},
+          {"date", "~D[2024-01-01]", "1"},
+          {"time", "~T[12:00:00]", "1"},
+          {"timestamp", "~U[2024-01-01 00:00:00Z]", "1"},
+          {"datetime", ~s(@datetime "2024-01-01T00:00:00+02:00"), "1"},
+          {"duration", ~s(@duration "P1D"), "1"},
+          {"uuid", ~s(@uuid "550e8400-e29b-41d4-a716-446655440000"), "1"},
+          {"uri", ~s(@uri "https://example.com"), "1"},
+          {"bytes", ~s(@bytes "aGk="), "1"},
+          {"regex", "~r/abc/", "1"}
+        ] do
+      test "#{type}" do
+        r = registry_for(":#{unquote(type)}")
+        assert {:ok, %{"v" => _}} = field(r, unquote(good))
+        assert {:error, %Dextrin.Error{}} = field(r, unquote(bad))
+      end
+    end
+
+    test "timestamp specifically rejects a non-UTC datetime, and vice versa" do
+      r = registry_for(":timestamp")
+      assert {:error, %Dextrin.Error{}} = field(r, ~s(@datetime "2024-01-01T00:00:00+02:00"))
+
+      r = registry_for(":datetime")
+      assert {:error, %Dextrin.Error{}} = field(r, "~U[2024-01-01 00:00:00Z]")
+    end
+  end
+
+  describe "{:reference, name} against a real (non-Dextrin.Struct) Elixir struct" do
+    defmodule RealPoint do
+      @moduledoc false
+      defstruct [:x]
+    end
+
+    test "matches when the struct's own module is registered for that schema name" do
+      dxns = "%{ Point: %schema{ fields: @ordered %{ x: :integer } } }"
+      {:ok, doc} = Dextrin.decode(dxns)
+      {:ok, registry} = Dextrin.Schema.compile(doc)
+      registry = Dextrin.Registry.put_struct_module(registry, "Point", RealPoint)
+
+      assert Dextrin.Schema.TypeExpr.matches?({:reference, "Point"}, %RealPoint{x: 1}, registry)
+    end
+
+    test "rejects a real struct whose module doesn't match the name's own registered module" do
+      dxns = """
+      %{
+        Point: %schema{ fields: @ordered %{ x: :integer } }
+        Other: %schema{ fields: @ordered %{ y: :integer } }
+      }
+      """
+
+      {:ok, doc} = Dextrin.decode(dxns)
+      {:ok, registry} = Dextrin.Schema.compile(doc)
+      registry = Dextrin.Registry.put_struct_module(registry, "Point", RealPoint)
+      registry = Dextrin.Registry.put_struct_module(registry, "Other", Dextrin.Struct)
+
+      refute Dextrin.Schema.TypeExpr.matches?({:reference, "Other"}, %RealPoint{x: 1}, registry)
+    end
+
+    test "an unregistered *name* is trusted too -- nothing registered to check the module against" do
+      dxns = "%{ Point: %schema{ fields: @ordered %{ x: :integer } } }"
+      {:ok, doc} = Dextrin.decode(dxns)
+      {:ok, registry} = Dextrin.Schema.compile(doc)
+      registry = Dextrin.Registry.put_struct_module(registry, "Point", RealPoint)
+
+      assert Dextrin.Schema.TypeExpr.matches?(
+               {:reference, "NeverRegistered"},
+               %RealPoint{x: 1},
+               registry
+             )
+    end
+
+    test "an unregistered real struct is trusted (nothing to check it against)" do
+      registry = Dextrin.Registry.new()
+      assert Dextrin.Schema.TypeExpr.matches?({:reference, "Point"}, %RealPoint{x: 1}, registry)
     end
   end
 end

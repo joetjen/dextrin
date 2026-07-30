@@ -1,8 +1,8 @@
 defmodule Dextrin.Binary.RoundTripTest do
   @moduledoc """
   Per-type round-trip: `.dxn` text decodes to the same value that
-  `.dxnb` decodes back to after an encode/decode cycle (DESIGN.md §9).
-  Edge values chosen for the corners each type is actually likely to
+  `.dxnb` decodes back to after an encode/decode cycle. Edge values
+  chosen for the corners each type is actually likely to
   break on, not just a happy-path sample.
   """
 
@@ -11,6 +11,7 @@ defmodule Dextrin.Binary.RoundTripTest do
   @samples [
     {"nil", "nil"},
     {"true", "true"},
+    {"false", "false"},
     {"integer 0", "0"},
     {"negative integer", "-1"},
     {"bignum beyond 64 bits", "999999999999999999999999999999"},
@@ -63,12 +64,21 @@ defmodule Dextrin.Binary.RoundTripTest do
       assert {:ok, value} = Dextrin.decode(text)
       assert {:ok, encoded} = Dextrin.encode_binary(value)
       assert {:ok, decoded} = Dextrin.decode_binary(encoded)
-      assert decoded == value
+      assert comparable(decoded) == comparable(value)
     end
   end
 
-  # DXN.md §2.5 / DESIGN.md §7.3.1's general value-sharing (CBOR tags
-  # 28/29) is now implemented — see test/binary/value_sharing_test.exs,
+  # DXN.md §2.5's general value-sharing (CBOR tags 28/29) is
+  # implemented — see test/binary/value_sharing_test.exs,
   # not here, since it needs its own fixtures (repeated compound
   # values) rather than the one-off samples this file uses.
+
+  # A `Regex` compiled from the same source/opts twice is never `==` to
+  # itself in Elixir — its `re_pattern` field is a distinct opaque
+  # resource per compile, even though both inspect identically — so a
+  # decoded regex can never structurally equal the one `Dextrin.decode/1`
+  # produced. Substituting `{source, opts}` before comparing sidesteps
+  # that without weakening the check for every other type.
+  defp comparable(%Regex{} = r), do: {Regex.source(r), Regex.opts(r)}
+  defp comparable(other), do: other
 end

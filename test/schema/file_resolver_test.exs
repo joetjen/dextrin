@@ -1,8 +1,8 @@
 defmodule Dextrin.Schema.FileResolverTest do
   @moduledoc """
   `Dextrin.Schema.FileResolver` — one reasonable, swappable answer to
-  "automatically resolve `Namespace/Name` to a file path" (DESIGN.md
-  §4.4.6/§10), not a mandated convention. Convention under test:
+  "automatically resolve `Namespace/Name` to a file path", not a
+  mandated convention. Convention under test:
   `Namespace/Name` -> `<path>/Namespace.dxns`, entry `Name`; a bare
   `Name` -> `<path>/Name.dxns`, entry `Name`.
   """
@@ -18,7 +18,8 @@ defmodule Dextrin.Schema.FileResolverTest do
     resolver = Dextrin.Schema.FileResolver.for_paths([dir])
     registry = Dextrin.Registry.new() |> Dextrin.Registry.put_resolver(resolver)
 
-    assert {:ok, %{"x" => 1, "y" => 2}} = Dextrin.decode("%geo/Point{x: 1, y: 2}", registry: registry)
+    assert {:ok, %{"x" => 1, "y" => 2}} =
+             Dextrin.decode("%geo/Point{x: 1, y: 2}", registry: registry)
   end
 
   @tag :tmp_dir
@@ -52,7 +53,8 @@ defmodule Dextrin.Schema.FileResolverTest do
     resolver = Dextrin.Schema.FileResolver.for_paths([dir])
     registry = Dextrin.Registry.new() |> Dextrin.Registry.put_resolver(resolver)
 
-    assert {:ok, %Dextrin.Struct{name: "geo/Circle"}} = Dextrin.decode("%geo/Circle[1]", registry: registry)
+    assert {:ok, %Dextrin.Struct{name: "geo/Circle"}} =
+             Dextrin.decode("%geo/Circle[1]", registry: registry)
   end
 
   @tag :tmp_dir

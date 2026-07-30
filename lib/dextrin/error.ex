@@ -1,16 +1,18 @@
 defmodule Dextrin.Error do
   @moduledoc """
-  One error struct for both pipelines, so a caller never has to
-  special-case which one produced it. Wraps `Ichor.Error` verbatim for
-  the text side (including its caret-annotated `context_lines`); the
-  binary side has no source text to annotate, so it only ever carries
-  a message, a byte offset, and a stage.
+  One error struct for both the text and binary pipelines, so a caller
+  never has to special-case which one produced it. Wraps `Ichor.Error`
+  verbatim for the text side (including its caret-annotated
+  `context_lines`, useful for CLI/log output); the binary side has no
+  source text to annotate, so it only ever carries a message, a byte
+  offset, and a stage.
 
-  Also the channel for schema-violation errors (DESIGN.md §4.4.5) —
-  those come back with `stage: :action`, the same stage `Ichor.Error`
-  already uses for `Ichor.Actions`-level failures, so a schema
-  violation and a syntax error are indistinguishable by shape alone
-  and a caller only ever needs to check `{:error, %Dextrin.Error{}}`.
+  Also the channel for schema-violation errors: those come back with
+  `stage: :action`, the same stage `Ichor.Error` already uses for
+  `Ichor.Actions`-level failures (a `handle_rule/3`/`handle_token/3`
+  callback returning `{:error, _}`) — so a schema violation and a
+  syntax error are indistinguishable by shape alone, and a caller only
+  ever needs to check `{:error, %Dextrin.Error{}}`.
   """
 
   @type stage :: Ichor.Error.stage() | :binary
@@ -40,7 +42,8 @@ defmodule Dextrin.Error do
   end
 
   @spec format(t()) :: String.t()
-  def format(%__MODULE__{ichor_error: %Ichor.Error{} = ichor_error}), do: Ichor.Error.format(ichor_error)
+  def format(%__MODULE__{ichor_error: %Ichor.Error{} = ichor_error}),
+    do: Ichor.Error.format(ichor_error)
 
   def format(%__MODULE__{message: message, byte_offset: nil}), do: message
 

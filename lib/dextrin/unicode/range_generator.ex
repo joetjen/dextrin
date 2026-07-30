@@ -2,11 +2,19 @@ defmodule Dextrin.Unicode.RangeGenerator do
   @moduledoc """
   Pure text-processing core for turning a Unicode Character Database
   `DerivedCoreProperties.txt` into the generated `IDENT_START`/
-  `IDENT_CONT`/`IDENTIFIER` block spliced into `priv/grammar/dxn.aether`
-  (DESIGN.md §5.2). No file or network I/O lives here — that's
+  `IDENT_CONT`/`IDENTIFIER` block spliced into `priv/grammar/dxn.aether`.
+  No file or network I/O lives here — that's
   `Mix.Tasks.Dextrin.Gen.Unicode`'s job — so this module can be tested
   directly against small in-memory fixtures instead of the real,
   ~1MB UCD file.
+
+  `DXN.md`'s `letter`/`ident_char` productions are defined via
+  Unicode's `XID_Start`/`XID_Continue` properties (UAX #31) — hundreds
+  of codepoint ranges, not something any human should hand-write or
+  hand-maintain across Unicode versions. This module turns the UCD's
+  own published range data into Aether character-class syntax
+  (`\\u{H+}` escapes), so keeping the grammar current is "run the mix
+  task, review the diff," not manual transcription.
   """
 
   @line_re ~r/^([0-9A-Fa-f]+)(?:\.\.([0-9A-Fa-f]+))?\s*;\s*(\S+)/

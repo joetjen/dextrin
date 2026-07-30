@@ -4,7 +4,8 @@ defmodule Dextrin.Symbol do
   plain `String.t()`, never an Elixir atom: atoms are never garbage
   collected on the BEAM, and a decoder fed adversarial or merely large
   third-party input must not be able to exhaust the atom table by
-  decoding enough distinct symbols (DESIGN.md §4.2).
+  decoding enough distinct symbols. A caller who trusts their input
+  and wants a real atom can always convert explicitly.
   """
 
   @type t :: %__MODULE__{name: String.t()}

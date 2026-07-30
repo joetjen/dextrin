@@ -1,18 +1,17 @@
 defmodule Dextrin.Schema.MultiDocumentTest do
   @moduledoc """
   Verifies functionality that was designed and implemented early
-  (DESIGN.md §4.3's "loaded up front vs. on demand is a per-system
-  choice") but never actually exercised by a test until now: composing
-  more than one `.dxns` document into a single registry, and the lazy
-  resolver hook for on-demand schema loading.
+  ("loaded up front vs. on demand is a per-system choice") but never
+  actually exercised by a test until now: composing more than one
+  `.dxns` document into a single registry, and the lazy resolver hook
+  for on-demand schema loading.
 
-  This also directly informs DESIGN.md §4.4.6/§10's "cross-file schema
-  references" open item — the part of that problem which is just
-  "combine multiple compiled schemas into one registry" already works
-  today via plain API composition (`compile/3`'s `base_registry`
-  parameter, or a resolver). What's still genuinely undesigned is only
-  the *automatic* file-path resolution for a bare `Namespace/Name`
-  reference — a real policy decision, not an implementation gap.
+  This also directly covers "combine multiple compiled schemas into
+  one registry," which needs no special mechanism at all — plain API
+  composition (`compile/3`'s `base_registry` parameter, or a resolver)
+  already handles it. `Dextrin.Schema.FileResolver` covers the
+  separate, genuinely undesigned part: *automatic* file-path
+  resolution for a bare `Namespace/Name` reference.
   """
 
   use ExUnit.Case, async: true
@@ -28,7 +27,10 @@ defmodule Dextrin.Schema.MultiDocumentTest do
     {:ok, registry} = Dextrin.Schema.compile(money_doc, registry)
 
     assert {:ok, %{"x" => 1, "y" => 2}} = Dextrin.decode("%Point{x: 1, y: 2}", registry: registry)
-    assert {:ok, %{"amount" => amount}} = Dextrin.decode("%Money{amount: 19.99M}", registry: registry)
+
+    assert {:ok, %{"amount" => amount}} =
+             Dextrin.decode("%Money{amount: 19.99M}", registry: registry)
+
     assert Decimal.equal?(amount, Decimal.new("19.99"))
   end
 

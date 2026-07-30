@@ -1,6 +1,4 @@
 defmodule Mix.Tasks.Dextrin.Gen.Schema do
-  @shortdoc "Generates a .dxns scaffold from an already-compiled Elixir struct module"
-
   @moduledoc """
       $ mix dextrin.gen.schema MyApp.Point
       $ mix dextrin.gen.schema MyApp.Point --out point.dxns --name Point
@@ -8,18 +6,20 @@ defmodule Mix.Tasks.Dextrin.Gen.Schema do
   Introspects `Module`'s field list (always available for any compiled
   struct) and guesses each field's DXN type from its **default
   value**'s runtime type — not from `@type t()` typespecs. Typespec
-  extraction (`Code.Typespec.fetch_types/1`) needs a `:debug_info`
-  chunk that isn't guaranteed present for every compiled module
+  extraction (via Erlang/Elixir's typespec debug-info chunk API) needs
+  a `:debug_info` chunk that isn't guaranteed present for every compiled module
   (dependencies built for production commonly strip it), so it can't
   be relied on as the primary source; a field whose default is `nil`,
-  or that has no confident mapping, becomes `:any` (DESIGN.md §12.3)
-  rather than a guess either way.
+  or that has no confident mapping, becomes `:any` rather than a guess
+  either way.
 
   This is explicitly a starting point to review and tighten by hand,
   not a claim that struct → `.dxns` translation is lossless.
   """
 
   use Mix.Task
+
+  @shortdoc "Generates a .dxns scaffold from an already-compiled Elixir struct module"
 
   @impl Mix.Task
   def run(argv) do
@@ -40,7 +40,9 @@ defmodule Mix.Tasks.Dextrin.Gen.Schema do
     end
 
     schema_name = Keyword.get(opts, :name, module |> Module.split() |> List.last())
-    fields = module.__struct__() |> Map.from_struct() |> Map.to_list() |> Enum.sort_by(&elem(&1, 0))
+
+    fields =
+      module.__struct__() |> Map.from_struct() |> Map.to_list() |> Enum.sort_by(&elem(&1, 0))
 
     text = render_schema(schema_name, fields)
     write_output(text, opts[:out])

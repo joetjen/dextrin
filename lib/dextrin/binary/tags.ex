@@ -42,7 +42,15 @@ defmodule Dextrin.Binary.Tags do
   @spec regex_bits() :: [{non_neg_integer(), String.t()}]
   def regex_bits, do: [{0, "i"}, {1, "m"}, {2, "s"}, {3, "u"}, {4, "x"}, {5, "f"}, {6, "r"}]
 
-  @flag_to_opt %{"i" => :caseless, "m" => :multiline, "s" => :dotall, "u" => :unicode, "x" => :extended, "f" => :firstline, "r" => :ungreedy}
+  @flag_to_opt %{
+    "i" => :caseless,
+    "m" => :multiline,
+    "s" => :dotall,
+    "u" => :unicode,
+    "x" => :extended,
+    "f" => :firstline,
+    "r" => :ungreedy
+  }
 
   @doc """
   Flag letters to `Regex.compile/2` option atoms — deliberately not a
@@ -66,7 +74,9 @@ defmodule Dextrin.Binary.Tags do
   @spec regex_opts_to_byte([atom()]) :: non_neg_integer()
   def regex_opts_to_byte(opts) do
     Enum.reduce(regex_bits(), 0, fn {bit, flag}, acc ->
-      if Map.fetch!(@flag_to_opt, flag) in opts, do: Bitwise.bor(acc, Bitwise.bsl(1, bit)), else: acc
+      if Map.fetch!(@flag_to_opt, flag) in opts,
+        do: Bitwise.bor(acc, Bitwise.bsl(1, bit)),
+        else: acc
     end)
   end
 

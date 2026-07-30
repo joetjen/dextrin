@@ -1,30 +1,25 @@
 defmodule Dextrin.Text.GrammarHazardsTest do
   @moduledoc """
-  Regression tests for the two lexer hazards DESIGN.md §5.5/§5.6 found
-  and resolved — exactly the two places a future grammar edit is most
-  likely to silently reintroduce ambiguity (DESIGN.md §9).
+  Regression tests for the two lexer hazards found and resolved while
+  writing `priv/grammar/dxn.aether` (see the `MAP_KEY`/`AT_DISCARD`
+  comments there) — exactly the two places a future grammar edit is
+  most likely to silently reintroduce ambiguity.
   """
 
   use ExUnit.Case, async: true
 
   describe "§5.5 — MAP_KEY vs KEYWORD" do
     test "no space before colon is a shorthand map key" do
-      assert {:ok, %{x: 1}} = normalize(Dextrin.decode("%{x:1}"))
+      assert {:ok, %{x: 1}} = Dextrin.decode("%{x:1}")
     end
 
     test "space after colon is still a shorthand map key" do
-      assert {:ok, %{x: 1}} = normalize(Dextrin.decode("%{x: 1}"))
+      assert {:ok, %{x: 1}} = Dextrin.decode("%{x: 1}")
     end
 
     test "space before colon is NOT a valid shorthand key (documented restriction)" do
       assert {:error, %Dextrin.Error{}} = Dextrin.decode("%{x : 1}")
     end
-
-    defp normalize({:ok, map}) do
-      {:ok, Map.new(map, fn {%Dextrin.Keyword{name: name}, v} -> {String.to_atom(name), v} end)}
-    end
-
-    defp normalize(other), do: other
   end
 
   describe "§5.6 — AT_DISCARD vs a custom tag" do

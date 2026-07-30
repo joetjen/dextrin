@@ -2,7 +2,8 @@ defmodule Dextrin.Array do
   @moduledoc """
   DXN `array` (`@array[ ... ]`) — fixed-size, indexed. Wraps an
   Elixir tuple, the one DXN collection type where Elixir's own
-  fixed-arity tuple is actually the right fit (DESIGN.md §4.2).
+  fixed-arity tuple is actually the right fit — unlike `Dextrin.Tuple`,
+  which backs DXN's arbitrary-length `tuple` with a list instead.
   """
 
   @type t :: %__MODULE__{items: tuple()}

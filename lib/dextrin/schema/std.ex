@@ -1,8 +1,13 @@
 defmodule Dextrin.Schema.Std do
   @moduledoc """
-  dextrin's standard library of named types (`priv/schema/std.dxns`,
-  DESIGN.md §4.4.1) — common refinements like `PositiveInteger` or
-  `NonEmptyString`, so a schema author doesn't redefine them by hand.
+  dextrin's standard library of named types (`priv/schema/std.dxns`)
+  — common refinements like `PositiveInteger` or `NonEmptyString`, so
+  a schema author doesn't redefine them by hand. Built the same way
+  any consumer's own named types would be — nothing about them is
+  special-cased in `Dextrin.Schema.Compiler`. Deliberately excludes
+  anything domain-specific (email, phone number, URL-shaped string):
+  what counts as a valid one is an application decision this library
+  shouldn't guess at.
   Opt-in: pass `Std.registry/1`'s result as `compile/3`'s
   `base_registry` to make these names available to your own document.
 

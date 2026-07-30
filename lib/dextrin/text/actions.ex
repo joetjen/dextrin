@@ -1,13 +1,24 @@
 defmodule Dextrin.Text.Actions do
   @moduledoc """
-  `Ichor.Actions` implementation for `Dextrin.Text.Grammar`
-  (DESIGN.md §6). `context` is a `Dextrin.Registry.t()` — text parsing
-  never mutates it.
+  `Ichor.Actions` implementation for `Dextrin.Text.Grammar` — turns
+  the raw capture tree `Grammar.Native` produces while matching
+  `priv/grammar/dxn.aether` into actual `Dextrin.Value.t()` values.
+  `context` is a `Dextrin.Registry.t()` — text parsing only ever reads
+  it (to resolve struct schemas and custom tags), never mutates it.
+
+  `handle_token/3` covers every scalar (numbers via
+  `String.to_integer`/`Float.parse`/`Decimal.new`/a manual rational
+  split; strings/chars through the shared escape-decoding in
+  `Dextrin.Text.Escapes` so string bodies and char literals never
+  duplicate escape logic); `handle_rule/3` covers every collection and
+  `tag_form` (a dispatch table: built-in tag names from `DXN.md` §1.3
+  go to a hardcoded handler in `dispatch_tag/3`, anything else falls
+  through to a `Dextrin.Registry` lookup, then to `Dextrin.CustomTag`
+  as the last resort).
   """
 
-  @behaviour Ichor.Actions
-
   alias Dextrin.Text.Escapes
+  alias Ichor.Toolkit.Result
 
   alias Dextrin.{
     Array,
@@ -24,6 +35,8 @@ defmodule Dextrin.Text.Actions do
     Uri,
     Uuid
   }
+
+  @behaviour Ichor.Actions
 
   # Elixir's own built-in `Duration` module (ISO 8601 parsing, referenced
   # bare below) is deliberately not aliased here — `Dextrin.Duration`
@@ -85,7 +98,7 @@ defmodule Dextrin.Text.Actions do
     end
   end
 
-  def handle_token(:KEYWORD, text, _ctx) do
+  def handle_token(:KEYWORD, text, ctx) do
     body = String.trim_leading(text, ":")
 
     case body do
@@ -93,25 +106,28 @@ defmodule Dextrin.Text.Actions do
         inner = body |> String.trim_leading("\"") |> String.trim_trailing("\"")
 
         case Escapes.decode(inner) do
-          {:ok, decoded} -> {:ok, Keyword.new(decoded)}
+          {:ok, decoded} -> {:ok, keyword_value(decoded, ctx)}
           {:error, reason} -> {:error, action_error("invalid keyword literal: #{reason}")}
         end
 
       identifier ->
-        {:ok, Keyword.new(identifier)}
+        {:ok, keyword_value(identifier, ctx)}
     end
   end
 
-  def handle_token(:MAP_KEY, text, _ctx) do
-    {:ok, Keyword.new(String.trim_trailing(text, ":"))}
+  def handle_token(:MAP_KEY, text, ctx) do
+    {:ok, keyword_value(String.trim_trailing(text, ":"), ctx)}
   end
 
   def handle_token(:DATE_SIGIL, text, _ctx) do
     inner = text |> String.trim_leading("~D[") |> String.trim_trailing("]")
 
     case Date.from_iso8601(inner) do
-      {:ok, date} -> {:ok, date}
-      {:error, reason} -> {:error, action_error("invalid date #{inspect(inner)}: #{inspect(reason)}")}
+      {:ok, date} ->
+        {:ok, date}
+
+      {:error, reason} ->
+        {:error, action_error("invalid date #{inspect(inner)}: #{inspect(reason)}")}
     end
   end
 
@@ -119,8 +135,11 @@ defmodule Dextrin.Text.Actions do
     inner = text |> String.trim_leading("~T[") |> String.trim_trailing("]")
 
     case Time.from_iso8601(inner) do
-      {:ok, time} -> {:ok, normalize_microsecond(time)}
-      {:error, reason} -> {:error, action_error("invalid time #{inspect(inner)}: #{inspect(reason)}")}
+      {:ok, time} ->
+        {:ok, normalize_microsecond(time)}
+
+      {:error, reason} ->
+        {:error, action_error("invalid time #{inspect(inner)}: #{inspect(reason)}")}
     end
   end
 
@@ -144,8 +163,11 @@ defmodule Dextrin.Text.Actions do
         # string form triggers a deprecation warning for "r" (Elixir
         # prefers /U), even though "r" is DXN.md's own valid flag letter.
         case Regex.compile(pattern, Dextrin.Binary.Tags.regex_flags_to_opts(flags)) do
-          {:ok, regex} -> {:ok, regex}
-          {:error, reason} -> {:error, action_error("invalid regex #{inspect(text)}: #{inspect(reason)}")}
+          {:ok, regex} ->
+            {:ok, regex}
+
+          {:error, reason} ->
+            {:error, action_error("invalid regex #{inspect(text)}: #{inspect(reason)}")}
         end
 
       nil ->
@@ -272,16 +294,7 @@ defmodule Dextrin.Text.Actions do
   end
 
   defp eval_list(caps, ctx) when is_list(caps) do
-    Enum.reduce_while(caps, {:ok, [], ctx}, fn cap, {:ok, acc, ctx} ->
-      case cap.eval.(ctx) do
-        {:ok, value, ctx} -> {:cont, {:ok, [value | acc], ctx}}
-        {:error, _} = err -> {:halt, err}
-      end
-    end)
-    |> case do
-      {:ok, acc, ctx} -> {:ok, Enum.reverse(acc), ctx}
-      {:error, _} = err -> err
-    end
+    Result.map_ok(caps, ctx, fn cap, ctx -> cap.eval.(ctx) end)
   end
 
   # A single (non-list) capture can arrive unwrapped when its
@@ -291,10 +304,14 @@ defmodule Dextrin.Text.Actions do
   defp eval_list(cap, ctx), do: eval_list([cap], ctx)
 
   defp struct_field_names(pairs) do
-    Enum.reduce_while(pairs, {:ok, []}, fn {key, val}, {:ok, acc} ->
+    Result.reduce_ok(pairs, [], fn {key, val}, acc ->
       case field_name(key) do
-        {:ok, name} -> {:cont, {:ok, [{name, val} | acc]}}
-        :error -> {:halt, {:error, action_error("struct field name must be an identifier or string, got #{inspect(key)}")}}
+        {:ok, name} ->
+          {:ok, [{name, val} | acc]}
+
+        :error ->
+          {:error,
+           action_error("struct field name must be an identifier or string, got #{inspect(key)}")}
       end
     end)
     |> case do
@@ -306,6 +323,15 @@ defmodule Dextrin.Text.Actions do
   defp field_name(%Keyword{name: name}), do: {:ok, name}
   defp field_name(%Symbol{name: name}), do: {:ok, name}
   defp field_name(name) when is_binary(name), do: {:ok, name}
+
+  # A struct field's shorthand key (`x:`) goes through the same
+  # `keyword_value/2` `Registry.t()`-driven choice as any other
+  # keyword-shaped key — trusted (default) decodes it as a real atom.
+  # `Dextrin.Struct.keyed/2` always wants the plain string name either
+  # way, regardless of which the caller's `trusted:` setting produced.
+  defp field_name(name) when is_atom(name) and name not in [nil, true, false],
+    do: {:ok, Atom.to_string(name)}
+
   defp field_name(_), do: :error
 
   defp materialize_struct(name, fields, ctx) do
@@ -321,10 +347,13 @@ defmodule Dextrin.Text.Actions do
 
             # Fail-fast, decode-time enforcement — a schema violation
             # is an ordinary decode error, same channel as bad syntax,
-            # with no lenient escape hatch (DESIGN.md §4.4.5).
+            # with no lenient escape hatch to get the value anyway.
             case Dextrin.Schema.Validator.materialize(compiled, fields, materializer, registry) do
-              {:ok, materialized} -> {:ok, materialized, registry}
-              {:error, reason} -> {:error, action_error("struct #{inspect(name)} violates its schema: #{reason}")}
+              {:ok, materialized} ->
+                {:ok, materialized, registry}
+
+              {:error, reason} ->
+                {:error, action_error("struct #{inspect(name)} violates its schema: #{reason}")}
             end
 
           {:unknown, registry} ->
@@ -341,10 +370,17 @@ defmodule Dextrin.Text.Actions do
 
   defp decode_char_escape("\\" <> rest) do
     case Escapes.decode_escape(rest) do
-      {:ok, <<cp::utf8>>, ""} -> {:ok, Char.new(cp)}
-      {:ok, _multi, ""} -> {:error, action_error("char escape must decode to exactly one codepoint")}
-      {:ok, _, _leftover} -> {:error, action_error("trailing characters after char escape")}
-      {:error, reason} -> {:error, action_error("invalid char escape: #{reason}")}
+      {:ok, <<cp::utf8>>, ""} ->
+        {:ok, Char.new(cp)}
+
+      {:ok, _multi, ""} ->
+        {:error, action_error("char escape must decode to exactly one codepoint")}
+
+      {:ok, _, _leftover} ->
+        {:error, action_error("trailing characters after char escape")}
+
+      {:error, reason} ->
+        {:error, action_error("invalid char escape: #{reason}")}
     end
   end
 
@@ -421,10 +457,11 @@ defmodule Dextrin.Text.Actions do
           {:ok, decoded, ctx}
         else
           :error ->
-            with {:ok, inner, ctx} <- value_cap.eval.(ctx), do: {:ok, CustomTag.new(name, inner), ctx}
+            with {:ok, inner, ctx} <- value_cap.eval.(ctx),
+                 do: {:ok, CustomTag.new(name, inner), ctx}
 
-          {:error, _} = err ->
-            err
+          {:error, reason} ->
+            {:error, action_error("tag #{inspect(name)} decoder failed: #{inspect(reason)}")}
         end
 
       _ ->
@@ -436,22 +473,31 @@ defmodule Dextrin.Text.Actions do
   # map_lit evaluation always collapses to a plain Map (losing write
   # order), which is correct for the common bare-`%{...}` case but
   # would destroy exactly the information `@ordered` exists to keep.
-  # `Ichor.evaluate_node/3` lets us re-enter the parse tree for each
-  # map_entry directly, bypassing map_lit's own (order-discarding)
-  # handler (DESIGN.md's discussion of `Dextrin.OrderedMap`, §4.4.2).
+  # `Ichor.Actions.evaluate_node/3` lets us re-enter the parse tree for
+  # each map_entry directly, bypassing map_lit's own (order-discarding)
+  # handler, so pair order in the source text survives into
+  # `Dextrin.OrderedMap.pairs`.
   defp eval_ordered_map(value_cap, ctx) do
     case value_cap.node do
-      {:rule, :value, %{value_body: {:rule, :value_body, %{map_lit: {:rule, :map_lit, %{map_entry: raw_entries}}}}}} ->
-        raw_entries
+      {:rule, :value,
+       %{
+         value_body: {:rule, :value_body, %{map_lit: {:rule, :map_lit, map_lit_captures}}}
+       }} ->
+        # `Map.get(..., :map_entry, [])`, not a `%{map_entry: raw_entries}`
+        # destructure — an empty `%{}` has no `:map_entry` key in its
+        # captures at all (same reason the ordinary, non-`@ordered`
+        # `map_lit` handler below needs the same default), so requiring
+        # the key present rejected `@ordered %{}` outright as if it
+        # weren't a map literal, instead of an ordered map with zero
+        # pairs.
+        map_lit_captures
+        |> Map.get(:map_entry, [])
         |> List.wrap()
-        |> Enum.reduce_while({:ok, [], ctx}, fn raw_entry, {:ok, acc, ctx} ->
-          case Ichor.evaluate_node(raw_entry, __MODULE__, ctx) do
-            {:ok, pair, ctx} -> {:cont, {:ok, [pair | acc], ctx}}
-            {:error, _} = err -> {:halt, err}
-          end
+        |> Result.map_ok(ctx, fn raw_entry, ctx ->
+          Ichor.Actions.evaluate_node(raw_entry, __MODULE__, ctx)
         end)
         |> case do
-          {:ok, acc, ctx} -> {:ok, OrderedMap.new(Enum.reverse(acc)), ctx}
+          {:ok, pairs, ctx} -> {:ok, OrderedMap.new(pairs), ctx}
           {:error, _} = err -> err
         end
 
@@ -461,8 +507,12 @@ defmodule Dextrin.Text.Actions do
   end
 
   defp from_elixir_duration(%Duration{} = d) do
-    {micro, precision} = d.microsecond || {0, 0}
-    total_micro = if d.second == 0 and micro == 0 and precision == 0, do: nil, else: d.second * 1_000_000 + micro
+    {micro, precision} = d.microsecond
+
+    total_micro =
+      if d.second == 0 and micro == 0 and precision == 0,
+        do: nil,
+        else: d.second * 1_000_000 + micro
 
     %Dextrin.Duration{
       years: zero_to_nil(d.year),
@@ -477,6 +527,13 @@ defmodule Dextrin.Text.Actions do
 
   defp zero_to_nil(0), do: nil
   defp zero_to_nil(n), do: n
+
+  # `Dextrin.Registry.put_trusted/2`'s own doc has the full reasoning:
+  # trusted (default) decodes a real atom, `DXN.md` §1.3's own natural
+  # mapping; untrusted wraps in `Dextrin.Keyword` instead. `symbol`
+  # deliberately has no equivalent — see that doc.
+  defp keyword_value(name, %Registry{trusted: true}), do: String.to_atom(name)
+  defp keyword_value(name, _ctx), do: Keyword.new(name)
 
   defp parse_offset_datetime(text) do
     with [date_part, time_and_offset] <- String.split(text, "T", parts: 2),

@@ -4,7 +4,7 @@ defmodule Dextrin.Tuple do
   Wraps a list, not an Elixir tuple: DXN tuples have no fixed arity in
   the type system the way Elixir's do, and `Dextrin.Array` already
   claims the Elixir tuple for the one DXN type that actually is
-  fixed-size/indexed (DESIGN.md §4.2).
+  fixed-size/indexed.
   """
 
   @type t :: %__MODULE__{items: [term()]}

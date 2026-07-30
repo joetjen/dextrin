@@ -9,7 +9,10 @@ COMMENT := "#" (!"\n" .)* "\n"?
 TRIVIA  := (SPACE | COMMENT)*
 
 ; Reserved words declared before IDENTIFIER so maximal-munch's
-; declaration-order tie-break keeps them out of IDENTIFIER (DESIGN.md §5.3).
+; declaration-order tie-break keeps them out of IDENTIFIER — "nil",
+; "true", "false" are all syntactically valid IDENTIFIER matches too,
+; so the fix is structural (declare them first), not a grammar-level
+; exclusion list.
 NIL   := "nil"
 TRUE  := "true"
 FALSE := "false"
@@ -30,13 +33,19 @@ IDENTIFIER  := IDENT_START IDENT_CONT* ("/" IDENT_START IDENT_CONT*)?
 
 ; Fuses identifier+colon into one token so maximal munch can never
 ; confuse a shorthand map key with a value-position KEYWORD token at
-; the same position (DESIGN.md §5.5). No standalone COLON token exists
-; anywhere in this grammar.
+; the same position: without this, "name:value" (no space, legal per
+; ws being insignificant everywhere) would let a lexer choose the
+; longer KEYWORD match (":value") over a standalone COLON, silently
+; breaking the map-entry shorthand. No standalone COLON token exists
+; anywhere in this grammar — the arrow form uses "=>" instead.
 MAP_KEY := IDENTIFIER ":"
 KEYWORD := ":" (IDENTIFIER | STRING)
 
 ; Fixed 2-char token beats plain AT by length at every "@_..." position,
-; so a custom tag can never be named "_..." (DESIGN.md §5.6).
+; so a custom tag can never be named "_..." — "_" alone is a valid
+; IDENTIFIER (letter = "_" is allowed with zero following ident_chars),
+; so without this fixed literal, "@_foo" would be ambiguous between
+; "discard foo" and "custom tag named _foo".
 AT_DISCARD := "@_"
 AT         := "@"
 
@@ -45,7 +54,9 @@ STRING := "\"" (ESCAPE | (![\"\\] .))* "\""
 CHAR   := "?" (ESCAPE | "s" | (![ \t\r\n] .))
 
 ; Sigil bodies are captured whole; ISO 8601/regex validation happens
-; in Dextrin.Text.Actions, not in the grammar (DESIGN.md §5.7).
+; in Dextrin.Text.Actions (via Date/Time/DateTime.from_iso8601 and
+; Regex.compile), not in the grammar — smaller grammar, and correctness
+; for calendar edge cases comes from a battle-tested stdlib parser.
 DATE_SIGIL    := "~D[" (!"]" .)* "]"
 TIME_SIGIL    := "~T[" (!"]" .)* "]"
 INSTANT_SIGIL := "~U[" (!"]" .)* "]"
@@ -58,9 +69,11 @@ REGEX_SIGIL   := "~r/" (("\\" .) | (!"/" .))* "/" [imsuxfr]*
 ; only at document start — Ichor tokenizes the whole input in one
 ; global pass before parsing ever begins (AETHER.md), so this isn't
 ; position-sensitive. Consequence: "@dxn" can only ever be this header,
-; never an ordinary custom tag, anywhere in a document. Low-risk (it's
-; the format's own name), but a real, deliberate restriction — same
-; shape as §5.5/§5.6's. Written up in DESIGN.md §5.9.
+; never an ordinary custom tag, anywhere in a document — a nested
+; "[@dxn \"x\"]" fails to parse rather than being read as a custom tag
+; literally named "dxn". Low-risk (it's the format's own name), but a
+; real, deliberate restriction — same shape as the MAP_KEY/AT_DISCARD
+; fusions above.
 ; @skip's auto-splice only inserts trivia *between* sequence elements
 ; (AETHER.md), never after the last one — a real document almost
 ; always ends with a trailing newline (confirmed empirically: "1\n"
@@ -101,7 +114,9 @@ map_entry := (short_key:MAP_KEY short_val:value) | (arrow_key:value "=>" arrow_v
 
 ; "%{" vs "%Name{" vs "%Name[" need no special token — bare "%" plus
 ; either "{" or an identifier disambiguates via ordinary ordered choice
-; at the rule level (DESIGN.md §5.8).
+; at the rule level: putting map_lit first in value_body's choice is
+; enough, since PEG ordered choice only needs map_lit to fail fast on
+; seeing an identifier instead of "{", which it does immediately.
 struct_lit        := "%" name:IDENTIFIER (keyed:struct_keyed | positional:struct_positional)
 struct_keyed      := "{" map_entry* "}"
 struct_positional := "[" value* "]"

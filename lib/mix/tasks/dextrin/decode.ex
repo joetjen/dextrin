@@ -1,6 +1,4 @@
 defmodule Mix.Tasks.Dextrin.Decode do
-  @shortdoc "Decodes .dxnb binary to .dxn text"
-
   @moduledoc """
       $ mix dextrin.decode data.dxnb
       $ mix dextrin.decode data.dxnb --out data.dxn
@@ -8,10 +6,12 @@ defmodule Mix.Tasks.Dextrin.Decode do
   Prints through `Dextrin.Text.Formatter`'s pretty (multi-line) mode by
   default — a CLI decode is a human reading the result, so the
   encoder's own single-line default (correct for `Dextrin.encode/2`'s
-  own API) isn't the right default here (DESIGN.md §12.2).
+  own API) isn't the right default here.
   """
 
   use Mix.Task
+
+  @shortdoc "Decodes .dxnb binary to .dxn text"
 
   @impl Mix.Task
   def run(argv) do
@@ -26,8 +26,10 @@ defmodule Mix.Tasks.Dextrin.Decode do
   defp decode(path, opts) do
     bytes = File.read!(path)
 
-    case Dextrin.decode_binary(bytes) do
-      {:ok, value} -> write_output(Dextrin.Text.Formatter.pretty(value), opts[:out])
+    with {:ok, value} <- Dextrin.decode_binary(bytes),
+         {:ok, text} <- Dextrin.encode(value, pretty: true) do
+      write_output(text, opts[:out])
+    else
       {:error, error} -> Mix.raise(Dextrin.Error.format(error))
     end
   end

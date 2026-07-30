@@ -1,7 +1,7 @@
 defmodule Dextrin.Conformance.WorkedExampleTest do
   @moduledoc """
   `DXN.md` §3's worked example — the one document that exercises every
-  type at once, the way a real consumer would (DESIGN.md §9).
+  type at once, the way a real consumer would.
   """
 
   use ExUnit.Case, async: true
@@ -21,8 +21,12 @@ defmodule Dextrin.Conformance.WorkedExampleTest do
   }
   """
 
+  # `trusted: false` throughout this file: it asserts the pre-existing
+  # `Dextrin.Keyword`-based shapes (map keys, the `tags` set, `result`'s
+  # `ok`) that `trusted: true` (now decode's default) would instead
+  # decode as plain atoms.
   setup do
-    {:ok, value} = Dextrin.decode(@source)
+    {:ok, value} = Dextrin.decode(@source, trusted: false)
     %{value: value}
   end
 
@@ -51,7 +55,11 @@ defmodule Dextrin.Conformance.WorkedExampleTest do
 
   test "tags is a set of keywords", %{value: value} do
     assert %MapSet{} = tags = fetch(value, "tags")
-    assert MapSet.equal?(tags, MapSet.new([Dextrin.Keyword.new("admin"), Dextrin.Keyword.new("staff")]))
+
+    assert MapSet.equal?(
+             tags,
+             MapSet.new([Dextrin.Keyword.new("admin"), Dextrin.Keyword.new("staff")])
+           )
   end
 
   test "meta is an ordered map preserving field order", %{value: value} do
@@ -61,7 +69,8 @@ defmodule Dextrin.Conformance.WorkedExampleTest do
   end
 
   test "address is an opaque positional struct (no schema registered)", %{value: value} do
-    assert %Dextrin.Struct{name: "Point", fields: {:positional, [51.05, 13.74]}} = fetch(value, "address")
+    assert %Dextrin.Struct{name: "Point", fields: {:positional, [51.05, 13.74]}} =
+             fetch(value, "address")
   end
 
   test "result is a tuple", %{value: value} do
@@ -77,9 +86,19 @@ defmodule Dextrin.Conformance.WorkedExampleTest do
 
   test "every field round-trips through .dxnb", %{value: value} do
     assert {:ok, encoded} = Dextrin.encode_binary(value)
-    assert {:ok, decoded} = Dextrin.decode_binary(encoded)
-    assert decoded == value
+    assert {:ok, decoded} = Dextrin.decode_binary(encoded, trusted: false)
+    # "handle"'s Regex is compiled independently on each side (once by
+    # Dextrin.decode/1, once by decode_binary/1 here) -- Elixir's own
+    # `Regex.compile!/2` never produces two structs that are `==` to
+    # each other for the same source/opts (a distinct opaque
+    # `re_pattern` resource per compile), so it's swapped for a plain,
+    # comparable tuple on both sides before the equality check.
+    normalize = fn map -> Map.new(map, fn {k, v} -> {k, comparable(v)} end) end
+    assert normalize.(decoded) == normalize.(value)
   end
 
   defp fetch(map, key), do: Map.fetch!(map, Dextrin.Keyword.new(key))
+
+  defp comparable(%Regex{} = r), do: {Regex.source(r), Regex.opts(r)}
+  defp comparable(other), do: other
 end
