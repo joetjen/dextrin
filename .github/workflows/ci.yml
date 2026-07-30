@@ -5,31 +5,36 @@ on:
     branches: [main, develop]
   pull_request:
 
+permissions:
+  contents: read
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   MIX_ENV: test
 
 jobs:
-  precommit:
-    name: mix precommit (OTP ${{ matrix.otp }})
+  ci:
+    name: OTP ${{ matrix.otp }} / Elixir 1.19.4
     runs-on: ubuntu-latest
-
     strategy:
       fail-fast: false
       matrix:
-        # The three latest common OTP majors; Elixir version tracks
-        # mix.exs's own `~> 1.19` requirement, so only OTP varies here.
-        otp: ['26', '27', '28']
-        elixir: ['1.19']
-
+        include:
+          - otp: "28"
+            elixir: "1.19.4-otp-28"
+          - otp: "27"
+            elixir: "1.19.4-otp-27"
+          - otp: "26"
+            elixir: "1.19.4-otp-26"
     steps:
       - uses: actions/checkout@v4
 
-      - uses: erlef/setup-beam@v1
+      - name: Set up Elixir
         id: beam
+        uses: erlef/setup-beam@v1
         with:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
@@ -40,63 +45,15 @@ jobs:
           path: |
             deps
             _build
-          key: mix-${{ runner.os }}-otp-${{ steps.beam.outputs.otp-version }}-elixir-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('**/mix.lock') }}
+          key: mix-${{ runner.os }}-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-${{ hashFiles('mix.lock') }}
           restore-keys: |
-            mix-${{ runner.os }}-otp-${{ steps.beam.outputs.otp-version }}-elixir-${{ steps.beam.outputs.elixir-version }}-
+            mix-${{ runner.os }}-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-
 
       - name: Install dependencies
         run: mix deps.get
 
-      # Mirrors `mix precommit`'s alias list (mix.exs) one command per
-      # step, fast/cheap checks first, so a broken commit fails quickly
-      # and the GitHub UI shows exactly which check failed. Keep this
-      # list in sync with the `precommit` alias if that ever changes.
-      - name: Check formatting
-        run: mix format --check-formatted
+      - name: Precommit
+        run: mix precommit
 
-      - name: Compile (warnings as errors)
-        run: mix compile --warnings-as-errors
-
-      - name: Credo
-        run: mix credo --strict
-
-      - name: Sobelow
-        run: mix sobelow
-
-      - name: Test
-        run: mix test
-
-      - name: Dialyzer
-        run: mix dialyzer
-
-  package:
-    name: hex.build
-    runs-on: ubuntu-latest
-
-    # Not part of `mix precommit` (that alias targets ordinary dev
-    # iteration) — verifies mix.exs's package.files allowlist still
-    # actually assembles into a publishable package.
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: erlef/setup-beam@v1
-        id: beam
-        with:
-          version-file: .tool-versions
-          version-type: strict
-
-      - name: Restore deps/_build cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            deps
-            _build
-          key: mix-${{ runner.os }}-otp-${{ steps.beam.outputs.otp-version }}-elixir-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('**/mix.lock') }}
-          restore-keys: |
-            mix-${{ runner.os }}-otp-${{ steps.beam.outputs.otp-version }}-elixir-${{ steps.beam.outputs.elixir-version }}-
-
-      - name: Install dependencies
-        run: mix deps.get
-
-      - name: Build Hex package
+      - name: Verify package assembles (hex.build)
         run: mix hex.build
