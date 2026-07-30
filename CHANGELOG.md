@@ -7,7 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-07-30
+
 ### Added
+
+- **`.dxn` text**: full grammar support for all 30 types DXN.md §1.3
+  defines, via a hand-authored Aether grammar (`priv/grammar/dxn.aether`)
+  compiled at build time through Ichor's `Grammar.Native` backend.
+- **`.dxnb` binary**: a hand-rolled CBOR codec (`Dextrin.Binary.Encoder`/
+  `Decoder`) covering the full type mapping, the private tag block
+  (200-214), the duration bitmask and regex flags byte, and both
+  value-sharing extensions (string-only, tag 256/25; general arbitrary-
+  value sharing, tags 28/29 — decode-only required, encode opt-in via
+  `share: true`, gated by a size-aware threshold rather than a fixed rule).
+- **`.dxns` schema documents**: `Dextrin.Schema.compile/3` compiles a
+  decoded `.dxns` document (itself plain `.dxn` data, no new grammar)
+  into a `Dextrin.Registry` — struct schemas with required/optional
+  (`?`-suffixed keys)/closed/forbidden fields and `refine` constraints,
+  plus reusable named types composed from the fixed 13-form type_expr
+  vocabulary. Enforcement is automatic, fail-fast, and symmetric:
+  `Dextrin.decode/2`/`decode_binary/2` check every registered struct
+  name unconditionally on the way in; `Dextrin.encode/2`/
+  `encode_binary/2` do the same automatic whole-tree check on the way
+  out (`validate: false` opts out), plus an opt-in `schema:` check for
+  a nameless top-level value.
+- **`Dextrin.Registry`**: the shared extension point for both `struct`
+  (schema-driven, `put_struct_materializer/3`/`put_struct_module/3`)
+  and `custom-tag` (`put_tag/3`/`put_tag_encoder/4`), plus a lazy
+  `put_resolver/2` hook for on-demand schema loading.
+- **`Dextrin.Schema.Std`**: a small standard library of common named
+  types (`PositiveInteger`, `NonEmptyString`, `Percentage`, ...),
+  opt-in via `Std.registry/1`.
+- **`Dextrin.Schema.FileResolver`**: one reasonable, swappable
+  convention resolving `Namespace/Name` references to
+  `<path>/Namespace.dxns` files on disk.
+- **Value types**: `Dextrin.Symbol`, `Dextrin.Keyword` (never Elixir
+  atoms — decoding untrusted data can't exhaust the atom table),
+  `Dextrin.Tuple`, `Dextrin.Array`, `Dextrin.OrderedMap`,
+  `Dextrin.SortedSet`, `Dextrin.Struct`, `Dextrin.Duration`,
+  `Dextrin.Rational`, `Dextrin.Uuid`, `Dextrin.Uri`, `Dextrin.Bytes`,
+  `Dextrin.Char`, `Dextrin.CustomTag` — small wrapper structs only
+  where Elixir has nothing native that fits without losing information.
+- **`Dextrin.Text.Formatter`**: multi-line, indented `.dxn` rendering
+  (`pretty/2`), built on top of `Dextrin.Text.Printer`'s single-line
+  default.
+- **`mix dextrin.*` tasks**: `validate`, `encode`, `decode`, `format`,
+  `gen.schema` (scaffold a `.dxns` file from an existing Elixir
+  struct's field list), and `gen.unicode` (regenerate the grammar's
+  Unicode `XID_Start`/`XID_Continue` identifier ranges from the latest
+  Unicode Character Database — a deliberate, reviewed action, never
+  run at build time).
+- Conformance fixtures covering `DXN.md` §3's full worked example,
+  per-type round-trip tests, cross-format equivalence tests, grammar
+  hazard regression tests, and a fuzz/malformed-input pass over the
+  binary decoder.
 
 - `Dextrin.encode/2` gained `pretty:` and `indent:` opts — `pretty:
   true` produces multi-line, indented output (`indent:` sets spaces
@@ -63,6 +116,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   type is documented (`DXN.md` §1.3) and how most callers actually use
   this library, at the cost of needing an explicit opt-out for
   genuinely untrusted/network input.
+
+- **Breaking:** `Dextrin.Text.Printer`'s (and so `Dextrin.encode/2`'s
+  default, non-`pretty:` output) is now maximally compact: no space
+  after a map/struct entry's `:`, no space around `=>`, and entries/
+  positional-struct fields are comma-joined with no trailing space
+  (`%{x:1,y:2}`, `%Point{x:1,y:2}`, `%{1=>"one"}`) rather than the
+  previous `%{x: 1, y: 2}`-style spacing. DXN's own grammar treats
+  whitespace and commas as insignificant everywhere, so this loses no
+  information and every value still round-trips identically through
+  `decode/2`; only the default *rendering* got smaller. List/tuple/
+  set/array element separators and `@tag value`'s space are unchanged
+  (the former have nothing to gain — comma and space are both a
+  single byte — and the latter's space can't be dropped in general for
+  a custom tag whose value could start with an identifier character).
+- **Breaking:** `Dextrin.Text.Formatter.pretty/2` now returns
+  `{:ok, String.t()} | {:error, Dextrin.Error.t()}`, matching
+  `Dextrin.Text.Printer.print/2`'s contract, instead of a bare
+  `String.t()` that raised `ArgumentError` on an unencodable value.
+  Also gained the same `indent:` opt `Dextrin.encode/2`'s new
+  `pretty:`/`indent:` opts use internally (default 2 spaces per
+  nesting level, previously a fixed, non-configurable 2).
+- Adopted ichor's new `mix ichor.gen`/`ichor_runtime` split: the `.dxn`
+  lexer/parser is now generated ahead of time into
+  `lib/dextrin/text/grammar/native.ex` (checked in, regenerated via
+  `mix ichor.gen` whenever `priv/grammar/dxn.aether` changes) instead
+  of being produced by `use Ichor` at `dextrin`'s own compile time.
+  `Dextrin.Text.Grammar` is now a thin, hand-documented wrapper around
+  the generated `Grammar.Native`. This lets `mix.exs` depend on the
+  small `ichor_runtime` package (the only thing the generated code
+  actually calls) as an ordinary runtime dependency, while `ichor`
+  proper (the Aether front-end, format importers, `Grammar.Analysis`,
+  both codegen backends) moves to `only: :dev, runtime: false` — the
+  bulk of Ichor no longer ships in a `dextrin` release. Both are now
+  published to Hex separately (`ichor ~> 0.2.1`, `ichor_runtime ~>
+  0.1.0`) and referenced as ordinary Hex dependencies — no `git:`/
+  `sparse:`/`override:` needed, since `ichor`'s own `mix.exs` now
+  depends on `ichor_runtime` the same way. Migrating surfaced a genuine
+  gap in that split, fixed upstream: the raw-capture-node re-evaluation
+  entry point needed by `Dextrin.Text.Actions` at actual decode time
+  (for `@ordered %{...}`) had stayed on the top-level, dev-only `Ichor`
+  module instead of moving to `ichor_runtime`; it's now
+  `Ichor.Actions.evaluate_node/3`.
+- Added `credo`, `dialyxir`, `sobelow`, and `excoveralls` as dev/test
+  tooling, plus a `mix precommit` alias (`format`, `compile
+  --warnings-as-errors`, `credo --strict`, `sobelow`, `test`,
+  `dialyzer`) run before every commit. Fixed everything it surfaced:
+  canonical module layout (`moduledoc`/`use`/`alias`/...) across the
+  mix tasks and text pipeline modules; `Dextrin.decode/2`'s spec
+  under-declared its own return type (the underlying grammar engine
+  can report a list of errors, not just one) — widened to match, which
+  also resolved three "dead code" warnings in the mix tasks' own error
+  handling; removed a dead `Duration.microsecond || {0, 0}` fallback
+  (that field is never `nil`).
+- Every hand-rolled "walk a collection, thread an accumulator, halt on
+  the first non-`{:ok, _}` step result" reduce across
+  `Dextrin.Schema.Compiler`, `Dextrin.Schema.Validator`,
+  `Dextrin.Binary.Encoder`, `Dextrin.Text.Printer`, and
+  `Dextrin.Text.Actions` now uses `Ichor.Toolkit.Result.reduce_ok/3`/
+  `map_ok/3` instead of a hand-rolled `Enum.reduce_while/3`.
+- Documentation reworked throughout: every module's docs are now
+  self-contained (no references to an external design document), and
+  the normative `DXN.md` format specification moved under
+  `guides/dxn/DXN.md`, alongside a full set of tutorials, examples,
+  and cheatsheets for both this library and the DXN format itself.
+  `DXN.md` itself gained a new normative §4, "Schema documents
+  (`.dxns`)" — the `type_expr`/`refine`-constraint vocabulary,
+  `%schema{}`/`%field{}` shape, named types, cross-file references, and
+  enforcement semantics, written implementation-independent (this
+  library's own choices stay documented separately, in
+  `Dextrin.Schema`'s own module docs) — closing a gap where `.dxns`
+  was documented everywhere *except* the one place meant to be
+  the authoritative, cross-implementation reference for it.
 
 ### Fixed
 
@@ -145,134 +270,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   encoding. `Dextrin.Text.Printer`/`Dextrin.Binary.Encoder` now rebuild
   the equivalent `Dextrin.Struct` automatically, in the compiled
   schema's own canonical field order.
-
-### Changed
-
-- **Breaking:** `Dextrin.Text.Printer`'s (and so `Dextrin.encode/2`'s
-  default, non-`pretty:` output) is now maximally compact: no space
-  after a map/struct entry's `:`, no space around `=>`, and entries/
-  positional-struct fields are comma-joined with no trailing space
-  (`%{x:1,y:2}`, `%Point{x:1,y:2}`, `%{1=>"one"}`) rather than the
-  previous `%{x: 1, y: 2}`-style spacing. DXN's own grammar treats
-  whitespace and commas as insignificant everywhere, so this loses no
-  information and every value still round-trips identically through
-  `decode/2`; only the default *rendering* got smaller. List/tuple/
-  set/array element separators and `@tag value`'s space are unchanged
-  (the former have nothing to gain — comma and space are both a
-  single byte — and the latter's space can't be dropped in general for
-  a custom tag whose value could start with an identifier character).
-- **Breaking:** `Dextrin.Text.Formatter.pretty/2` now returns
-  `{:ok, String.t()} | {:error, Dextrin.Error.t()}`, matching
-  `Dextrin.Text.Printer.print/2`'s contract, instead of a bare
-  `String.t()` that raised `ArgumentError` on an unencodable value.
-  Also gained the same `indent:` opt `Dextrin.encode/2`'s new
-  `pretty:`/`indent:` opts use internally (default 2 spaces per
-  nesting level, previously a fixed, non-configurable 2).
-- Adopted ichor's new `mix ichor.gen`/`ichor_runtime` split: the `.dxn`
-  lexer/parser is now generated ahead of time into
-  `lib/dextrin/text/grammar/native.ex` (checked in, regenerated via
-  `mix ichor.gen` whenever `priv/grammar/dxn.aether` changes) instead
-  of being produced by `use Ichor` at `dextrin`'s own compile time.
-  `Dextrin.Text.Grammar` is now a thin, hand-documented wrapper around
-  the generated `Grammar.Native`. This lets `mix.exs` depend on the
-  small `ichor_runtime` package (the only thing the generated code
-  actually calls) as an ordinary runtime dependency, while `ichor`
-  proper (the Aether front-end, format importers, `Grammar.Analysis`,
-  both codegen backends) moves to `only: :dev, runtime: false` — the
-  bulk of Ichor no longer ships in a `dextrin` release. Both are now
-  published to Hex separately (`ichor ~> 0.2.1`, `ichor_runtime ~>
-  0.1.0`) and referenced as ordinary Hex dependencies — no `git:`/
-  `sparse:`/`override:` needed, since `ichor`'s own `mix.exs` now
-  depends on `ichor_runtime` the same way. Migrating surfaced a genuine
-  gap in that split, fixed upstream: the raw-capture-node re-evaluation
-  entry point needed by `Dextrin.Text.Actions` at actual decode time
-  (for `@ordered %{...}`) had stayed on the top-level, dev-only `Ichor`
-  module instead of moving to `ichor_runtime`; it's now
-  `Ichor.Actions.evaluate_node/3`.
-- `ichor` was a Hex dependency (`~> 0.1.1`) for one release, before the
-  above.
-- Added `credo`, `dialyxir`, `sobelow`, and `excoveralls` as dev/test
-  tooling, plus a `mix precommit` alias (`format`, `compile
-  --warnings-as-errors`, `credo --strict`, `sobelow`, `test`,
-  `dialyzer`) run before every commit. Fixed everything it surfaced:
-  canonical module layout (`moduledoc`/`use`/`alias`/...) across the
-  mix tasks and text pipeline modules; `Dextrin.decode/2`'s spec
-  under-declared its own return type (the underlying grammar engine
-  can report a list of errors, not just one) — widened to match, which
-  also resolved three "dead code" warnings in the mix tasks' own error
-  handling; removed a dead `Duration.microsecond || {0, 0}` fallback
-  (that field is never `nil`).
-- Every hand-rolled "walk a collection, thread an accumulator, halt on
-  the first non-`{:ok, _}` step result" reduce across
-  `Dextrin.Schema.Compiler`, `Dextrin.Schema.Validator`,
-  `Dextrin.Binary.Encoder`, `Dextrin.Text.Printer`, and
-  `Dextrin.Text.Actions` now uses `Ichor.Toolkit.Result.reduce_ok/3`/
-  `map_ok/3` instead of a hand-rolled `Enum.reduce_while/3`.
-- Documentation reworked throughout: every module's docs are now
-  self-contained (no references to an external design document), and
-  the normative `DXN.md` format specification moved under
-  `guides/dxn/DXN.md`, alongside a full set of tutorials, examples,
-  and cheatsheets for both this library and the DXN format itself.
-  `DXN.md` itself gained a new normative §4, "Schema documents
-  (`.dxns`)" — the `type_expr`/`refine`-constraint vocabulary,
-  `%schema{}`/`%field{}` shape, named types, cross-file references, and
-  enforcement semantics, written implementation-independent (this
-  library's own choices stay documented separately, in
-  `Dextrin.Schema`'s own module docs) — closing a gap where `.dxns`
-  was documented everywhere *except* the one place meant to be
-  the authoritative, cross-implementation reference for it.
-
-## [0.1.0] - 2026-07-28
-
-### Added
-
-- **`.dxn` text**: full grammar support for all 30 types DXN.md §1.3
-  defines, via a hand-authored Aether grammar (`priv/grammar/dxn.aether`)
-  compiled at build time through Ichor's `Grammar.Native` backend.
-- **`.dxnb` binary**: a hand-rolled CBOR codec (`Dextrin.Binary.Encoder`/
-  `Decoder`) covering the full type mapping, the private tag block
-  (200-214), the duration bitmask and regex flags byte, and both
-  value-sharing extensions (string-only, tag 256/25; general arbitrary-
-  value sharing, tags 28/29 — decode-only required, encode opt-in via
-  `share: true`, gated by a size-aware threshold rather than a fixed rule).
-- **`.dxns` schema documents**: `Dextrin.Schema.compile/3` compiles a
-  decoded `.dxns` document (itself plain `.dxn` data, no new grammar)
-  into a `Dextrin.Registry` — struct schemas with required/optional
-  (`?`-suffixed keys)/closed/forbidden fields and `refine` constraints,
-  plus reusable named types composed from the fixed 13-form type_expr
-  vocabulary. Enforcement is automatic, fail-fast, and symmetric:
-  `Dextrin.decode/2`/`decode_binary/2` check every registered struct
-  name unconditionally on the way in; `Dextrin.encode/2`/
-  `encode_binary/2` do the same automatic whole-tree check on the way
-  out (`validate: false` opts out), plus an opt-in `schema:` check for
-  a nameless top-level value.
-- **`Dextrin.Registry`**: the shared extension point for both `struct`
-  (schema-driven, `put_struct_materializer/3`/`put_struct_module/3`)
-  and `custom-tag` (`put_tag/3`/`put_tag_encoder/4`), plus a lazy
-  `put_resolver/2` hook for on-demand schema loading.
-- **`Dextrin.Schema.Std`**: a small standard library of common named
-  types (`PositiveInteger`, `NonEmptyString`, `Percentage`, ...),
-  opt-in via `Std.registry/1`.
-- **`Dextrin.Schema.FileResolver`**: one reasonable, swappable
-  convention resolving `Namespace/Name` references to
-  `<path>/Namespace.dxns` files on disk.
-- **Value types**: `Dextrin.Symbol`, `Dextrin.Keyword` (never Elixir
-  atoms — decoding untrusted data can't exhaust the atom table),
-  `Dextrin.Tuple`, `Dextrin.Array`, `Dextrin.OrderedMap`,
-  `Dextrin.SortedSet`, `Dextrin.Struct`, `Dextrin.Duration`,
-  `Dextrin.Rational`, `Dextrin.Uuid`, `Dextrin.Uri`, `Dextrin.Bytes`,
-  `Dextrin.Char`, `Dextrin.CustomTag` — small wrapper structs only
-  where Elixir has nothing native that fits without losing information.
-- **`Dextrin.Text.Formatter`**: multi-line, indented `.dxn` rendering
-  (`pretty/2`), built on top of `Dextrin.Text.Printer`'s single-line
-  default.
-- **`mix dextrin.*` tasks**: `validate`, `encode`, `decode`, `format`,
-  `gen.schema` (scaffold a `.dxns` file from an existing Elixir
-  struct's field list), and `gen.unicode` (regenerate the grammar's
-  Unicode `XID_Start`/`XID_Continue` identifier ranges from the latest
-  Unicode Character Database — a deliberate, reviewed action, never
-  run at build time).
-- Conformance fixtures covering `DXN.md` §3's full worked example,
-  per-type round-trip tests, cross-format equivalence tests, grammar
-  hazard regression tests, and a fuzz/malformed-input pass over the
-  binary decoder.
