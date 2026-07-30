@@ -33,7 +33,7 @@ defmodule Dextrin.Schema.ProviderTest do
     {:ok, registry} = Dextrin.Schema.register_provider(Dextrin.Registry.new(), ProviderPoint.DXN)
 
     good = %ProviderPoint{x: 1, y: 2}
-    assert {:ok, "%Point{x: 1, y: 2}"} = Dextrin.encode(good, registry: registry)
+    assert {:ok, "%Point{x:1,y:2}"} = Dextrin.encode(good, registry: registry)
     assert {:ok, ^good} = Dextrin.decode("%Point{x: 1, y: 2}", registry: registry)
 
     bad = %ProviderPoint{x: 0, y: 2}

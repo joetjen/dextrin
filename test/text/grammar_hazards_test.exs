@@ -10,22 +10,16 @@ defmodule Dextrin.Text.GrammarHazardsTest do
 
   describe "§5.5 — MAP_KEY vs KEYWORD" do
     test "no space before colon is a shorthand map key" do
-      assert {:ok, %{x: 1}} = normalize(Dextrin.decode("%{x:1}"))
+      assert {:ok, %{x: 1}} = Dextrin.decode("%{x:1}")
     end
 
     test "space after colon is still a shorthand map key" do
-      assert {:ok, %{x: 1}} = normalize(Dextrin.decode("%{x: 1}"))
+      assert {:ok, %{x: 1}} = Dextrin.decode("%{x: 1}")
     end
 
     test "space before colon is NOT a valid shorthand key (documented restriction)" do
       assert {:error, %Dextrin.Error{}} = Dextrin.decode("%{x : 1}")
     end
-
-    defp normalize({:ok, map}) do
-      {:ok, Map.new(map, fn {%Dextrin.Keyword{name: name}, v} -> {String.to_atom(name), v} end)}
-    end
-
-    defp normalize(other), do: other
   end
 
   describe "§5.6 — AT_DISCARD vs a custom tag" do

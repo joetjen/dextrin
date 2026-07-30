@@ -33,7 +33,8 @@ defmodule Dextrin.Registry do
           materializers: %{optional(String.t()) => struct_materializer()},
           resolver: struct_resolver() | nil,
           type_aliases: %{optional(String.t()) => TypeExpr.t()},
-          struct_modules: %{optional(String.t()) => module()}
+          struct_modules: %{optional(String.t()) => module()},
+          trusted: boolean()
         }
 
   defstruct tags: %{},
@@ -42,10 +43,33 @@ defmodule Dextrin.Registry do
             materializers: %{},
             resolver: nil,
             type_aliases: %{},
-            struct_modules: %{}
+            struct_modules: %{},
+            trusted: true
 
   @spec new() :: t()
   def new, do: %__MODULE__{}
+
+  @doc """
+  Marks (or unmarks) this registry as decoding a *trusted* source —
+  the default — vs. an *untrusted* one. Currently the one thing this
+  affects is `keyword`: trusted (the default) decodes it as a real
+  Elixir atom (`DXN.md` §1.3's own type table: `keyword`'s Elixir type
+  is "Elixir atom"); untrusted decodes it as `Dextrin.Keyword.t()`
+  instead, so a `String.to_atom/1` call is never reachable from
+  attacker-controlled text (which could otherwise exhaust the atom
+  table). Pass `trusted: false` to `Dextrin.decode/2`/`decode_binary/2`
+  — or `put_trusted(registry, false)` on a reused registry — for any
+  source you *don't* fully control; the default assumes you do.
+
+  `symbol` is deliberately unaffected either way — it stays
+  `Dextrin.Symbol.t()` regardless of `trusted`, mirroring `encode/2`'s
+  own choice to accept a bare atom as a stand-in for `keyword`, never
+  for `symbol`.
+  """
+  @spec put_trusted(t(), boolean()) :: t()
+  def put_trusted(%__MODULE__{} = registry, trusted?) when is_boolean(trusted?) do
+    %{registry | trusted: trusted?}
+  end
 
   @spec put_tag(t(), String.t(), tag_decoder()) :: t()
   def put_tag(%__MODULE__{} = registry, name, decoder)

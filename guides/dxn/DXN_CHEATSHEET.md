@@ -12,7 +12,7 @@ for the Elixir-API-level equivalent.
 - `#` starts a comment running to end of line; comments vanish before
   any value exists (no reader can recover them after parsing).
 
-## All 24 data types
+## All 28 data types
 
 ```text
 nil          nil
@@ -50,7 +50,7 @@ the document only.
 
 ## Struct forms
 
-```
+```text
 %Name{field: value, ...}     keyed -- order doesn't matter
 %Name[value, ...]            positional -- order is everything
 ```
@@ -61,7 +61,7 @@ between them.
 
 ## Discard
 
-```
+```text
 @_ value
 ```
 
@@ -96,7 +96,7 @@ min-count / max-count                                       list/set/tuple
 
 ## Struct schema shape
 
-```
+```text
 %schema{
   closed:    true | false        # default false -- unlisted fields preserved, not rejected
   forbidden: [name, ...]         # explicit deny-list, reported by name specifically
@@ -115,7 +115,7 @@ min-count / max-count                                       list/set/tuple
 
 ## Named types
 
-```
+```text
 PositiveInt: {:refine :integer %{min: 1}}
 ```
 
@@ -131,7 +131,7 @@ None of these may begin a bare identifier: `#` `@` `%` `~` `?` `:`.
 
 ## Binary (`.dxnb`) envelope
 
-```
+```text
 "DX" <version byte> <cbor item>
 ```
 

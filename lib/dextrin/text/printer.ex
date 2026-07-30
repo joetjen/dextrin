@@ -49,6 +49,17 @@ defmodule Dextrin.Text.Printer do
   def print(:positive_infinity, _opts), do: {:ok, "Infinity"}
   def print(:negative_infinity, _opts), do: {:ok, "-Infinity"}
 
+  # `DXN.md` §1.3's own type table lists `keyword`'s natural Elixir
+  # type as "Elixir atom" — `Dextrin.Keyword` only exists as the wire
+  # -shape decode produces (never an atom, so untrusted input can't
+  # exhaust the atom table); nothing about that decode-side safety
+  # concern applies to an atom the caller's own code already created,
+  # so encode accepts a bare atom exactly as if it were
+  # `Dextrin.Keyword.new(Atom.to_string(atom))`.
+  def print(atom, _opts) when is_atom(atom) and atom not in [nil, true, false] do
+    {:ok, ":" <> keyword_name(Atom.to_string(atom))}
+  end
+
   def print(i, _opts) when is_integer(i), do: {:ok, Integer.to_string(i)}
   def print(f, _opts) when is_float(f), do: {:ok, Float.to_string(f)}
 
@@ -111,7 +122,7 @@ defmodule Dextrin.Text.Printer do
 
   def print(%Struct{name: name, fields: {:positional, items}}, opts) do
     with {:ok, printed} <- print_all(items, opts),
-         do: {:ok, "%" <> name <> "[" <> Enum.join(printed, ", ") <> "]"}
+         do: {:ok, "%" <> name <> "[" <> Enum.join(printed, ",") <> "]"}
   end
 
   def print(%Date{} = date, _opts), do: {:ok, "~D[" <> Date.to_iso8601(date) <> "]"}
@@ -166,6 +177,18 @@ defmodule Dextrin.Text.Printer do
     end
   end
 
+  # A true catch-all — every DXN-representable Elixir shape has its
+  # own clause above; whatever reaches here (a PID, a port, a
+  # reference, a function, a raw Elixir tuple that isn't
+  # `Dextrin.Tuple`, ...) has no DXN representation at all. `encode/2`
+  # promises `{:ok, _} | {:error, _}` in its own typespec, never a
+  # raised exception, so this returns a clean error instead of letting
+  # the lack of a matching clause crash with `FunctionClauseError`.
+  def print(other, _opts) do
+    {:error,
+     Dextrin.Error.action("cannot encode value with no DXN representation: #{inspect(other)}")}
+  end
+
   defp print_via_tag_encoder(other, module, opts) do
     with %Registry{} = registry <- Keyword.get(opts, :registry, :none),
          {:ok, {name, encoder}} <- Registry.fetch_tag_encoder(registry, module) do
@@ -201,23 +224,52 @@ defmodule Dextrin.Text.Printer do
     end
   end
 
+  # `map_entry`'s colon-shorthand (`DXN.md` §1.2) is `identifier ":"
+  # value` specifically — an `identifier`, never a quoted string, so
+  # it's only reachable for a `Dextrin.Keyword` whose name is already a
+  # bare identifier. Any other name (empty, containing spaces, a
+  # leading digit, ...) has no colon-shorthand form at all and MUST
+  # fall back to the arrow form instead, printing the keyword as an
+  # ordinary value (`:"name"`) on the key side — `quote_string(name) <>
+  # ":"` looks superficially plausible but is simply not valid
+  # `map_entry` syntax (a genuine bug this once produced: `%{"":0}`
+  # for an empty-name keyword, which fails to parse back at all).
   defp print_entries(pairs, opts) do
     Result.reduce_ok(pairs, [], fn
       {%Dextrin.Keyword{name: name}, value}, acc ->
-        case print(value, opts) do
-          {:ok, printed} -> {:ok, [keyword_name(name) <> ": " <> printed | acc]}
-          {:error, _} = err -> err
-        end
+        print_keyword_entry(name, value, opts, acc)
+
+      # A bare atom key (`nil`/`true`/`false` excluded — those are
+      # `boolean`/`nil` values, not stand-ins for a `keyword` name) is
+      # accepted the same way a bare atom value is (see `print/2`):
+      # `DXN.md` §1.3 documents `keyword` as "Elixir atom" in the
+      # first place, so `%{x: 1}` (atom key) and
+      # `%{Dextrin.Keyword.new("x") => 1}` print identically.
+      {atom, value}, acc when is_atom(atom) and atom not in [nil, true, false] ->
+        print_keyword_entry(Atom.to_string(atom), value, opts, acc)
 
       {key, value}, acc ->
         with {:ok, printed_key} <- print(key, opts),
              {:ok, printed_value} <- print(value, opts) do
-          {:ok, [printed_key <> " => " <> printed_value | acc]}
+          {:ok, [printed_key <> "=>" <> printed_value | acc]}
         end
     end)
     |> case do
-      {:ok, acc} -> {:ok, Enum.join(Enum.reverse(acc), ", ")}
+      {:ok, acc} -> {:ok, Enum.join(Enum.reverse(acc), ",")}
       {:error, _} = err -> err
+    end
+  end
+
+  defp print_keyword_entry(name, value, opts, acc) do
+    if bare_identifier?(name) do
+      case print(value, opts) do
+        {:ok, printed} -> {:ok, [name <> ":" <> printed | acc]}
+        {:error, _} = err -> err
+      end
+    else
+      with {:ok, printed_value} <- print(value, opts) do
+        {:ok, [":" <> quote_string(name) <> "=>" <> printed_value | acc]}
+      end
     end
   end
 
@@ -225,7 +277,18 @@ defmodule Dextrin.Text.Printer do
     if bare_identifier?(name), do: name, else: quote_string(name)
   end
 
-  defp bare_identifier?(name) do
+  @doc """
+  Whether `name` is a valid bare `identifier` (`DXN.md` §1.1) on its
+  own — the one thing that decides whether a `Dextrin.Keyword` can use
+  `map_entry`'s colon-shorthand (`identifier ":" value`) at all, or
+  must fall back to the arrow form instead. Public so
+  `Dextrin.Text.Formatter` can apply the same rule rather than
+  duplicating this check (or, worse, not checking at all — the bug
+  this once was: an empty or space-containing keyword name printed as
+  `"": 0` / a bare `: 0`, neither of which parses back).
+  """
+  @spec bare_identifier?(String.t()) :: boolean()
+  def bare_identifier?(name) do
     case Dextrin.Text.Grammar.tokenize(name) do
       {:ok, [%{name: :IDENTIFIER, text: ^name}]} -> true
       _ -> false

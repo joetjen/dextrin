@@ -98,7 +98,7 @@ defmodule Dextrin.Text.Actions do
     end
   end
 
-  def handle_token(:KEYWORD, text, _ctx) do
+  def handle_token(:KEYWORD, text, ctx) do
     body = String.trim_leading(text, ":")
 
     case body do
@@ -106,17 +106,17 @@ defmodule Dextrin.Text.Actions do
         inner = body |> String.trim_leading("\"") |> String.trim_trailing("\"")
 
         case Escapes.decode(inner) do
-          {:ok, decoded} -> {:ok, Keyword.new(decoded)}
+          {:ok, decoded} -> {:ok, keyword_value(decoded, ctx)}
           {:error, reason} -> {:error, action_error("invalid keyword literal: #{reason}")}
         end
 
       identifier ->
-        {:ok, Keyword.new(identifier)}
+        {:ok, keyword_value(identifier, ctx)}
     end
   end
 
-  def handle_token(:MAP_KEY, text, _ctx) do
-    {:ok, Keyword.new(String.trim_trailing(text, ":"))}
+  def handle_token(:MAP_KEY, text, ctx) do
+    {:ok, keyword_value(String.trim_trailing(text, ":"), ctx)}
   end
 
   def handle_token(:DATE_SIGIL, text, _ctx) do
@@ -323,6 +323,15 @@ defmodule Dextrin.Text.Actions do
   defp field_name(%Keyword{name: name}), do: {:ok, name}
   defp field_name(%Symbol{name: name}), do: {:ok, name}
   defp field_name(name) when is_binary(name), do: {:ok, name}
+
+  # A struct field's shorthand key (`x:`) goes through the same
+  # `keyword_value/2` `Registry.t()`-driven choice as any other
+  # keyword-shaped key — trusted (default) decodes it as a real atom.
+  # `Dextrin.Struct.keyed/2` always wants the plain string name either
+  # way, regardless of which the caller's `trusted:` setting produced.
+  defp field_name(name) when is_atom(name) and name not in [nil, true, false],
+    do: {:ok, Atom.to_string(name)}
+
   defp field_name(_), do: :error
 
   defp materialize_struct(name, fields, ctx) do
@@ -472,10 +481,17 @@ defmodule Dextrin.Text.Actions do
     case value_cap.node do
       {:rule, :value,
        %{
-         value_body:
-           {:rule, :value_body, %{map_lit: {:rule, :map_lit, %{map_entry: raw_entries}}}}
+         value_body: {:rule, :value_body, %{map_lit: {:rule, :map_lit, map_lit_captures}}}
        }} ->
-        raw_entries
+        # `Map.get(..., :map_entry, [])`, not a `%{map_entry: raw_entries}`
+        # destructure — an empty `%{}` has no `:map_entry` key in its
+        # captures at all (same reason the ordinary, non-`@ordered`
+        # `map_lit` handler below needs the same default), so requiring
+        # the key present rejected `@ordered %{}` outright as if it
+        # weren't a map literal, instead of an ordered map with zero
+        # pairs.
+        map_lit_captures
+        |> Map.get(:map_entry, [])
         |> List.wrap()
         |> Result.map_ok(ctx, fn raw_entry, ctx ->
           Ichor.Actions.evaluate_node(raw_entry, __MODULE__, ctx)
@@ -511,6 +527,13 @@ defmodule Dextrin.Text.Actions do
 
   defp zero_to_nil(0), do: nil
   defp zero_to_nil(n), do: n
+
+  # `Dextrin.Registry.put_trusted/2`'s own doc has the full reasoning:
+  # trusted (default) decodes a real atom, `DXN.md` §1.3's own natural
+  # mapping; untrusted wraps in `Dextrin.Keyword` instead. `symbol`
+  # deliberately has no equivalent — see that doc.
+  defp keyword_value(name, %Registry{trusted: true}), do: String.to_atom(name)
+  defp keyword_value(name, _ctx), do: Keyword.new(name)
 
   defp parse_offset_datetime(text) do
     with [date_part, time_and_offset] <- String.split(text, "T", parts: 2),

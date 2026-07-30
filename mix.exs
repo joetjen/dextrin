@@ -102,7 +102,7 @@ defmodule Dextrin.MixProject do
       licenses: ["MIT"],
       links: %{"GitHub" => "https://github.com/joetjen/dextrin"},
       files:
-        ~w(lib priv/grammar priv/unicode priv/schema .formatter.exs mix.exs README.md CHANGELOG.md LICENSE.txt)
+        ~w(lib priv/grammar priv/unicode priv/schema .formatter.exs mix.exs README.md CHANGELOG.md LICENSE)
     ]
   end
 
@@ -129,13 +129,15 @@ defmodule Dextrin.MixProject do
       "guides/dxn/DXN_CHEATSHEET.md",
       "CHANGELOG.md",
       "CONTRIBUTION.md",
-      "LICENSE.txt"
+      "LICENSE"
     ]
   end
 
   defp groups_for_extras do
     [
-      DXN: Path.wildcard("guides/dxn/*.md")
+      Guides: ["guides/TUTORIAL.md", "guides/EXAMPLES.md", "guides/CHEATSHEET.md"],
+      "DXN Format": Path.wildcard("guides/dxn/*.md"),
+      Project: ["CHANGELOG.md", "CONTRIBUTION.md", "LICENSE"]
     ]
   end
 

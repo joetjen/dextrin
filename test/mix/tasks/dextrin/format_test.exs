@@ -15,7 +15,8 @@ defmodule Mix.Tasks.Dextrin.FormatTest do
     output = capture_io(fn -> Format.run([path]) end)
 
     {:ok, value} = Dextrin.decode("%{x: 1, y: 2}")
-    assert output == Dextrin.Text.Formatter.pretty(value) <> "\n"
+    {:ok, pretty} = Dextrin.Text.Formatter.pretty(value)
+    assert output == pretty <> "\n"
     # File itself is untouched without --in-place.
     assert File.read!(path) == "%{x: 1, y: 2}"
   end
@@ -27,7 +28,7 @@ defmodule Mix.Tasks.Dextrin.FormatTest do
 
     output = capture_io(fn -> Format.run([path, "--mode", "condense"]) end)
 
-    assert output == "%{x: 1}\n"
+    assert output == "%{x:1}\n"
   end
 
   @tag :tmp_dir
@@ -38,7 +39,7 @@ defmodule Mix.Tasks.Dextrin.FormatTest do
     output = capture_io(fn -> Format.run([path, "--mode", "condense", "--in-place"]) end)
 
     assert output == ""
-    assert File.read!(path) == "%{x: 1}\n"
+    assert File.read!(path) == "%{x:1}\n"
   end
 
   @tag :tmp_dir

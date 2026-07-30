@@ -119,7 +119,14 @@ defmodule Dextrin.Schema.TypeExpr do
 
   def matches?({:map_of, _, _}, _value, _registry), do: false
 
-  def matches?({:enum, literals}, value, _registry), do: value in literals
+  # A schema's `enum` literals always come from `.dxns` *compilation*
+  # (`Dextrin.Schema.Compiler`'s `atomize_back/1` normalizes them to
+  # `Dextrin.Keyword`, regardless of how the schema *source* was
+  # decoded), but the *data* being checked against them can be either
+  # shape depending on the caller's own `trusted:` choice — a plain
+  # `in` would only ever match the untrusted (`Dextrin.Keyword`) shape.
+  def matches?({:enum, literals}, value, _registry),
+    do: Enum.any?(literals, &keyword_aware_eq?(&1, value))
 
   def matches?({:one_of, types}, value, registry),
     do: Enum.any?(types, &matches?(&1, value, registry))
@@ -148,7 +155,16 @@ defmodule Dextrin.Schema.TypeExpr do
   defp primitive_matches?("string", value), do: is_binary(value)
   defp primitive_matches?("char", value), do: match?(%Char{}, value)
   defp primitive_matches?("symbol", value), do: match?(%Symbol{}, value)
-  defp primitive_matches?("keyword", value), do: match?(%Keyword{}, value)
+  # A schema-validated value's `keyword` field can be either shape
+  # depending on how the caller decoded it (`Dextrin.Registry`'s
+  # `trusted:` — real atom by default, `Dextrin.Keyword` if decoded
+  # untrusted) — `nil`/`true`/`false` excluded since those are their
+  # own `nil`/`boolean` primitives, never a `keyword`, regardless of
+  # how permissive an atom check alone would be.
+  defp primitive_matches?("keyword", value) do
+    match?(%Keyword{}, value) or (is_atom(value) and value not in [nil, true, false])
+  end
+
   defp primitive_matches?("list", value), do: is_list(value)
   defp primitive_matches?("tuple", value), do: match?(%Tuple{}, value)
   defp primitive_matches?("map", value), do: is_map(value) and not is_struct(value)
@@ -170,6 +186,17 @@ defmodule Dextrin.Schema.TypeExpr do
   defp primitive_matches?("bytes", value), do: match?(%Bytes{}, value)
   defp primitive_matches?("regex", value), do: match?(%Regex{}, value)
   defp primitive_matches?(_name, _value), do: false
+
+  # A schema's `enum` literals always come from `.dxns` *compilation*
+  # (`Dextrin.Schema.Compiler`'s `atomize_back/1` normalizes them to
+  # `Dextrin.Keyword`, regardless of how the schema *source* was
+  # decoded), but the *data* being checked against them can be either
+  # shape depending on the caller's own `trusted:` choice.
+  defp keyword_aware_eq?(%Keyword{name: name}, value)
+       when is_atom(value) and value not in [nil, true, false],
+       do: Atom.to_string(value) == name
+
+  defp keyword_aware_eq?(literal, value), do: literal == value
 
   # ---- refine constraints -----------------------------------------------------
 

@@ -25,11 +25,17 @@ Elixir-API-level) examples.
 
 ```elixir
 {:ok, config} = File.read!("config.dxn") |> Dextrin.decode()
-config["db"]["host"]
+config.db.host
 #=> "db.internal"
-MapSet.member?(config["features"], %Dextrin.Keyword{name: "billing"})
+MapSet.member?(config.features, :billing)
 #=> true
 ```
+
+Shorthand keys (`db:`, `features:`) are DXN `keyword`s, which decode as
+real atoms by default (`trusted: true`) — that's what makes the dot
+-access above work directly. Pass `trusted: false` for a config file
+you don't fully trust the contents of, and use
+`Dextrin.Keyword.new("db")`-style keys (or `Map.fetch/2`) instead.
 
 ## An API payload with an explicit schema
 
@@ -62,7 +68,7 @@ payload = """
 """
 
 {:ok, user} = Dextrin.decode(payload, registry: registry)
-#=> {:ok, %{"id" => %Dextrin.Uuid{...}, "email" => "ada@example.com", "role" => %Dextrin.Keyword{name: "admin"}, ...}}
+#=> {:ok, %{"id" => %Dextrin.Uuid{...}, "email" => "ada@example.com", "role" => :admin, ...}}
 
 # A response body accidentally including a legacy field is rejected loudly, not silently dropped:
 Dextrin.decode(~s(%User{id: @uuid "...", email: "a@b.co", role: :admin, created: ~U[2024-01-01 00:00:00Z], legacy_id: 1}), registry: registry)
@@ -218,7 +224,7 @@ Dextrin.decode(~s(%LatLng{lat: 51.05, lng: 13.74}), registry: registry)
 #=> {:ok, %Geo.LatLng{lat: 51.05, lng: 13.74}}
 
 Dextrin.encode(%Geo.LatLng{lat: 51.05, lng: 13.74}, registry: registry)
-#=> {:ok, "%LatLng{lat: 51.05, lng: 13.74}"}
+#=> {:ok, "%LatLng{lat:51.05,lng:13.74}"}
 
 # Degrees' own refine constraint is enforced automatically, same as
 # any other schema -- no special handling needed on either side:

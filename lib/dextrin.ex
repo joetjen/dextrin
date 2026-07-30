@@ -34,18 +34,33 @@ defmodule Dextrin do
 
   alias Dextrin.Registry
 
-  @type opts :: [registry: Registry.t(), schema: String.t(), validate: boolean()]
+  @type opts :: [
+          registry: Registry.t(),
+          schema: String.t(),
+          validate: boolean(),
+          pretty: boolean(),
+          indent: non_neg_integer(),
+          trusted: boolean()
+        ]
 
   @doc """
   Decodes `.dxn` text into a value. `{:error, _}` carries a single
   `Dextrin.Error` normally, but a list when the underlying grammar
   engine reports more than one (`Ichor.Actions.evaluate/5`'s own
   `Ichor.Error.t() | [Ichor.Error.t()]`).
+
+  Decodes `keyword` as a real Elixir atom by default (`trusted: true`)
+  — see `Dextrin.Registry.put_trusted/2`'s own doc for exactly what
+  this does and doesn't affect. Pass `trusted: false` for any source
+  you *don't* fully control; the default assumes a source you do
+  (your own config, your own application's data, ...), not arbitrary
+  untrusted/network input, where an unbounded `String.to_atom/1` could
+  exhaust the atom table.
   """
   @spec decode(String.t(), opts()) ::
           {:ok, term()} | {:error, Dextrin.Error.t() | [Dextrin.Error.t()]}
   def decode(text, opts \\ []) when is_binary(text) do
-    registry = Keyword.get(opts, :registry, Registry.new())
+    registry = registry_with_trusted(opts)
 
     case Dextrin.Text.Grammar.run(text, registry) do
       {:ok, value} ->
@@ -62,10 +77,24 @@ defmodule Dextrin do
   @doc """
   Encodes a value back to `.dxn` text.
 
-  A printer, not a formatter: single-line, minimal-whitespace output,
-  with no line-wrapping or indentation policy — use
-  `Dextrin.Text.Formatter.pretty/2` for multi-line, human-readable
-  output (e.g. for `mix dextrin.format`).
+  Single-line, minimal-whitespace by default — the smallest text this
+  value can round-trip through, with no line-wrapping or indentation
+  at all (`Dextrin.Text.Printer`). Pass `pretty: true` for multi-line,
+  indented output instead (`Dextrin.Text.Formatter`) — `indent:` then
+  sets the number of spaces per nesting level (default 2). Both
+  produce the exact same value on the way back through `decode/2`;
+  `pretty`/`indent` are a rendering choice, never a semantic one.
+
+      {:ok, value} = Dextrin.decode("%{x: 1, y: 2}")
+
+      Dextrin.encode(value)
+      #=> {:ok, "%{x:1,y:2}"}
+
+      Dextrin.encode(value, pretty: true)
+      #=> {:ok, "%{\\n  x: 1\\n  y: 2\\n}"}
+
+      Dextrin.encode(value, pretty: true, indent: 4)
+      #=> {:ok, "%{\\n    x: 1\\n    y: 2\\n}"}
 
   Automatically validates every `Dextrin.Struct` or registered
   application struct found anywhere in `value` against its own schema
@@ -78,18 +107,27 @@ defmodule Dextrin do
   (`Dextrin.Schema.validate_encode/3`) — the one case the automatic
   walk can't cover on its own, a nameless plain map or struct at the
   very top. Either check failing returns `{:error, _}` instead of
-  encoding a value that doesn't conform.
+  encoding a value that doesn't conform — regardless of `pretty:`,
+  since validation and rendering are independent concerns.
   """
   @spec encode(term(), opts()) :: {:ok, String.t()} | {:error, Dextrin.Error.t()}
   def encode(value, opts \\ []) do
     with :ok <- maybe_validate_encode(value, opts) do
-      Dextrin.Text.Printer.print(value, opts)
+      if Keyword.get(opts, :pretty, false) do
+        Dextrin.Text.Formatter.pretty(value, opts)
+      else
+        Dextrin.Text.Printer.print(value, opts)
+      end
     end
   end
 
-  @doc "Decodes a `.dxnb` binary into a value."
+  @doc """
+  Decodes a `.dxnb` binary into a value. Same `trusted:` opt as
+  `decode/2` — see there for what it does and doesn't affect.
+  """
   @spec decode_binary(binary(), opts()) :: {:ok, term()} | {:error, Dextrin.Error.t()}
   def decode_binary(bytes, opts \\ []) when is_binary(bytes) do
+    opts = Keyword.put(opts, :registry, registry_with_trusted(opts))
     Dextrin.Binary.Decoder.decode(bytes, opts)
   end
 
@@ -143,6 +181,20 @@ defmodule Dextrin do
       end
     else
       :ok
+    end
+  end
+
+  # An explicit `trusted:` opt always wins (per-call override); absent
+  # it, a `registry:` the caller already built via
+  # `Dextrin.Registry.put_trusted/2` keeps whatever it already had —
+  # so `trusted` can be set once on a reused registry, or per call,
+  # without one silently clobbering the other.
+  defp registry_with_trusted(opts) do
+    registry = Keyword.get(opts, :registry, Registry.new())
+
+    case Keyword.fetch(opts, :trusted) do
+      {:ok, trusted?} -> Registry.put_trusted(registry, trusted?)
+      :error -> registry
     end
   end
 end

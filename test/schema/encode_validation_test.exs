@@ -51,7 +51,7 @@ defmodule Dextrin.Schema.EncodeValidationTest do
         {"currency", Dextrin.Keyword.new("usd")}
       ])
 
-    assert {:ok, "%Money{amount: 19.99M, currency: :usd}"} =
+    assert {:ok, "%Money{amount:19.99M,currency::usd}"} =
              Dextrin.encode(money, registry: registry, schema: "Money")
   end
 

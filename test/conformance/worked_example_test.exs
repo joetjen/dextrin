@@ -21,8 +21,12 @@ defmodule Dextrin.Conformance.WorkedExampleTest do
   }
   """
 
+  # `trusted: false` throughout this file: it asserts the pre-existing
+  # `Dextrin.Keyword`-based shapes (map keys, the `tags` set, `result`'s
+  # `ok`) that `trusted: true` (now decode's default) would instead
+  # decode as plain atoms.
   setup do
-    {:ok, value} = Dextrin.decode(@source)
+    {:ok, value} = Dextrin.decode(@source, trusted: false)
     %{value: value}
   end
 
@@ -82,7 +86,7 @@ defmodule Dextrin.Conformance.WorkedExampleTest do
 
   test "every field round-trips through .dxnb", %{value: value} do
     assert {:ok, encoded} = Dextrin.encode_binary(value)
-    assert {:ok, decoded} = Dextrin.decode_binary(encoded)
+    assert {:ok, decoded} = Dextrin.decode_binary(encoded, trusted: false)
     # "handle"'s Regex is compiled independently on each side (once by
     # Dextrin.decode/1, once by decode_binary/1 here) -- Elixir's own
     # `Regex.compile!/2` never produces two structs that are `==` to

@@ -77,6 +77,24 @@ defmodule Dextrin.Text.PrinterTest do
     test "a keyword whose name isn't a bare identifier is quoted" do
       assert Printer.print(Keyword.new("has spaces")) == {:ok, ~s(:"has spaces")}
     end
+
+    test "a bare atom is accepted as a keyword (DXN.md §1.3: keyword's Elixir type is \"Elixir atom\")" do
+      assert Printer.print(:ok) == {:ok, ":ok"}
+      assert Printer.print(:"has spaces") == {:ok, ~s(:"has spaces")}
+      assert Printer.print(:ok) == Printer.print(Keyword.new("ok"))
+    end
+
+    test "nil/true/false stay their own literals, never a keyword named nil/true/false" do
+      assert Printer.print(nil) == {:ok, "nil"}
+      assert Printer.print(true) == {:ok, "true"}
+      assert Printer.print(false) == {:ok, "false"}
+    end
+
+    test "an unencodable term (no DXN representation at all) is a clean error, not a crash" do
+      assert {:error, %Dextrin.Error{}} = Printer.print(self())
+      assert {:error, %Dextrin.Error{}} = Printer.print(make_ref())
+      assert {:error, %Dextrin.Error{}} = Printer.print({1, 2})
+    end
   end
 
   describe "collections" do
@@ -101,25 +119,25 @@ defmodule Dextrin.Text.PrinterTest do
 
     test "ordered-map with keyword-shorthand keys" do
       om = OrderedMap.new([{Keyword.new("b"), 2}, {Keyword.new("a"), 1}])
-      assert Printer.print(om) == {:ok, "@ordered %{b: 2, a: 1}"}
+      assert Printer.print(om) == {:ok, "@ordered %{b:2,a:1}"}
     end
 
     test "a plain map with keyword-shorthand keys" do
-      assert Printer.print(%{Keyword.new("x") => 1}) == {:ok, "%{x: 1}"}
+      assert Printer.print(%{Keyword.new("x") => 1}) == {:ok, "%{x:1}"}
     end
 
     test "a plain map with a non-keyword key uses the arrow form" do
-      assert Printer.print(%{1 => "one"}) == {:ok, "%{1 => \"one\"}"}
+      assert Printer.print(%{1 => "one"}) == {:ok, "%{1=>\"one\"}"}
     end
 
     test "a keyed struct" do
       s = Struct.keyed("Point", [{"x", 1}, {"y", 2}])
-      assert Printer.print(s) == {:ok, "%Point{x: 1, y: 2}"}
+      assert Printer.print(s) == {:ok, "%Point{x:1,y:2}"}
     end
 
     test "a positional struct" do
       s = Struct.positional("Point", [1, 2])
-      assert Printer.print(s) == {:ok, "%Point[1, 2]"}
+      assert Printer.print(s) == {:ok, "%Point[1,2]"}
     end
   end
 
@@ -235,7 +253,7 @@ defmodule Dextrin.Text.PrinterTest do
       {:ok, registry} = Dextrin.Schema.compile(doc)
       registry = Dextrin.Registry.put_struct_module(registry, "Plain", PlainStruct)
 
-      assert Printer.print(%PlainStruct{a: 1}, registry: registry) == {:ok, "%Plain{a: 1}"}
+      assert Printer.print(%PlainStruct{a: 1}, registry: registry) == {:ok, "%Plain{a:1}"}
     end
   end
 end

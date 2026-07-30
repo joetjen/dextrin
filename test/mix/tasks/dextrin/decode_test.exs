@@ -15,7 +15,8 @@ defmodule Mix.Tasks.Dextrin.DecodeTest do
 
     output = capture_io(fn -> Decode.run([path]) end)
 
-    assert output == Dextrin.Text.Formatter.pretty(%{"x" => 1}) <> "\n"
+    {:ok, pretty} = Dextrin.Text.Formatter.pretty(%{"x" => 1})
+    assert output == pretty <> "\n"
   end
 
   @tag :tmp_dir
@@ -27,7 +28,8 @@ defmodule Mix.Tasks.Dextrin.DecodeTest do
 
     capture_io(fn -> Decode.run([in_path, "--out", out_path]) end)
 
-    assert File.read!(out_path) == Dextrin.Text.Formatter.pretty([1, 2, 3])
+    {:ok, pretty} = Dextrin.Text.Formatter.pretty([1, 2, 3])
+    assert File.read!(out_path) == pretty
   end
 
   test "no path argument raises a usage error" do

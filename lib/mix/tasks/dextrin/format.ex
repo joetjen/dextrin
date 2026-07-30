@@ -43,10 +43,8 @@ defmodule Mix.Tasks.Dextrin.Format do
     end
   end
 
-  defp render("pretty", value), do: Dextrin.Text.Formatter.pretty(value)
-
-  defp render("condense", value) do
-    case Dextrin.encode(value) do
+  defp render(mode, value) when mode in ["pretty", "condense"] do
+    case Dextrin.encode(value, pretty: mode == "pretty") do
       {:ok, text} -> text
       {:error, error} -> Mix.raise(format_error(error))
     end

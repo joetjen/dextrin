@@ -80,7 +80,7 @@ defmodule Dextrin.Schema.TypeExprTest do
 
     test "{:enum literal...}" do
       r = registry_for("{:enum :a :b :c}")
-      assert {:ok, %{"v" => %Dextrin.Keyword{name: "a"}}} = field(r, ":a")
+      assert {:ok, %{"v" => :a}} = field(r, ":a")
       assert {:error, %Dextrin.Error{}} = field(r, ":d")
     end
 

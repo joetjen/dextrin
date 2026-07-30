@@ -13,7 +13,7 @@ defmodule Dextrin.Binary.ValueSharingTest do
   test "share: false (default) produces no tag 28/29 and is transparent" do
     value = [@repeated, @repeated, @repeated]
     assert {:ok, encoded} = Dextrin.encode_binary(value)
-    assert {:ok, decoded} = Dextrin.decode_binary(encoded)
+    assert {:ok, decoded} = Dextrin.decode_binary(encoded, trusted: false)
     assert decoded == value
   end
 
@@ -27,7 +27,7 @@ defmodule Dextrin.Binary.ValueSharingTest do
   test "share: true round-trips to an equal (not just similar) value" do
     value = [@repeated, @repeated, @repeated]
     assert {:ok, shared} = Dextrin.encode_binary(value, share: true)
-    assert {:ok, decoded} = Dextrin.decode_binary(shared)
+    assert {:ok, decoded} = Dextrin.decode_binary(shared, trusted: false)
     assert decoded == value
   end
 
@@ -38,7 +38,7 @@ defmodule Dextrin.Binary.ValueSharingTest do
     }
 
     assert {:ok, shared} = Dextrin.encode_binary(value, share: true)
-    assert {:ok, decoded} = Dextrin.decode_binary(shared)
+    assert {:ok, decoded} = Dextrin.decode_binary(shared, trusted: false)
     assert decoded == value
   end
 

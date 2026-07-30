@@ -51,6 +51,7 @@ defmodule Dextrin.Schema.Compiler do
   @spec compile(term(), Dextrin.Registry.t(), %{optional(String.t()) => Compiled.refine_fn()}) ::
           {:ok, Dextrin.Registry.t()} | {:error, term()}
   def compile(schema_doc, base_registry, predicates \\ %{}) when is_map(schema_doc) do
+    schema_doc = atomize_back(schema_doc)
     named_entries = Enum.map(schema_doc, fn {k, v} -> {entry_name(k), v} end)
 
     {schema_entries, alias_entries} =
@@ -90,6 +91,60 @@ defmodule Dextrin.Schema.Compiler do
   defp entry_name(%Keyword{name: name}), do: name
   defp entry_name(%Symbol{name: name}), do: name
   defp entry_name(name) when is_binary(name), do: name
+
+  # This module's whole vocabulary (`entry_name/1`, `literal_name/1`,
+  # every `compile_type_expr/2` clause matching a literal
+  # `%Keyword{name: "list-of"}`/etc.) is written against
+  # `Dextrin.Keyword` specifically — the shape `Dextrin.decode/2`
+  # always produced before `trusted:` existed. `trusted: true` (now
+  # the default) decodes the same `.dxns` text's keyword literals as
+  # real atoms instead, which none of those patterns would match.
+  # Rather than teaching every one of those clauses to also accept an
+  # atom, `compile/3` normalizes the whole decoded document back to
+  # `Dextrin.Keyword` once, up front — mirrors
+  # `Dextrin.Schema.Validated.strip/1`'s exact recursive-walk shape,
+  # whole-tree normalization instead of wrapper removal. A `.dxns`
+  # document is schema *definition* syntax, not the untrusted end-user
+  # data it describes, so this has nothing to do with whether the
+  # schema's own source was itself decoded as trusted or not — the
+  # compiler needs one canonical internal shape either way.
+  defp atomize_back(atom) when is_atom(atom) and atom not in [nil, true, false],
+    do: Keyword.new(Atom.to_string(atom))
+
+  defp atomize_back(list) when is_list(list), do: Enum.map(list, &atomize_back/1)
+
+  defp atomize_back(%Tuple{items: items} = t), do: %{t | items: Enum.map(items, &atomize_back/1)}
+
+  defp atomize_back(%Dextrin.Array{items: items} = a) do
+    %{
+      a
+      | items:
+          items |> :erlang.tuple_to_list() |> Enum.map(&atomize_back/1) |> :erlang.list_to_tuple()
+    }
+  end
+
+  defp atomize_back(%OrderedMap{pairs: pairs} = om) do
+    %{om | pairs: Enum.map(pairs, fn {k, v} -> {atomize_back(k), atomize_back(v)} end)}
+  end
+
+  defp atomize_back(%MapSet{} = set), do: set |> Enum.map(&atomize_back/1) |> MapSet.new()
+
+  defp atomize_back(%Dextrin.SortedSet{items: items} = ss),
+    do: %{ss | items: Enum.map(items, &atomize_back/1)}
+
+  defp atomize_back(%Struct{fields: {:keyed, pairs}} = s) do
+    %{s | fields: {:keyed, Enum.map(pairs, fn {k, v} -> {k, atomize_back(v)} end)}}
+  end
+
+  defp atomize_back(%Struct{fields: {:positional, items}} = s),
+    do: %{s | fields: {:positional, Enum.map(items, &atomize_back/1)}}
+
+  defp atomize_back(%Dextrin.CustomTag{value: value} = c), do: %{c | value: atomize_back(value)}
+
+  defp atomize_back(%{} = map) when not is_struct(map),
+    do: Map.new(map, fn {k, v} -> {atomize_back(k), atomize_back(v)} end)
+
+  defp atomize_back(other), do: other
 
   defp compile_entry(%Struct{name: "schema", fields: {:keyed, pairs}}, predicates, aliases) do
     fields_value = get(pairs, "fields")
@@ -158,6 +213,17 @@ defmodule Dextrin.Schema.Compiler do
 
   defp compile_type_expr(%Keyword{name: name}, _aliases) when name in @primitives,
     do: {:ok, {:primitive, name}}
+
+  # `atomize_back/1` deliberately leaves `nil`/`true`/`false` alone
+  # (converting them would corrupt a genuine `default: nil`/`true`
+  # /`false` field value elsewhere in the same document) — but "nil"
+  # is *also* one of `@primitives`' own names, and `Dextrin.Keyword`
+  # unaffected, "nil" the primitive type name (`x: :nil`) and the bare
+  # literal `nil` decode to the exact same Elixir value once `trusted:
+  # true` is in play (`String.to_atom("nil") == nil`), so this one
+  # primitive name needs its own clause rather than going through the
+  # general atom-was-a-keyword path at all.
+  defp compile_type_expr(nil, _aliases), do: {:ok, {:primitive, "nil"}}
 
   defp compile_type_expr(%Symbol{name: name}, aliases) do
     case Map.fetch(aliases, name) do

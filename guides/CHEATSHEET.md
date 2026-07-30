@@ -17,7 +17,14 @@ Dextrin.encode_binary(value, opts \\ [])    #=> {:ok, bytes} | {:error, %Dextrin
 `opts`: `registry:` (a `Dextrin.Registry.t()`, both directions),
 `schema:` (encode only — validate the top-level value against one
 named schema), `validate:` (encode only, default `true` — set `false`
-to skip the automatic whole-tree schema check).
+to skip the automatic whole-tree schema check), `pretty:` (`encode/2`
+only, default `false` — multi-line, indented output instead of
+single-line/compact), `indent:` (`encode/2` only, meaningful with
+`pretty: true` — spaces per nesting level, default 2), `trusted:`
+(decode only, default `true` — `keyword` decodes as a real atom;
+`false` for untrusted input decodes it as `Dextrin.Keyword.t()`
+instead, so `String.to_atom/1` is never reachable from attacker
+-controlled text).
 
 ## Render an error
 
@@ -29,8 +36,16 @@ IO.puts(Dextrin.Error.format(error))
 ## Pretty-print / reformat
 
 ```elixir
-Dextrin.Text.Formatter.pretty(value, opts \\ [])   #=> String.t(), multi-line, indented
+Dextrin.encode(value, pretty: true)                #=> {:ok, text} | {:error, %Dextrin.Error{}}
+Dextrin.encode(value, pretty: true, indent: 4)      # 4 spaces per level instead of the default 2
+
+Dextrin.Text.Formatter.pretty(value, opts \\ [])    # what pretty: true calls; same {:ok, _}|{:error, _}
+                                                     # contract, same indent: opt
 ```
+
+Compact is `encode/2`'s default — the smallest text a value can
+round-trip through, no line-wrapping or indentation at all. `pretty:`
+only changes rendering, never what the value decodes back to.
 
 ```sh
 mix dextrin.format data.dxn --mode pretty|condense [--in-place]
@@ -40,7 +55,7 @@ mix dextrin.format data.dxn --mode pretty|condense [--in-place]
 
 ```text
 symbol      Dextrin.Symbol{name: string}          bare identifier, e.g. `foo`
-keyword     Dextrin.Keyword{name: string}         `:foo` / `foo:` (key position)
+keyword     atom (default) / Dextrin.Keyword      `:foo` / `foo:` (key position) — trusted: false for the latter
 tuple       Dextrin.Tuple{items: [term]}          `{1 2 3}` — list-backed, arbitrary length
 array       Dextrin.Array{items: tuple}           `@array[1 2 3]` — tuple-backed, fixed size
 ordered-map Dextrin.OrderedMap{pairs: [{k,v}]}    `@ordered %{...}` — order is part of identity

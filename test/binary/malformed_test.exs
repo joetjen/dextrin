@@ -107,4 +107,9 @@ defmodule Dextrin.Binary.MalformedTest do
     body = <<6::3, 25::5, Tags.t_custom()::16, 4::3, 1::5, 3::8, ?a, ?b, ?c>>
     assert_decode_error("DX" <> <<1>> <> body)
   end
+
+  test "a malformed time payload (not an integer) — found by property-based fuzzing, not by hand" do
+    body = <<6::3, 25::5, Tags.t_time()::16, 4::3, 0::5>>
+    assert_decode_error("DX" <> <<1>> <> body)
+  end
 end

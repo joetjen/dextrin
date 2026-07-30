@@ -32,7 +32,7 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
     assert message =~ "Bar"
 
     good = Dextrin.Struct.keyed("Bar", [{"baz", 1}])
-    assert {:ok, "%Bar{baz: 1}"} = Dextrin.encode(good, registry: registry)
+    assert {:ok, "%Bar{baz:1}"} = Dextrin.encode(good, registry: registry)
   end
 
   test "a named struct nested inside an untyped (:any) field is still caught", %{
@@ -83,7 +83,7 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
     registry: registry
   } do
     bad = Dextrin.Struct.keyed("Bar", [{"baz", true}])
-    assert {:ok, "%Bar{baz: true}"} = Dextrin.encode(bad, registry: registry, validate: false)
+    assert {:ok, "%Bar{baz:true}"} = Dextrin.encode(bad, registry: registry, validate: false)
     assert {:ok, _bin} = Dextrin.encode_binary(bad, registry: registry, validate: false)
   end
 
@@ -91,7 +91,7 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
     registry: registry
   } do
     opaque = Dextrin.Struct.keyed("Unregistered", [{"anything", 1}])
-    assert {:ok, "%Unregistered{anything: 1}"} = Dextrin.encode(opaque, registry: registry)
+    assert {:ok, "%Unregistered{anything:1}"} = Dextrin.encode(opaque, registry: registry)
   end
 
   test "ordinary valid data still round-trips through encode/decode", %{registry: registry} do

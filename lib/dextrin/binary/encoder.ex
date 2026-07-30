@@ -220,6 +220,16 @@ defmodule Dextrin.Binary.Encoder do
   defp encode_item_dispatch(%Dextrin.Keyword{name: name}, _opts),
     do: {:ok, tag(Tags.t_keyword(), text(name))}
 
+  # `DXN.md` §1.3 documents `keyword`'s natural Elixir type as "Elixir
+  # atom" — same reasoning as `Dextrin.Text.Printer`'s equivalent
+  # clause: nothing about decode's own "never produce an atom" safety
+  # invariant (untrusted-input atom-table exhaustion) applies to an
+  # atom the caller's own code already created, so a bare atom encodes
+  # exactly as `Dextrin.Keyword.new(Atom.to_string(atom))` would.
+  defp encode_item_dispatch(atom, _opts) when is_atom(atom) and atom not in [nil, true, false] do
+    {:ok, tag(Tags.t_keyword(), text(Atom.to_string(atom)))}
+  end
+
   # ---- collections ------------------------------------------------------------
 
   defp encode_item_dispatch(list, opts) when is_list(list) do

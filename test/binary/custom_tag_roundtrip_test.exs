@@ -22,7 +22,9 @@ defmodule Dextrin.CustomTagRoundtripTest do
         {:ok, Dextrin.Tuple.new([a, c])}
       end)
 
-    {:ok, decoded} = Dextrin.decode(~s(@my-app/money {19.99M, :usd}), registry: registry)
+    {:ok, decoded} =
+      Dextrin.decode(~s(@my-app/money {19.99M, :usd}), registry: registry, trusted: false)
+
     %{registry: registry, decoded: decoded}
   end
 
@@ -36,12 +38,12 @@ defmodule Dextrin.CustomTagRoundtripTest do
 
   test "text round-trips to an equal value", %{registry: registry, decoded: decoded} do
     {:ok, text} = Dextrin.encode(decoded, registry: registry)
-    assert {:ok, ^decoded} = Dextrin.decode(text, registry: registry)
+    assert {:ok, ^decoded} = Dextrin.decode(text, registry: registry, trusted: false)
   end
 
   test "binary round-trips to an equal value", %{registry: registry, decoded: decoded} do
     assert {:ok, bin} = Dextrin.encode_binary(decoded, registry: registry)
-    assert {:ok, ^decoded} = Dextrin.decode_binary(bin, registry: registry)
+    assert {:ok, ^decoded} = Dextrin.decode_binary(bin, registry: registry, trusted: false)
   end
 
   test "Dextrin.Text.Formatter.pretty/2 also consults the registry", %{
@@ -49,7 +51,7 @@ defmodule Dextrin.CustomTagRoundtripTest do
     decoded: decoded
   } do
     assert Dextrin.Text.Formatter.pretty(decoded, registry: registry) ==
-             "@my-app/money {19.99M :usd}"
+             {:ok, "@my-app/money {19.99M :usd}"}
   end
 
   test "encode_binary/2 without a registry fails clearly instead of crashing", %{decoded: decoded} do

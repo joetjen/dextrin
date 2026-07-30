@@ -26,8 +26,10 @@ defmodule Mix.Tasks.Dextrin.Decode do
   defp decode(path, opts) do
     bytes = File.read!(path)
 
-    case Dextrin.decode_binary(bytes) do
-      {:ok, value} -> write_output(Dextrin.Text.Formatter.pretty(value), opts[:out])
+    with {:ok, value} <- Dextrin.decode_binary(bytes),
+         {:ok, text} <- Dextrin.encode(value, pretty: true) do
+      write_output(text, opts[:out])
+    else
       {:error, error} -> Mix.raise(Dextrin.Error.format(error))
     end
   end

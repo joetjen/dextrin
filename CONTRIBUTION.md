@@ -70,11 +70,15 @@ bug in its own right.
 3. **Run the full verification pass before opening a PR:**
 
    ```sh
-   mix format
-   mix compile --warnings-as-errors --force
-   mix test
-   mix docs
+   mix precommit
    ```
+
+   Expands to `mix format`, `mix compile --warnings-as-errors`,
+   `mix credo --strict`, `mix sobelow`, `mix test`, and
+   `mix dialyzer`, in that order — fast/cheap checks first, dialyzer
+   (slowest, especially its first PLT build) last. Run `mix docs`
+   separately if you touched any documentation (moduledocs or the
+   files under `guides/`) to confirm it still builds cleanly.
 
 4. **Match the existing documentation style.** Default to no comments;
    when one is warranted, explain a non-obvious *why* (a hidden
@@ -134,4 +138,4 @@ specific input/expected/actual triple.
 ## License
 
 By contributing, you agree that your contributions will be licensed
-under the project's [MIT license](LICENSE.txt).
+under the project's [MIT license](LICENSE).

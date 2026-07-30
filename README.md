@@ -11,19 +11,39 @@ extension mechanism.
 
 ```elixir
 {:ok, value} = Dextrin.decode(~s(%{x: 1, y: 2}))
+value
+#=> %{x: 1, y: 2}
+
 Dextrin.encode(value)
-#=> {:ok, "%{x: 1, y: 2}"}
+#=> {:ok, "%{x:1,y:2}"}
 
 {:ok, bytes} = Dextrin.encode_binary(value)
 Dextrin.decode_binary(bytes)
+#=> {:ok, %{x: 1, y: 2}}
+```
+
+A plain map's shorthand keys (`x:`) are themselves DXN `keyword`s — `%{x: 1}`
+and `%{:x => 1}` are the exact same value, and `keyword`'s own Elixir type,
+per `DXN.md` §1.3, is a real atom, which is what both `decode/2` and
+`decode_binary/2` produce by default (`trusted: true`). Encoding accepts a
+bare atom the same way, anywhere a `keyword` is expected — `%{x: 1}` or
+`Dextrin.encode(:ok)` both work with no conversion needed first.
+
+That default assumes a source you control — your own config, your own
+application's data — not arbitrary untrusted/network input, where an
+unbounded `String.to_atom/1` could exhaust the atom table. Pass
+`trusted: false` for that case; `keyword` then decodes as `Dextrin.Keyword.t()`
+instead:
+
+```elixir
+Dextrin.decode(~s(%{x: 1, y: 2}), trusted: false)
 #=> {:ok, %{%Dextrin.Keyword{name: "x"} => 1, %Dextrin.Keyword{name: "y"} => 2}}
 ```
 
-A plain map's shorthand keys (`x:`) are themselves DXN `keyword`s, not bare
-strings — `%{x: 1}` and `%{:x => 1}` are the exact same value. A
-schema-backed `struct`'s fields are the one place names *do* come back
-as plain strings — see the [tutorial](guides/TUTORIAL.md) — since a
-schema always knows its field names up front.
+A schema-backed `struct`'s fields are the one place names *do* come back
+as plain strings regardless of `trusted:` — see the
+[tutorial](guides/TUTORIAL.md) — since a schema always knows its field
+names up front.
 
 `.dxn`'s text grammar is compiled by [Ichor](https://github.com/joetjen/ichor)
 — write the grammar once (`priv/grammar/dxn.aether`), get a lexer,
@@ -47,7 +67,8 @@ meant for a human to read or hand-edit; EDN is expressive and
 Elixir-friendly in spirit but has no first-party Elixir implementation
 and no binary counterpart. DXN's premise is that a `.dxn` text
 document and a `.dxnb` binary document should be the *same* value
-space — 24 scalar/collection/temporal/extended types, precise enough
+space — 30 scalar/collection/temporal/extended types
+([reference](guides/dxn/DXN.md) §1.3), precise enough
 for money (`Decimal`), exact ratios (`Rational`), and arbitrary
 precision integers, with `struct` and `custom-tag` as first-class,
 schema-describable extension points — encoded however density or
@@ -58,14 +79,17 @@ readability happens to matter for a given use.
 - **`Dextrin`** — the four-function public API: `decode/2`, `encode/2`
   (`.dxn` text) and `decode_binary/2`, `encode_binary/2` (`.dxnb`
   binary). One error type, `Dextrin.Error`, for both.
-- **Value types** (`Dextrin.Symbol`, `Dextrin.Keyword`, `Dextrin.Tuple`,
+- **Value types** (`Dextrin.Symbol`, `Dextrin.Tuple`,
   `Dextrin.OrderedMap`, `Dextrin.SortedSet`, `Dextrin.Struct`,
   `Dextrin.Array`, `Dextrin.Duration`, `Dextrin.Rational`,
   `Dextrin.Uuid`, `Dextrin.Uri`, `Dextrin.Bytes`, `Dextrin.Char`,
   `Dextrin.CustomTag`) — small wrapper structs for the DXN types
-  Elixir has nothing native for without losing information. Everything
-  else (integers, floats, strings, lists, plain maps, sets, dates,
-  regexes, ...) decodes to the obvious native Elixir value.
+  Elixir has nothing native for without losing information. `keyword`
+  is the one exception with two faces: a real atom by default
+  (`trusted: true`), `Dextrin.Keyword` when decoded untrusted. Every
+  other scalar/collection (integers, floats, strings, lists, plain
+  maps, sets, dates, regexes, ...) decodes to the obvious native
+  Elixir value.
 - **`Dextrin.Text.Grammar`/`Actions`/`Printer`/`Formatter`** — the
   `.dxn` pipeline: an Ichor-compiled grammar (`Grammar` is a thin
   wrapper around the pregenerated `Grammar.Native`), an `Ichor.Actions`
@@ -82,11 +106,15 @@ readability happens to matter for a given use.
   wherever a registered struct name appears. `Dextrin.Schema.Std` ships
   a small standard library of common named types (`PositiveInteger`,
   `NonEmptyString`, ...); `Dextrin.Schema.FileResolver` resolves
-  `Namespace/Name` references across separate `.dxns` files.
+  `Namespace/Name` references across separate `.dxns` files;
+  `Dextrin.Schema.Provider` lets a struct's *own* library ship its DXN
+  schema without that library ever depending on `dextrin` itself.
 - **`Dextrin.Registry`** — the one extension point both `struct` and
   `custom-tag` share: register a tag decoder/encoder, a struct
-  materializer, or a lazy schema resolver. Plain immutable data,
-  threaded explicitly — never a process or ETS table.
+  materializer, or a lazy schema resolver; also carries the
+  `trusted:`/`put_trusted/2` flag that decides how `keyword` decodes.
+  Plain immutable data, threaded explicitly — never a process or ETS
+  table.
 - **`mix dextrin.*`** — `validate`, `encode`, `decode`, `format`,
   `gen.schema` (scaffold a `.dxns` file from an existing Elixir
   struct), and `gen.unicode` (regenerate the grammar's Unicode
@@ -121,30 +149,31 @@ end
 
 ## Development
 
-`ichor` and `ichor_runtime` aren't published to Hex separately yet —
-`mix.exs` references both via `git:` (the `feature/runtime` branch of
-[`ichor`](https://github.com/joetjen/ichor), `ichor_runtime` via
-`sparse: "packages/ichor_runtime"`), so nothing extra needs to be
-checked out locally:
-
 ```sh
 mix deps.get
-mix test
-mix format --check-formatted
-mix compile --warnings-as-errors
-mix docs
+mix precommit
 ```
+
+`mix precommit` runs the full verification pass this project expects
+before a commit: `mix format`, `mix compile --warnings-as-errors`,
+`mix credo --strict`, `mix sobelow`, `mix test`, and `mix dialyzer`, in
+that order (fast/cheap checks first, dialyzer — the slowest, especially
+its first PLT build — last).
 
 `priv/grammar/dxn.aether`'s generated Unicode identifier ranges are
 regenerated with `mix dextrin.gen.unicode` — a deliberate, reviewed
 action on a Unicode version bump, never run automatically at build
 time (see that task's own docs). Either way, changing the grammar
-itself requires a `mix ichor.gen` step afterward — see
-[CONTRIBUTION.md](CONTRIBUTION.md).
+itself requires a `mix ichor.gen` step afterward, since
+`lib/dextrin/text/grammar/native.ex` is generated ahead of time, not
+produced at `dextrin`'s own compile time (that's also what keeps
+`ichor` itself, and everything it depends on for parsing/codegen,
+`only: :dev, runtime: false` — only the small `ichor_runtime` package
+ships in a release) — see [CONTRIBUTION.md](CONTRIBUTION.md).
 
 See [CONTRIBUTION.md](CONTRIBUTION.md) for how to propose changes, and
 [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## License
 
-MIT — see [LICENSE.txt](LICENSE.txt).
+MIT — see [LICENSE](LICENSE).
