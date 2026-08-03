@@ -170,9 +170,9 @@ itself requires a `mix ichor.gen` step afterward, since
 produced at `dextrin`'s own compile time (that's also what keeps
 `ichor` itself, and everything it depends on for parsing/codegen,
 `only: :dev, runtime: false` — only the small `ichor_runtime` package
-ships in a release) — see [CONTRIBUTION.md](CONTRIBUTION.md).
+ships in a release) — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-See [CONTRIBUTION.md](CONTRIBUTION.md) for how to propose changes, and
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes, and
 [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## License

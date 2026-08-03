@@ -1,7 +1,7 @@
 defmodule Dextrin.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.1.1"
 
   def project do
     [
@@ -71,8 +71,8 @@ defmodule Dextrin.MixProject do
       # generates lib/dextrin/text/grammar/native.ex ahead of time --
       # it's never referenced by any code that ships, hence `only:
       # :dev, runtime: false`.
-      {:ichor_runtime, "~> 0.1.0"},
-      {:ichor, "~> 0.2.1", only: :dev, runtime: false},
+      {:ichor_runtime, "~> 0.2"},
+      {:ichor, "~> 0.2", only: :dev, runtime: false},
       {:decimal, "~> 2.1"}
     ]
   end
@@ -128,7 +128,7 @@ defmodule Dextrin.MixProject do
       "guides/dxn/DXN_EXAMPLES.md",
       "guides/dxn/DXN_CHEATSHEET.md",
       "CHANGELOG.md",
-      "CONTRIBUTION.md",
+      "CONTRIBUTING.md",
       "LICENSE"
     ]
   end
@@ -137,7 +137,7 @@ defmodule Dextrin.MixProject do
     [
       Guides: ["guides/TUTORIAL.md", "guides/EXAMPLES.md", "guides/CHEATSHEET.md"],
       "DXN Format": Path.wildcard("guides/dxn/*.md"),
-      Project: ["CHANGELOG.md", "CONTRIBUTION.md", "LICENSE"]
+      Project: ["CHANGELOG.md", "CONTRIBUTING.md", "LICENSE"]
     ]
   end
 
