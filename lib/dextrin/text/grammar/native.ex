@@ -11,202 +11,195 @@ defmodule Dextrin.Text.Grammar.Native do
     alias Grammar.VM.Token
 
     def lex_expr__0(input) do
-      lex_token__IDENTIFIER(input)
+      lex_token__IDENT_START(input)
+    end
+
+    def lex_expr__2(input) do
+      lex_token__IDENT_CONT(input)
     end
 
     def lex_expr__1(input) do
+      Tokenizer.star_char(&lex_expr__2/1, input)
+    end
+
+    def lex_expr__5(input) do
       case input do
-        <<":", rest::binary>> -> {:ok, ":", rest}
+        <<"/", rest::binary>> -> {:ok, "/", rest}
         _ -> :fail
       end
     end
 
-    def lex_token__MAP_KEY(input0) do
-      with {:ok, t0, rest0} <- lex_expr__0(input0), {:ok, t1, rest1} <- lex_expr__1(rest0) do
-        {:ok, t0 <> t1, rest1}
+    def lex_expr__6(input) do
+      lex_token__IDENT_START(input)
+    end
+
+    def lex_expr__8(input) do
+      lex_token__IDENT_CONT(input)
+    end
+
+    def lex_expr__7(input) do
+      Tokenizer.star_char(&lex_expr__8/1, input)
+    end
+
+    def lex_expr__4(input0) do
+      with {:ok, t0, rest0} <- lex_expr__5(input0),
+           {:ok, t1, rest1} <- lex_expr__6(rest0),
+           {:ok, t2, rest2} <- lex_expr__7(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
       else
         :fail -> :fail
       end
     end
 
     def lex_expr__3(input) do
+      Tokenizer.opt_char(&lex_expr__4/1, input)
+    end
+
+    def lex_token__IDENTIFIER(input0) do
+      with {:ok, t0, rest0} <- lex_expr__0(input0),
+           {:ok, t1, rest1} <- lex_expr__1(rest0),
+           {:ok, t2, rest2} <- lex_expr__3(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__10(input) do
       case input do
         <<"-", rest::binary>> -> {:ok, "-", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__2(input) do
-      Tokenizer.opt_char(&lex_expr__3/1, input)
+    def lex_expr__9(input) do
+      Tokenizer.opt_char(&lex_expr__10/1, input)
     end
 
-    def lex_expr__5(input) do
+    def lex_expr__12(input) do
       lex_token__DIGIT(input)
     end
 
-    def lex_expr__4(input) do
-      Tokenizer.plus_char(&lex_expr__5/1, input)
+    def lex_expr__11(input) do
+      Tokenizer.plus_char(&lex_expr__12/1, input)
     end
 
-    def lex_expr__6(input) do
+    def lex_expr__15(input) do
       case input do
-        <<"/", rest::binary>> -> {:ok, "/", rest}
+        <<".", rest::binary>> -> {:ok, ".", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__8(input) do
+    def lex_expr__17(input) do
       lex_token__DIGIT(input)
     end
 
-    def lex_expr__7(input) do
-      Tokenizer.plus_char(&lex_expr__8/1, input)
+    def lex_expr__16(input) do
+      Tokenizer.plus_char(&lex_expr__17/1, input)
     end
 
-    def lex_token__RATIONAL(input0) do
-      with {:ok, t0, rest0} <- lex_expr__2(input0),
-           {:ok, t1, rest1} <- lex_expr__4(rest0),
-           {:ok, t2, rest2} <- lex_expr__6(rest1),
-           {:ok, t3, rest3} <- lex_expr__7(rest2) do
+    def lex_expr__14(input0) do
+      with {:ok, t0, rest0} <- lex_expr__15(input0), {:ok, t1, rest1} <- lex_expr__16(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__13(input) do
+      Tokenizer.opt_char(&lex_expr__14/1, input)
+    end
+
+    def lex_expr__18(input) do
+      case input do
+        <<"M", rest::binary>> -> {:ok, "M", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_token__DECIMAL(input0) do
+      with {:ok, t0, rest0} <- lex_expr__9(input0),
+           {:ok, t1, rest1} <- lex_expr__11(rest0),
+           {:ok, t2, rest2} <- lex_expr__13(rest1),
+           {:ok, t3, rest3} <- lex_expr__18(rest2) do
         {:ok, t0 <> t1 <> t2 <> t3, rest3}
       else
         :fail -> :fail
       end
     end
 
-    def lex_expr__9(input) do
-      lex_token__IDENT_START(input)
-    end
-
-    def lex_expr__11(input) do
-      lex_token__IDENT_CONT(input)
-    end
-
-    def lex_expr__10(input) do
-      Tokenizer.star_char(&lex_expr__11/1, input)
-    end
-
-    def lex_expr__14(input) do
-      case input do
-        <<"/", rest::binary>> -> {:ok, "/", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__15(input) do
-      lex_token__IDENT_START(input)
-    end
-
-    def lex_expr__17(input) do
-      lex_token__IDENT_CONT(input)
-    end
-
-    def lex_expr__16(input) do
-      Tokenizer.star_char(&lex_expr__17/1, input)
-    end
-
-    def lex_expr__13(input0) do
-      with {:ok, t0, rest0} <- lex_expr__14(input0),
-           {:ok, t1, rest1} <- lex_expr__15(rest0),
-           {:ok, t2, rest2} <- lex_expr__16(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__12(input) do
-      Tokenizer.opt_char(&lex_expr__13/1, input)
-    end
-
-    def lex_token__IDENTIFIER(input0) do
-      with {:ok, t0, rest0} <- lex_expr__9(input0),
-           {:ok, t1, rest1} <- lex_expr__10(rest0),
-           {:ok, t2, rest2} <- lex_expr__12(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_token__AT(input) do
-      case input do
-        <<"@", rest::binary>> -> {:ok, "@", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__18(input) do
+    def lex_expr__19(input) do
       case input do
         <<"~r/", rest::binary>> -> {:ok, "~r/", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__22(input) do
+    def lex_expr__23(input) do
       case input do
         <<"\\", rest::binary>> -> {:ok, "\\", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__23(input) do
+    def lex_expr__24(input) do
       case input do
         <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__21(input0) do
-      with {:ok, t0, rest0} <- lex_expr__22(input0), {:ok, t1, rest1} <- lex_expr__23(rest0) do
+    def lex_expr__22(input0) do
+      with {:ok, t0, rest0} <- lex_expr__23(input0), {:ok, t1, rest1} <- lex_expr__24(rest0) do
         {:ok, t0 <> t1, rest1}
       else
         :fail -> :fail
       end
-    end
-
-    def lex_expr__26(input) do
-      case input do
-        <<"/", rest::binary>> -> {:ok, "/", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__25(input) do
-      Tokenizer.not_pred_char(&lex_expr__26/1, input)
     end
 
     def lex_expr__27(input) do
       case input do
+        <<"/", rest::binary>> -> {:ok, "/", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__26(input) do
+      Tokenizer.not_pred_char(&lex_expr__27/1, input)
+    end
+
+    def lex_expr__28(input) do
+      case input do
         <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__24(input0) do
-      with {:ok, t0, rest0} <- lex_expr__25(input0), {:ok, t1, rest1} <- lex_expr__27(rest0) do
+    def lex_expr__25(input0) do
+      with {:ok, t0, rest0} <- lex_expr__26(input0), {:ok, t1, rest1} <- lex_expr__28(rest0) do
         {:ok, t0 <> t1, rest1}
       else
         :fail -> :fail
       end
     end
 
+    def lex_expr__21(input) do
+      Tokenizer.first_char_match([&lex_expr__22/1, &lex_expr__25/1], input)
+    end
+
     def lex_expr__20(input) do
-      Tokenizer.first_char_match([&lex_expr__21/1, &lex_expr__24/1], input)
+      Tokenizer.star_char(&lex_expr__21/1, input)
     end
 
-    def lex_expr__19(input) do
-      Tokenizer.star_char(&lex_expr__20/1, input)
-    end
-
-    def lex_expr__28(input) do
+    def lex_expr__29(input) do
       case input do
         <<"/", rest::binary>> -> {:ok, "/", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__30(input) do
+    def lex_expr__31(input) do
       case input do
         <<c::utf8, rest::binary>> ->
           if Tokenizer.in_ranges?(c, [
@@ -228,216 +221,26 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def lex_expr__29(input) do
-      Tokenizer.star_char(&lex_expr__30/1, input)
+    def lex_expr__30(input) do
+      Tokenizer.star_char(&lex_expr__31/1, input)
     end
 
     def lex_token__REGEX_SIGIL(input0) do
-      with {:ok, t0, rest0} <- lex_expr__18(input0),
-           {:ok, t1, rest1} <- lex_expr__19(rest0),
-           {:ok, t2, rest2} <- lex_expr__28(rest1),
-           {:ok, t3, rest3} <- lex_expr__29(rest2) do
+      with {:ok, t0, rest0} <- lex_expr__19(input0),
+           {:ok, t1, rest1} <- lex_expr__20(rest0),
+           {:ok, t2, rest2} <- lex_expr__29(rest1),
+           {:ok, t3, rest3} <- lex_expr__30(rest2) do
         {:ok, t0 <> t1 <> t2 <> t3, rest3}
       else
         :fail -> :fail
       end
     end
 
-    def lex_token__ANON_2(input) do
-      case input do
-        <<"[", rest::binary>> -> {:ok, "[", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__HEX(input) do
-      case input do
-        <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{97, 102}, {65, 70}, {48, 57}]) do
-            {:ok, <<c::utf8>>, rest}
-          else
-            :fail
-          end
-
-        _ ->
-          :fail
-      end
-    end
-
-    def lex_expr__31(input) do
-      case input do
-        <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{101, 101}, {69, 69}]) do
-            {:ok, <<c::utf8>>, rest}
-          else
-            :fail
-          end
-
-        _ ->
-          :fail
-      end
-    end
-
-    def lex_expr__33(input) do
-      case input do
-        <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{43, 43}, {45, 45}]) do
-            {:ok, <<c::utf8>>, rest}
-          else
-            :fail
-          end
-
-        _ ->
-          :fail
-      end
-    end
-
     def lex_expr__32(input) do
-      Tokenizer.opt_char(&lex_expr__33/1, input)
-    end
-
-    def lex_expr__35(input) do
-      lex_token__DIGIT(input)
-    end
-
-    def lex_expr__34(input) do
-      Tokenizer.plus_char(&lex_expr__35/1, input)
-    end
-
-    def lex_token__EXPONENT(input0) do
-      with {:ok, t0, rest0} <- lex_expr__31(input0),
-           {:ok, t1, rest1} <- lex_expr__32(rest0),
-           {:ok, t2, rest2} <- lex_expr__34(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__36(input) do
-      case input do
-        <<"~T[", rest::binary>> -> {:ok, "~T[", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__40(input) do
-      case input do
-        <<"]", rest::binary>> -> {:ok, "]", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__39(input) do
-      Tokenizer.not_pred_char(&lex_expr__40/1, input)
-    end
-
-    def lex_expr__41(input) do
-      case input do
-        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__38(input0) do
-      with {:ok, t0, rest0} <- lex_expr__39(input0), {:ok, t1, rest1} <- lex_expr__41(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__37(input) do
-      Tokenizer.star_char(&lex_expr__38/1, input)
-    end
-
-    def lex_expr__42(input) do
-      case input do
-        <<"]", rest::binary>> -> {:ok, "]", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__TIME_SIGIL(input0) do
-      with {:ok, t0, rest0} <- lex_expr__36(input0),
-           {:ok, t1, rest1} <- lex_expr__37(rest0),
-           {:ok, t2, rest2} <- lex_expr__42(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__43(input) do
-      case input do
-        <<"#", rest::binary>> -> {:ok, "#", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__47(input) do
-      case input do
-        <<"\n", rest::binary>> -> {:ok, "\n", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__46(input) do
-      Tokenizer.not_pred_char(&lex_expr__47/1, input)
-    end
-
-    def lex_expr__48(input) do
-      case input do
-        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__45(input0) do
-      with {:ok, t0, rest0} <- lex_expr__46(input0), {:ok, t1, rest1} <- lex_expr__48(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__44(input) do
-      Tokenizer.star_char(&lex_expr__45/1, input)
-    end
-
-    def lex_expr__50(input) do
-      case input do
-        <<"\n", rest::binary>> -> {:ok, "\n", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__49(input) do
-      Tokenizer.opt_char(&lex_expr__50/1, input)
-    end
-
-    def lex_token__COMMENT(input0) do
-      with {:ok, t0, rest0} <- lex_expr__43(input0),
-           {:ok, t1, rest1} <- lex_expr__44(rest0),
-           {:ok, t2, rest2} <- lex_expr__49(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_token__TRUE(input) do
-      case input do
-        <<"true", rest::binary>> -> {:ok, "true", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__51(input) do
       lex_token__IDENT_START(input)
     end
 
-    def lex_expr__52(input) do
+    def lex_expr__33(input) do
       case input do
         <<c::utf8, rest::binary>> ->
           if Tokenizer.in_ranges?(c, [
@@ -1262,47 +1065,54 @@ defmodule Dextrin.Text.Grammar.Native do
     end
 
     def lex_token__IDENT_CONT(input) do
-      Tokenizer.first_char_match([&lex_expr__51/1, &lex_expr__52/1], input)
+      Tokenizer.first_char_match([&lex_expr__32/1, &lex_expr__33/1], input)
     end
 
-    def lex_expr__53(input) do
+    def lex_token__AT_DISCARD(input) do
+      case input do
+        <<"@_", rest::binary>> -> {:ok, "@_", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__34(input) do
       case input do
         <<"~U[", rest::binary>> -> {:ok, "~U[", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__57(input) do
+    def lex_expr__38(input) do
       case input do
         <<"]", rest::binary>> -> {:ok, "]", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__56(input) do
-      Tokenizer.not_pred_char(&lex_expr__57/1, input)
+    def lex_expr__37(input) do
+      Tokenizer.not_pred_char(&lex_expr__38/1, input)
     end
 
-    def lex_expr__58(input) do
+    def lex_expr__39(input) do
       case input do
         <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__55(input0) do
-      with {:ok, t0, rest0} <- lex_expr__56(input0), {:ok, t1, rest1} <- lex_expr__58(rest0) do
+    def lex_expr__36(input0) do
+      with {:ok, t0, rest0} <- lex_expr__37(input0), {:ok, t1, rest1} <- lex_expr__39(rest0) do
         {:ok, t0 <> t1, rest1}
       else
         :fail -> :fail
       end
     end
 
-    def lex_expr__54(input) do
-      Tokenizer.star_char(&lex_expr__55/1, input)
+    def lex_expr__35(input) do
+      Tokenizer.star_char(&lex_expr__36/1, input)
     end
 
-    def lex_expr__59(input) do
+    def lex_expr__40(input) do
       case input do
         <<"]", rest::binary>> -> {:ok, "]", rest}
         _ -> :fail
@@ -1310,19 +1120,19 @@ defmodule Dextrin.Text.Grammar.Native do
     end
 
     def lex_token__INSTANT_SIGIL(input0) do
-      with {:ok, t0, rest0} <- lex_expr__53(input0),
-           {:ok, t1, rest1} <- lex_expr__54(rest0),
-           {:ok, t2, rest2} <- lex_expr__59(rest1) do
+      with {:ok, t0, rest0} <- lex_expr__34(input0),
+           {:ok, t1, rest1} <- lex_expr__35(rest0),
+           {:ok, t2, rest2} <- lex_expr__40(rest1) do
         {:ok, t0 <> t1 <> t2, rest2}
       else
         :fail -> :fail
       end
     end
 
-    def lex_token__DIGIT(input) do
+    def lex_token__HEX(input) do
       case input do
         <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{48, 57}]) do
+          if Tokenizer.in_ranges?(c, [{97, 102}, {65, 70}, {48, 57}]) do
             {:ok, <<c::utf8>>, rest}
           else
             :fail
@@ -1333,9 +1143,111 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def lex_token__ANON_5(input) do
+    def lex_token__ANON_1(input) do
       case input do
-        <<"}", rest::binary>> -> {:ok, "}", rest}
+        <<"@dxn", rest::binary>> -> {:ok, "@dxn", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__41(input) do
+      case input do
+        <<c::utf8, rest::binary>> ->
+          if Tokenizer.in_ranges?(c, [{32, 32}, {9, 9}, {13, 13}, {10, 10}, {44, 44}]) do
+            {:ok, <<c::utf8>>, rest}
+          else
+            :fail
+          end
+
+        _ ->
+          :fail
+      end
+    end
+
+    def lex_token__SPACE(input) do
+      Tokenizer.plus_char(&lex_expr__41/1, input)
+    end
+
+    def lex_token__FALSE(input) do
+      case input do
+        <<"false", rest::binary>> -> {:ok, "false", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__42(input) do
+      case input do
+        <<"~D[", rest::binary>> -> {:ok, "~D[", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__46(input) do
+      case input do
+        <<"]", rest::binary>> -> {:ok, "]", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__45(input) do
+      Tokenizer.not_pred_char(&lex_expr__46/1, input)
+    end
+
+    def lex_expr__47(input) do
+      case input do
+        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__44(input0) do
+      with {:ok, t0, rest0} <- lex_expr__45(input0), {:ok, t1, rest1} <- lex_expr__47(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__43(input) do
+      Tokenizer.star_char(&lex_expr__44/1, input)
+    end
+
+    def lex_expr__48(input) do
+      case input do
+        <<"]", rest::binary>> -> {:ok, "]", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_token__DATE_SIGIL(input0) do
+      with {:ok, t0, rest0} <- lex_expr__42(input0),
+           {:ok, t1, rest1} <- lex_expr__43(rest0),
+           {:ok, t2, rest2} <- lex_expr__48(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__50(input) do
+      lex_token__SPACE(input)
+    end
+
+    def lex_expr__51(input) do
+      lex_token__COMMENT(input)
+    end
+
+    def lex_expr__49(input) do
+      Tokenizer.first_char_match([&lex_expr__50/1, &lex_expr__51/1], input)
+    end
+
+    def lex_token__TRIVIA(input) do
+      Tokenizer.star_char(&lex_expr__49/1, input)
+    end
+
+    def lex_token__NIL(input) do
+      case input do
+        <<"nil", rest::binary>> -> {:ok, "nil", rest}
         _ -> :fail
       end
     end
@@ -2047,71 +1959,116 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def lex_token__AT_DISCARD(input) do
+    def lex_token__ANON_7(input) do
       case input do
-        <<"@_", rest::binary>> -> {:ok, "@_", rest}
+        <<"=>", rest::binary>> -> {:ok, "=>", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__60(input) do
+    def lex_expr__52(input) do
       case input do
-        <<"~D[", rest::binary>> -> {:ok, "~D[", rest}
+        <<"~T[", rest::binary>> -> {:ok, "~T[", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__64(input) do
+    def lex_expr__56(input) do
       case input do
         <<"]", rest::binary>> -> {:ok, "]", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__63(input) do
-      Tokenizer.not_pred_char(&lex_expr__64/1, input)
+    def lex_expr__55(input) do
+      Tokenizer.not_pred_char(&lex_expr__56/1, input)
     end
 
-    def lex_expr__65(input) do
+    def lex_expr__57(input) do
       case input do
         <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__62(input0) do
-      with {:ok, t0, rest0} <- lex_expr__63(input0), {:ok, t1, rest1} <- lex_expr__65(rest0) do
+    def lex_expr__54(input0) do
+      with {:ok, t0, rest0} <- lex_expr__55(input0), {:ok, t1, rest1} <- lex_expr__57(rest0) do
         {:ok, t0 <> t1, rest1}
       else
         :fail -> :fail
       end
     end
 
-    def lex_expr__61(input) do
-      Tokenizer.star_char(&lex_expr__62/1, input)
+    def lex_expr__53(input) do
+      Tokenizer.star_char(&lex_expr__54/1, input)
     end
 
-    def lex_expr__66(input) do
+    def lex_expr__58(input) do
       case input do
         <<"]", rest::binary>> -> {:ok, "]", rest}
         _ -> :fail
       end
     end
 
-    def lex_token__DATE_SIGIL(input0) do
-      with {:ok, t0, rest0} <- lex_expr__60(input0),
-           {:ok, t1, rest1} <- lex_expr__61(rest0),
-           {:ok, t2, rest2} <- lex_expr__66(rest1) do
+    def lex_token__TIME_SIGIL(input0) do
+      with {:ok, t0, rest0} <- lex_expr__52(input0),
+           {:ok, t1, rest1} <- lex_expr__53(rest0),
+           {:ok, t2, rest2} <- lex_expr__58(rest1) do
         {:ok, t0 <> t1 <> t2, rest2}
       else
         :fail -> :fail
       end
     end
 
-    def lex_expr__67(input) do
+    def lex_token__ANON_4(input) do
+      case input do
+        <<"{", rest::binary>> -> {:ok, "{", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__60(input) do
+      case input do
+        <<"-", rest::binary>> -> {:ok, "-", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__59(input) do
+      Tokenizer.opt_char(&lex_expr__60/1, input)
+    end
+
+    def lex_expr__62(input) do
+      lex_token__DIGIT(input)
+    end
+
+    def lex_expr__61(input) do
+      Tokenizer.plus_char(&lex_expr__62/1, input)
+    end
+
+    def lex_token__INTEGER(input0) do
+      with {:ok, t0, rest0} <- lex_expr__59(input0), {:ok, t1, rest1} <- lex_expr__61(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__63(input) do
+      case input do
+        <<"\"", rest::binary>> -> {:ok, "\"", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__66(input) do
+      lex_token__ESCAPE(input)
+    end
+
+    def lex_expr__69(input) do
       case input do
         <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{32, 32}, {9, 9}, {13, 13}, {10, 10}, {44, 44}]) do
+          if Tokenizer.in_ranges?(c, [{34, 34}, {92, 92}]) do
             {:ok, <<c::utf8>>, rest}
           else
             :fail
@@ -2122,13 +2079,580 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def lex_token__SPACE(input) do
-      Tokenizer.plus_char(&lex_expr__67/1, input)
+    def lex_expr__68(input) do
+      Tokenizer.not_pred_char(&lex_expr__69/1, input)
     end
 
-    def lex_token__ANON_7(input) do
+    def lex_expr__70(input) do
       case input do
-        <<"=>", rest::binary>> -> {:ok, "=>", rest}
+        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__67(input0) do
+      with {:ok, t0, rest0} <- lex_expr__68(input0), {:ok, t1, rest1} <- lex_expr__70(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__65(input) do
+      Tokenizer.first_char_match([&lex_expr__66/1, &lex_expr__67/1], input)
+    end
+
+    def lex_expr__64(input) do
+      Tokenizer.star_char(&lex_expr__65/1, input)
+    end
+
+    def lex_expr__71(input) do
+      case input do
+        <<"\"", rest::binary>> -> {:ok, "\"", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_token__STRING(input0) do
+      with {:ok, t0, rest0} <- lex_expr__63(input0),
+           {:ok, t1, rest1} <- lex_expr__64(rest0),
+           {:ok, t2, rest2} <- lex_expr__71(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__72(input) do
+      case input do
+        <<"?", rest::binary>> -> {:ok, "?", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__74(input) do
+      lex_token__ESCAPE(input)
+    end
+
+    def lex_expr__75(input) do
+      case input do
+        <<"s", rest::binary>> -> {:ok, "s", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__78(input) do
+      case input do
+        <<c::utf8, rest::binary>> ->
+          if Tokenizer.in_ranges?(c, [{32, 32}, {9, 9}, {13, 13}, {10, 10}]) do
+            {:ok, <<c::utf8>>, rest}
+          else
+            :fail
+          end
+
+        _ ->
+          :fail
+      end
+    end
+
+    def lex_expr__77(input) do
+      Tokenizer.not_pred_char(&lex_expr__78/1, input)
+    end
+
+    def lex_expr__79(input) do
+      case input do
+        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__76(input0) do
+      with {:ok, t0, rest0} <- lex_expr__77(input0), {:ok, t1, rest1} <- lex_expr__79(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__73(input) do
+      Tokenizer.first_char_match([&lex_expr__74/1, &lex_expr__75/1, &lex_expr__76/1], input)
+    end
+
+    def lex_token__CHAR(input0) do
+      with {:ok, t0, rest0} <- lex_expr__72(input0), {:ok, t1, rest1} <- lex_expr__73(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__80(input) do
+      case input do
+        <<c::utf8, rest::binary>> ->
+          if Tokenizer.in_ranges?(c, [{48, 57}]) do
+            {:ok, <<c::utf8>>, rest}
+          else
+            :fail
+          end
+
+        _ ->
+          :fail
+      end
+    end
+
+    def lex_expr__81(input) do
+      case input do
+        <<c::utf8, rest::binary>> ->
+          if Tokenizer.in_ranges?(c, [{97, 122}, {65, 90}]) do
+            {:ok, <<c::utf8>>, rest}
+          else
+            :fail
+          end
+
+        _ ->
+          :fail
+      end
+    end
+
+    def lex_token__ALNUM(input) do
+      Tokenizer.first_char_match([&lex_expr__80/1, &lex_expr__81/1], input)
+    end
+
+    def lex_token__ANON_6(input) do
+      case input do
+        <<"%", rest::binary>> -> {:ok, "%", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_token__DIGIT(input) do
+      case input do
+        <<c::utf8, rest::binary>> ->
+          if Tokenizer.in_ranges?(c, [{48, 57}]) do
+            {:ok, <<c::utf8>>, rest}
+          else
+            :fail
+          end
+
+        _ ->
+          :fail
+      end
+    end
+
+    def lex_token__ANON_2(input) do
+      case input do
+        <<"[", rest::binary>> -> {:ok, "[", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__82(input) do
+      case input do
+        <<"#", rest::binary>> -> {:ok, "#", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__86(input) do
+      case input do
+        <<"\n", rest::binary>> -> {:ok, "\n", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__85(input) do
+      Tokenizer.not_pred_char(&lex_expr__86/1, input)
+    end
+
+    def lex_expr__87(input) do
+      case input do
+        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__84(input0) do
+      with {:ok, t0, rest0} <- lex_expr__85(input0), {:ok, t1, rest1} <- lex_expr__87(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__83(input) do
+      Tokenizer.star_char(&lex_expr__84/1, input)
+    end
+
+    def lex_expr__89(input) do
+      case input do
+        <<"\n", rest::binary>> -> {:ok, "\n", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__88(input) do
+      Tokenizer.opt_char(&lex_expr__89/1, input)
+    end
+
+    def lex_token__COMMENT(input0) do
+      with {:ok, t0, rest0} <- lex_expr__82(input0),
+           {:ok, t1, rest1} <- lex_expr__83(rest0),
+           {:ok, t2, rest2} <- lex_expr__88(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_token__ANON_3(input) do
+      case input do
+        <<"]", rest::binary>> -> {:ok, "]", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__91(input) do
+      case input do
+        <<"-", rest::binary>> -> {:ok, "-", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__90(input) do
+      Tokenizer.opt_char(&lex_expr__91/1, input)
+    end
+
+    def lex_expr__93(input) do
+      lex_token__DIGIT(input)
+    end
+
+    def lex_expr__92(input) do
+      Tokenizer.plus_char(&lex_expr__93/1, input)
+    end
+
+    def lex_expr__94(input) do
+      case input do
+        <<"/", rest::binary>> -> {:ok, "/", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__96(input) do
+      lex_token__DIGIT(input)
+    end
+
+    def lex_expr__95(input) do
+      Tokenizer.plus_char(&lex_expr__96/1, input)
+    end
+
+    def lex_token__RATIONAL(input0) do
+      with {:ok, t0, rest0} <- lex_expr__90(input0),
+           {:ok, t1, rest1} <- lex_expr__92(rest0),
+           {:ok, t2, rest2} <- lex_expr__94(rest1),
+           {:ok, t3, rest3} <- lex_expr__95(rest2) do
+        {:ok, t0 <> t1 <> t2 <> t3, rest3}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_token__TRUE(input) do
+      case input do
+        <<"true", rest::binary>> -> {:ok, "true", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__99(input) do
+      case input do
+        <<"-", rest::binary>> -> {:ok, "-", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__98(input) do
+      Tokenizer.opt_char(&lex_expr__99/1, input)
+    end
+
+    def lex_expr__101(input) do
+      lex_token__DIGIT(input)
+    end
+
+    def lex_expr__100(input) do
+      Tokenizer.plus_char(&lex_expr__101/1, input)
+    end
+
+    def lex_expr__104(input) do
+      case input do
+        <<".", rest::binary>> -> {:ok, ".", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__106(input) do
+      lex_token__DIGIT(input)
+    end
+
+    def lex_expr__105(input) do
+      Tokenizer.plus_char(&lex_expr__106/1, input)
+    end
+
+    def lex_expr__108(input) do
+      lex_token__EXPONENT(input)
+    end
+
+    def lex_expr__107(input) do
+      Tokenizer.opt_char(&lex_expr__108/1, input)
+    end
+
+    def lex_expr__103(input0) do
+      with {:ok, t0, rest0} <- lex_expr__104(input0),
+           {:ok, t1, rest1} <- lex_expr__105(rest0),
+           {:ok, t2, rest2} <- lex_expr__107(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__109(input) do
+      lex_token__EXPONENT(input)
+    end
+
+    def lex_expr__102(input) do
+      Tokenizer.first_char_match([&lex_expr__103/1, &lex_expr__109/1], input)
+    end
+
+    def lex_expr__97(input0) do
+      with {:ok, t0, rest0} <- lex_expr__98(input0),
+           {:ok, t1, rest1} <- lex_expr__100(rest0),
+           {:ok, t2, rest2} <- lex_expr__102(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__110(input) do
+      case input do
+        <<"NaN", rest::binary>> -> {:ok, "NaN", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__111(input) do
+      case input do
+        <<"Infinity", rest::binary>> -> {:ok, "Infinity", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__112(input) do
+      case input do
+        <<"-Infinity", rest::binary>> -> {:ok, "-Infinity", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_token__FLOAT(input) do
+      Tokenizer.first_char_match(
+        [&lex_expr__97/1, &lex_expr__110/1, &lex_expr__111/1, &lex_expr__112/1],
+        input
+      )
+    end
+
+    def lex_expr__113(input) do
+      case input do
+        <<"\\", rest::binary>> -> {:ok, "\\", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__115(input) do
+      case input do
+        <<"\"", rest::binary>> -> {:ok, "\"", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__116(input) do
+      case input do
+        <<"\\", rest::binary>> -> {:ok, "\\", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__117(input) do
+      case input do
+        <<"n", rest::binary>> -> {:ok, "n", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__118(input) do
+      case input do
+        <<"t", rest::binary>> -> {:ok, "t", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__119(input) do
+      case input do
+        <<"r", rest::binary>> -> {:ok, "r", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__120(input) do
+      case input do
+        <<"0", rest::binary>> -> {:ok, "0", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__121(input) do
+      case input do
+        <<"a", rest::binary>> -> {:ok, "a", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__122(input) do
+      case input do
+        <<"b", rest::binary>> -> {:ok, "b", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__123(input) do
+      case input do
+        <<"f", rest::binary>> -> {:ok, "f", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__124(input) do
+      case input do
+        <<"v", rest::binary>> -> {:ok, "v", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__126(input) do
+      case input do
+        <<"x{", rest::binary>> -> {:ok, "x{", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__128(input) do
+      lex_token__HEX(input)
+    end
+
+    def lex_expr__127(input) do
+      Tokenizer.plus_char(&lex_expr__128/1, input)
+    end
+
+    def lex_expr__129(input) do
+      case input do
+        <<"}", rest::binary>> -> {:ok, "}", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__125(input0) do
+      with {:ok, t0, rest0} <- lex_expr__126(input0),
+           {:ok, t1, rest1} <- lex_expr__127(rest0),
+           {:ok, t2, rest2} <- lex_expr__129(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__114(input) do
+      Tokenizer.first_char_match(
+        [
+          &lex_expr__115/1,
+          &lex_expr__116/1,
+          &lex_expr__117/1,
+          &lex_expr__118/1,
+          &lex_expr__119/1,
+          &lex_expr__120/1,
+          &lex_expr__121/1,
+          &lex_expr__122/1,
+          &lex_expr__123/1,
+          &lex_expr__124/1,
+          &lex_expr__125/1
+        ],
+        input
+      )
+    end
+
+    def lex_token__ESCAPE(input0) do
+      with {:ok, t0, rest0} <- lex_expr__113(input0), {:ok, t1, rest1} <- lex_expr__114(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__130(input) do
+      lex_token__IDENTIFIER(input)
+    end
+
+    def lex_expr__131(input) do
+      case input do
+        <<":", rest::binary>> -> {:ok, ":", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_token__MAP_KEY(input0) do
+      with {:ok, t0, rest0} <- lex_expr__130(input0), {:ok, t1, rest1} <- lex_expr__131(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__132(input) do
+      case input do
+        <<":", rest::binary>> -> {:ok, ":", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__134(input) do
+      lex_token__IDENTIFIER(input)
+    end
+
+    def lex_expr__135(input) do
+      lex_token__STRING(input)
+    end
+
+    def lex_expr__133(input) do
+      Tokenizer.first_char_match([&lex_expr__134/1, &lex_expr__135/1], input)
+    end
+
+    def lex_token__KEYWORD(input0) do
+      with {:ok, t0, rest0} <- lex_expr__132(input0), {:ok, t1, rest1} <- lex_expr__133(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_token__AT(input) do
+      case input do
+        <<"@", rest::binary>> -> {:ok, "@", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_token__ANON_5(input) do
+      case input do
+        <<"}", rest::binary>> -> {:ok, "}", rest}
         _ -> :fail
       end
     end
@@ -2147,578 +2671,54 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def lex_token__ANON_3(input) do
-      case input do
-        <<"]", rest::binary>> -> {:ok, "]", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__ANON_1(input) do
-      case input do
-        <<"@dxn", rest::binary>> -> {:ok, "@dxn", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__NIL(input) do
-      case input do
-        <<"nil", rest::binary>> -> {:ok, "nil", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__ANON_4(input) do
-      case input do
-        <<"{", rest::binary>> -> {:ok, "{", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__69(input) do
-      case input do
-        <<"-", rest::binary>> -> {:ok, "-", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__68(input) do
-      Tokenizer.opt_char(&lex_expr__69/1, input)
-    end
-
-    def lex_expr__71(input) do
-      lex_token__DIGIT(input)
-    end
-
-    def lex_expr__70(input) do
-      Tokenizer.plus_char(&lex_expr__71/1, input)
-    end
-
-    def lex_token__INTEGER(input0) do
-      with {:ok, t0, rest0} <- lex_expr__68(input0), {:ok, t1, rest1} <- lex_expr__70(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__73(input) do
-      lex_token__SPACE(input)
-    end
-
-    def lex_expr__74(input) do
-      lex_token__COMMENT(input)
-    end
-
-    def lex_expr__72(input) do
-      Tokenizer.first_char_match([&lex_expr__73/1, &lex_expr__74/1], input)
-    end
-
-    def lex_token__TRIVIA(input) do
-      Tokenizer.star_char(&lex_expr__72/1, input)
-    end
-
-    def lex_token__FALSE(input) do
-      case input do
-        <<"false", rest::binary>> -> {:ok, "false", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__76(input) do
-      case input do
-        <<"-", rest::binary>> -> {:ok, "-", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__75(input) do
-      Tokenizer.opt_char(&lex_expr__76/1, input)
-    end
-
-    def lex_expr__78(input) do
-      lex_token__DIGIT(input)
-    end
-
-    def lex_expr__77(input) do
-      Tokenizer.plus_char(&lex_expr__78/1, input)
-    end
-
-    def lex_expr__81(input) do
-      case input do
-        <<".", rest::binary>> -> {:ok, ".", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__83(input) do
-      lex_token__DIGIT(input)
-    end
-
-    def lex_expr__82(input) do
-      Tokenizer.plus_char(&lex_expr__83/1, input)
-    end
-
-    def lex_expr__80(input0) do
-      with {:ok, t0, rest0} <- lex_expr__81(input0), {:ok, t1, rest1} <- lex_expr__82(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__79(input) do
-      Tokenizer.opt_char(&lex_expr__80/1, input)
-    end
-
-    def lex_expr__84(input) do
-      case input do
-        <<"M", rest::binary>> -> {:ok, "M", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__DECIMAL(input0) do
-      with {:ok, t0, rest0} <- lex_expr__75(input0),
-           {:ok, t1, rest1} <- lex_expr__77(rest0),
-           {:ok, t2, rest2} <- lex_expr__79(rest1),
-           {:ok, t3, rest3} <- lex_expr__84(rest2) do
-        {:ok, t0 <> t1 <> t2 <> t3, rest3}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__85(input) do
-      case input do
-        <<"?", rest::binary>> -> {:ok, "?", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__87(input) do
-      lex_token__ESCAPE(input)
-    end
-
-    def lex_expr__88(input) do
-      case input do
-        <<"s", rest::binary>> -> {:ok, "s", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__91(input) do
-      case input do
-        <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{32, 32}, {9, 9}, {13, 13}, {10, 10}]) do
-            {:ok, <<c::utf8>>, rest}
-          else
-            :fail
-          end
-
-        _ ->
-          :fail
-      end
-    end
-
-    def lex_expr__90(input) do
-      Tokenizer.not_pred_char(&lex_expr__91/1, input)
-    end
-
-    def lex_expr__92(input) do
-      case input do
-        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__89(input0) do
-      with {:ok, t0, rest0} <- lex_expr__90(input0), {:ok, t1, rest1} <- lex_expr__92(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__86(input) do
-      Tokenizer.first_char_match([&lex_expr__87/1, &lex_expr__88/1, &lex_expr__89/1], input)
-    end
-
-    def lex_token__CHAR(input0) do
-      with {:ok, t0, rest0} <- lex_expr__85(input0), {:ok, t1, rest1} <- lex_expr__86(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__93(input) do
-      case input do
-        <<":", rest::binary>> -> {:ok, ":", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__95(input) do
-      lex_token__IDENTIFIER(input)
-    end
-
-    def lex_expr__96(input) do
-      lex_token__STRING(input)
-    end
-
-    def lex_expr__94(input) do
-      Tokenizer.first_char_match([&lex_expr__95/1, &lex_expr__96/1], input)
-    end
-
-    def lex_token__KEYWORD(input0) do
-      with {:ok, t0, rest0} <- lex_expr__93(input0), {:ok, t1, rest1} <- lex_expr__94(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__97(input) do
-      case input do
-        <<"\"", rest::binary>> -> {:ok, "\"", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__100(input) do
-      lex_token__ESCAPE(input)
-    end
-
-    def lex_expr__103(input) do
-      case input do
-        <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{34, 34}, {92, 92}]) do
-            {:ok, <<c::utf8>>, rest}
-          else
-            :fail
-          end
-
-        _ ->
-          :fail
-      end
-    end
-
-    def lex_expr__102(input) do
-      Tokenizer.not_pred_char(&lex_expr__103/1, input)
-    end
-
-    def lex_expr__104(input) do
-      case input do
-        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__101(input0) do
-      with {:ok, t0, rest0} <- lex_expr__102(input0), {:ok, t1, rest1} <- lex_expr__104(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__99(input) do
-      Tokenizer.first_char_match([&lex_expr__100/1, &lex_expr__101/1], input)
-    end
-
-    def lex_expr__98(input) do
-      Tokenizer.star_char(&lex_expr__99/1, input)
-    end
-
-    def lex_expr__105(input) do
-      case input do
-        <<"\"", rest::binary>> -> {:ok, "\"", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__STRING(input0) do
-      with {:ok, t0, rest0} <- lex_expr__97(input0),
-           {:ok, t1, rest1} <- lex_expr__98(rest0),
-           {:ok, t2, rest2} <- lex_expr__105(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__106(input) do
-      case input do
-        <<"\\", rest::binary>> -> {:ok, "\\", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__108(input) do
-      case input do
-        <<"\"", rest::binary>> -> {:ok, "\"", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__109(input) do
-      case input do
-        <<"\\", rest::binary>> -> {:ok, "\\", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__110(input) do
-      case input do
-        <<"n", rest::binary>> -> {:ok, "n", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__111(input) do
-      case input do
-        <<"t", rest::binary>> -> {:ok, "t", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__112(input) do
-      case input do
-        <<"r", rest::binary>> -> {:ok, "r", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__113(input) do
-      case input do
-        <<"0", rest::binary>> -> {:ok, "0", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__114(input) do
-      case input do
-        <<"a", rest::binary>> -> {:ok, "a", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__115(input) do
-      case input do
-        <<"b", rest::binary>> -> {:ok, "b", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__116(input) do
-      case input do
-        <<"f", rest::binary>> -> {:ok, "f", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__117(input) do
-      case input do
-        <<"v", rest::binary>> -> {:ok, "v", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__119(input) do
-      case input do
-        <<"x{", rest::binary>> -> {:ok, "x{", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__121(input) do
-      lex_token__HEX(input)
-    end
-
-    def lex_expr__120(input) do
-      Tokenizer.plus_char(&lex_expr__121/1, input)
-    end
-
-    def lex_expr__122(input) do
-      case input do
-        <<"}", rest::binary>> -> {:ok, "}", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__118(input0) do
-      with {:ok, t0, rest0} <- lex_expr__119(input0),
-           {:ok, t1, rest1} <- lex_expr__120(rest0),
-           {:ok, t2, rest2} <- lex_expr__122(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__107(input) do
-      Tokenizer.first_char_match(
-        [
-          &lex_expr__108/1,
-          &lex_expr__109/1,
-          &lex_expr__110/1,
-          &lex_expr__111/1,
-          &lex_expr__112/1,
-          &lex_expr__113/1,
-          &lex_expr__114/1,
-          &lex_expr__115/1,
-          &lex_expr__116/1,
-          &lex_expr__117/1,
-          &lex_expr__118/1
-        ],
-        input
-      )
-    end
-
-    def lex_token__ESCAPE(input0) do
-      with {:ok, t0, rest0} <- lex_expr__106(input0), {:ok, t1, rest1} <- lex_expr__107(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_token__ANON_6(input) do
-      case input do
-        <<"%", rest::binary>> -> {:ok, "%", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__123(input) do
-      case input do
-        <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{48, 57}]) do
-            {:ok, <<c::utf8>>, rest}
-          else
-            :fail
-          end
-
-        _ ->
-          :fail
-      end
-    end
-
-    def lex_expr__124(input) do
-      case input do
-        <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{97, 122}, {65, 90}]) do
-            {:ok, <<c::utf8>>, rest}
-          else
-            :fail
-          end
-
-        _ ->
-          :fail
-      end
-    end
-
-    def lex_token__ALNUM(input) do
-      Tokenizer.first_char_match([&lex_expr__123/1, &lex_expr__124/1], input)
-    end
-
-    def lex_expr__127(input) do
-      case input do
-        <<"-", rest::binary>> -> {:ok, "-", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__126(input) do
-      Tokenizer.opt_char(&lex_expr__127/1, input)
-    end
-
-    def lex_expr__129(input) do
-      lex_token__DIGIT(input)
-    end
-
-    def lex_expr__128(input) do
-      Tokenizer.plus_char(&lex_expr__129/1, input)
-    end
-
-    def lex_expr__132(input) do
-      case input do
-        <<".", rest::binary>> -> {:ok, ".", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__134(input) do
-      lex_token__DIGIT(input)
-    end
-
-    def lex_expr__133(input) do
-      Tokenizer.plus_char(&lex_expr__134/1, input)
-    end
-
     def lex_expr__136(input) do
-      lex_token__EXPONENT(input)
-    end
+      case input do
+        <<c::utf8, rest::binary>> ->
+          if Tokenizer.in_ranges?(c, [{101, 101}, {69, 69}]) do
+            {:ok, <<c::utf8>>, rest}
+          else
+            :fail
+          end
 
-    def lex_expr__135(input) do
-      Tokenizer.opt_char(&lex_expr__136/1, input)
-    end
-
-    def lex_expr__131(input0) do
-      with {:ok, t0, rest0} <- lex_expr__132(input0),
-           {:ok, t1, rest1} <- lex_expr__133(rest0),
-           {:ok, t2, rest2} <- lex_expr__135(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__137(input) do
-      lex_token__EXPONENT(input)
-    end
-
-    def lex_expr__130(input) do
-      Tokenizer.first_char_match([&lex_expr__131/1, &lex_expr__137/1], input)
-    end
-
-    def lex_expr__125(input0) do
-      with {:ok, t0, rest0} <- lex_expr__126(input0),
-           {:ok, t1, rest1} <- lex_expr__128(rest0),
-           {:ok, t2, rest2} <- lex_expr__130(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
+        _ ->
+          :fail
       end
     end
 
     def lex_expr__138(input) do
       case input do
-        <<"NaN", rest::binary>> -> {:ok, "NaN", rest}
-        _ -> :fail
+        <<c::utf8, rest::binary>> ->
+          if Tokenizer.in_ranges?(c, [{43, 43}, {45, 45}]) do
+            {:ok, <<c::utf8>>, rest}
+          else
+            :fail
+          end
+
+        _ ->
+          :fail
       end
     end
 
-    def lex_expr__139(input) do
-      case input do
-        <<"Infinity", rest::binary>> -> {:ok, "Infinity", rest}
-        _ -> :fail
-      end
+    def lex_expr__137(input) do
+      Tokenizer.opt_char(&lex_expr__138/1, input)
     end
 
     def lex_expr__140(input) do
-      case input do
-        <<"-Infinity", rest::binary>> -> {:ok, "-Infinity", rest}
-        _ -> :fail
-      end
+      lex_token__DIGIT(input)
     end
 
-    def lex_token__FLOAT(input) do
-      Tokenizer.first_char_match(
-        [&lex_expr__125/1, &lex_expr__138/1, &lex_expr__139/1, &lex_expr__140/1],
-        input
-      )
+    def lex_expr__139(input) do
+      Tokenizer.plus_char(&lex_expr__140/1, input)
+    end
+
+    def lex_token__EXPONENT(input0) do
+      with {:ok, t0, rest0} <- lex_expr__136(input0),
+           {:ok, t1, rest1} <- lex_expr__137(rest0),
+           {:ok, t2, rest2} <- lex_expr__139(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
     end
 
     def lex_candidates(input, _context) do
@@ -2884,8 +2884,8 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_rule__(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :NIL) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, %{NIL: {:token, :NIL, text}}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, %{NIL: capture}}
+        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, NIL: {:token, :NIL, text}}
+        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, NIL: capture}
         :fail -> :fail
       end
     end
@@ -2893,10 +2893,10 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__0(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :AT_DISCARD) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, %{AT_DISCARD: {:token, :AT_DISCARD, text}}}
+          {:ok, new_pos, ref_stack, AT_DISCARD: {:token, :AT_DISCARD, text}}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, %{AT_DISCARD: capture}}
+          {:ok, new_pos, ref_stack, AT_DISCARD: capture}
 
         :fail ->
           :fail
@@ -2905,7 +2905,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__2(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -2917,7 +2917,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__3(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{value: {:rule, :value, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
 
         _fail ->
           :fail
@@ -2936,14 +2936,14 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__4(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :ANON_2) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
 
     def parse_expr__6(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -2955,7 +2955,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__9(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{value: {:rule, :value, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
 
         _fail ->
           :fail
@@ -2964,7 +2964,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__13(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -2976,7 +2976,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__14(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{value: {:rule, :value, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
 
         _fail ->
           :fail
@@ -3011,7 +3011,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__16(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3022,7 +3022,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__17(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :ANON_3) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3049,7 +3049,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__20(stream, pos, ref_stack, context) do
       case parse_rule__discard(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{discard: {:rule, :discard, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, discard: {:rule, :discard, sub_captures}}
 
         _fail ->
           :fail
@@ -3058,7 +3058,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__24(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3070,7 +3070,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__25(stream, pos, ref_stack, context) do
       case parse_rule__discard(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{discard: {:rule, :discard, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, discard: {:rule, :discard, sub_captures}}
 
         _fail ->
           :fail
@@ -3105,7 +3105,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__27(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3117,7 +3117,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__28(stream, pos, ref_stack, context) do
       case parse_rule__value_body(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{value_body: {:rule, :value_body, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, value_body: {:rule, :value_body, sub_captures}}
 
         _fail ->
           :fail
@@ -3136,22 +3136,22 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_rule__string(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :STRING) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, %{STRING: {:token, :STRING, text}}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, %{STRING: capture}}
+        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, STRING: {:token, :STRING, text}}
+        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, STRING: capture}
         :fail -> :fail
       end
     end
 
     def parse_expr__29(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :ANON_1) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
 
     def parse_expr__31(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3162,14 +3162,9 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__32(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :STRING) do
-        {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, %{version: {:token, :STRING, text}}}
-
-        {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, %{version: capture}}
-
-        :fail ->
-          :fail
+        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, version: {:token, :STRING, text}}
+        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, version: capture}
+        :fail -> :fail
       end
     end
 
@@ -3185,16 +3180,16 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__33(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRUE) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, %{TRUE: {:token, :TRUE, text}}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, %{TRUE: capture}}
+        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, TRUE: {:token, :TRUE, text}}
+        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, TRUE: capture}
         :fail -> :fail
       end
     end
 
     def parse_expr__34(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :FALSE) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, %{FALSE: {:token, :FALSE, text}}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, %{FALSE: capture}}
+        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, FALSE: {:token, :FALSE, text}}
+        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, FALSE: capture}
         :fail -> :fail
       end
     end
@@ -3205,22 +3200,22 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_rule__char(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :CHAR) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, %{CHAR: {:token, :CHAR, text}}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, %{CHAR: capture}}
+        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, CHAR: {:token, :CHAR, text}}
+        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, CHAR: capture}
         :fail -> :fail
       end
     end
 
     def parse_expr__35(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :ANON_4) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
 
     def parse_expr__37(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3232,7 +3227,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__40(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{value: {:rule, :value, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
 
         _fail ->
           :fail
@@ -3241,7 +3236,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__44(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3253,7 +3248,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__45(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{value: {:rule, :value, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
 
         _fail ->
           :fail
@@ -3288,7 +3283,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__47(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3299,7 +3294,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__48(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :ANON_5) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3325,24 +3320,19 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__49(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :DECIMAL) do
-        {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, %{DECIMAL: {:token, :DECIMAL, text}}}
-
-        {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, %{DECIMAL: capture}}
-
-        :fail ->
-          :fail
+        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, DECIMAL: {:token, :DECIMAL, text}}
+        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, DECIMAL: capture}
+        :fail -> :fail
       end
     end
 
     def parse_expr__50(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :RATIONAL) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, %{RATIONAL: {:token, :RATIONAL, text}}}
+          {:ok, new_pos, ref_stack, RATIONAL: {:token, :RATIONAL, text}}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, %{RATIONAL: capture}}
+          {:ok, new_pos, ref_stack, RATIONAL: capture}
 
         :fail ->
           :fail
@@ -3351,22 +3341,17 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__51(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :FLOAT) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, %{FLOAT: {:token, :FLOAT, text}}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, %{FLOAT: capture}}
+        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, FLOAT: {:token, :FLOAT, text}}
+        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, FLOAT: capture}
         :fail -> :fail
       end
     end
 
     def parse_expr__52(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :INTEGER) do
-        {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, %{INTEGER: {:token, :INTEGER, text}}}
-
-        {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, %{INTEGER: capture}}
-
-        :fail ->
-          :fail
+        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, INTEGER: {:token, :INTEGER, text}}
+        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, INTEGER: capture}
+        :fail -> :fail
       end
     end
 
@@ -3383,10 +3368,10 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_rule__symbol(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :IDENTIFIER) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, %{IDENTIFIER: {:token, :IDENTIFIER, text}}}
+          {:ok, new_pos, ref_stack, IDENTIFIER: {:token, :IDENTIFIER, text}}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, %{IDENTIFIER: capture}}
+          {:ok, new_pos, ref_stack, IDENTIFIER: capture}
 
         :fail ->
           :fail
@@ -3396,10 +3381,10 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__53(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :DATE_SIGIL) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, %{DATE_SIGIL: {:token, :DATE_SIGIL, text}}}
+          {:ok, new_pos, ref_stack, DATE_SIGIL: {:token, :DATE_SIGIL, text}}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, %{DATE_SIGIL: capture}}
+          {:ok, new_pos, ref_stack, DATE_SIGIL: capture}
 
         :fail ->
           :fail
@@ -3409,10 +3394,10 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__54(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TIME_SIGIL) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, %{TIME_SIGIL: {:token, :TIME_SIGIL, text}}}
+          {:ok, new_pos, ref_stack, TIME_SIGIL: {:token, :TIME_SIGIL, text}}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, %{TIME_SIGIL: capture}}
+          {:ok, new_pos, ref_stack, TIME_SIGIL: capture}
 
         :fail ->
           :fail
@@ -3422,10 +3407,10 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__55(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :INSTANT_SIGIL) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, %{INSTANT_SIGIL: {:token, :INSTANT_SIGIL, text}}}
+          {:ok, new_pos, ref_stack, INSTANT_SIGIL: {:token, :INSTANT_SIGIL, text}}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, %{INSTANT_SIGIL: capture}}
+          {:ok, new_pos, ref_stack, INSTANT_SIGIL: capture}
 
         :fail ->
           :fail
@@ -3435,10 +3420,10 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__56(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :REGEX_SIGIL) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, %{REGEX_SIGIL: {:token, :REGEX_SIGIL, text}}}
+          {:ok, new_pos, ref_stack, REGEX_SIGIL: {:token, :REGEX_SIGIL, text}}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, %{REGEX_SIGIL: capture}}
+          {:ok, new_pos, ref_stack, REGEX_SIGIL: capture}
 
         :fail ->
           :fail
@@ -3457,21 +3442,16 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_rule__keyword(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :KEYWORD) do
-        {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, %{KEYWORD: {:token, :KEYWORD, text}}}
-
-        {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, %{KEYWORD: capture}}
-
-        :fail ->
-          :fail
+        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, KEYWORD: {:token, :KEYWORD, text}}
+        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, KEYWORD: capture}
+        :fail -> :fail
       end
     end
 
     def parse_expr__58(stream, pos, ref_stack, context) do
       case parse_rule__header(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{header: {:rule, :header, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, header: {:rule, :header, sub_captures}}
 
         _fail ->
           :fail
@@ -3484,7 +3464,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__60(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3496,7 +3476,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__61(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{value: {:rule, :value, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
 
         _fail ->
           :fail
@@ -3505,7 +3485,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__63(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3516,7 +3496,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__65(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3547,7 +3527,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__66(stream, pos, ref_stack, context) do
       case parse_rule__(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{nil: {:rule, nil, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, nil: {:rule, nil, sub_captures}}
 
         _fail ->
           :fail
@@ -3557,7 +3537,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__67(stream, pos, ref_stack, context) do
       case parse_rule__boolean(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{boolean: {:rule, :boolean, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, boolean: {:rule, :boolean, sub_captures}}
 
         _fail ->
           :fail
@@ -3567,7 +3547,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__68(stream, pos, ref_stack, context) do
       case parse_rule__number(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{number: {:rule, :number, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, number: {:rule, :number, sub_captures}}
 
         _fail ->
           :fail
@@ -3577,7 +3557,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__69(stream, pos, ref_stack, context) do
       case parse_rule__string(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{string: {:rule, :string, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, string: {:rule, :string, sub_captures}}
 
         _fail ->
           :fail
@@ -3587,7 +3567,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__70(stream, pos, ref_stack, context) do
       case parse_rule__char(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{char: {:rule, :char, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, char: {:rule, :char, sub_captures}}
 
         _fail ->
           :fail
@@ -3597,7 +3577,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__71(stream, pos, ref_stack, context) do
       case parse_rule__keyword(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{keyword: {:rule, :keyword, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, keyword: {:rule, :keyword, sub_captures}}
 
         _fail ->
           :fail
@@ -3607,7 +3587,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__72(stream, pos, ref_stack, context) do
       case parse_rule__symbol(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{symbol: {:rule, :symbol, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, symbol: {:rule, :symbol, sub_captures}}
 
         _fail ->
           :fail
@@ -3617,7 +3597,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__73(stream, pos, ref_stack, context) do
       case parse_rule__list(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{list: {:rule, :list, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, list: {:rule, :list, sub_captures}}
 
         _fail ->
           :fail
@@ -3627,7 +3607,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__74(stream, pos, ref_stack, context) do
       case parse_rule__tuple(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{tuple: {:rule, :tuple, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, tuple: {:rule, :tuple, sub_captures}}
 
         _fail ->
           :fail
@@ -3637,7 +3617,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__75(stream, pos, ref_stack, context) do
       case parse_rule__map_lit(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{map_lit: {:rule, :map_lit, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, map_lit: {:rule, :map_lit, sub_captures}}
 
         _fail ->
           :fail
@@ -3647,7 +3627,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__76(stream, pos, ref_stack, context) do
       case parse_rule__struct_lit(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{struct_lit: {:rule, :struct_lit, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, struct_lit: {:rule, :struct_lit, sub_captures}}
 
         _fail ->
           :fail
@@ -3657,7 +3637,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__77(stream, pos, ref_stack, context) do
       case parse_rule__set_lit(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{set_lit: {:rule, :set_lit, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, set_lit: {:rule, :set_lit, sub_captures}}
 
         _fail ->
           :fail
@@ -3667,7 +3647,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__78(stream, pos, ref_stack, context) do
       case parse_rule__sigil(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{sigil: {:rule, :sigil, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, sigil: {:rule, :sigil, sub_captures}}
 
         _fail ->
           :fail
@@ -3677,7 +3657,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__79(stream, pos, ref_stack, context) do
       case parse_rule__tag_form(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{tag_form: {:rule, :tag_form, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, tag_form: {:rule, :tag_form, sub_captures}}
 
         _fail ->
           :fail
@@ -3711,14 +3691,14 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__80(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :ANON_6) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
 
     def parse_expr__82(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3729,14 +3709,14 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__83(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :ANON_4) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
 
     def parse_expr__85(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3748,7 +3728,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__88(stream, pos, ref_stack, context) do
       case parse_rule__map_entry(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{map_entry: {:rule, :map_entry, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, map_entry: {:rule, :map_entry, sub_captures}}
 
         _fail ->
           :fail
@@ -3757,7 +3737,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__92(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3769,7 +3749,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__93(stream, pos, ref_stack, context) do
       case parse_rule__map_entry(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{map_entry: {:rule, :map_entry, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, map_entry: {:rule, :map_entry, sub_captures}}
 
         _fail ->
           :fail
@@ -3804,7 +3784,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__95(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3815,7 +3795,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__96(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :ANON_5) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3849,14 +3829,14 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__97(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :ANON_6) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
 
     def parse_expr__99(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3867,20 +3847,15 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__100(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :IDENTIFIER) do
-        {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, %{name: {:token, :IDENTIFIER, text}}}
-
-        {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, %{name: capture}}
-
-        :fail ->
-          :fail
+        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, name: {:token, :IDENTIFIER, text}}
+        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, name: capture}
+        :fail -> :fail
       end
     end
 
     def parse_expr__102(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3892,7 +3867,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__104(stream, pos, ref_stack, context) do
       case parse_rule__struct_keyed(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{keyed: {:rule, :struct_keyed, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, keyed: {:rule, :struct_keyed, sub_captures}}
 
         _fail ->
           :fail
@@ -3902,7 +3877,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__105(stream, pos, ref_stack, context) do
       case parse_rule__struct_positional(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{positional: {:rule, :struct_positional, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, positional: {:rule, :struct_positional, sub_captures}}
 
         _fail ->
           :fail
@@ -3934,15 +3909,15 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__106(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :AT) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, %{AT: {:token, :AT, text}}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, %{AT: capture}}
+        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, AT: {:token, :AT, text}}
+        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, AT: capture}
         :fail -> :fail
       end
     end
 
     def parse_expr__108(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3953,14 +3928,14 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__109(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :ANON_4) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
 
     def parse_expr__111(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3972,7 +3947,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__114(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{value: {:rule, :value, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
 
         _fail ->
           :fail
@@ -3981,7 +3956,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__118(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -3993,7 +3968,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__119(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{value: {:rule, :value, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
 
         _fail ->
           :fail
@@ -4028,7 +4003,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__121(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -4039,7 +4014,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__122(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :ANON_5) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -4073,15 +4048,15 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__123(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :AT) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, %{AT: {:token, :AT, text}}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, %{AT: capture}}
+        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, AT: {:token, :AT, text}}
+        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, AT: capture}
         :fail -> :fail
       end
     end
 
     def parse_expr__125(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -4092,20 +4067,15 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__126(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :IDENTIFIER) do
-        {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, %{name: {:token, :IDENTIFIER, text}}}
-
-        {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, %{name: capture}}
-
-        :fail ->
-          :fail
+        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, name: {:token, :IDENTIFIER, text}}
+        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, name: capture}
+        :fail -> :fail
       end
     end
 
     def parse_expr__128(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -4117,7 +4087,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__129(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{value: {:rule, :value, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
 
         _fail ->
           :fail
@@ -4146,10 +4116,10 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__131(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :MAP_KEY) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, %{short_key: {:token, :MAP_KEY, text}}}
+          {:ok, new_pos, ref_stack, short_key: {:token, :MAP_KEY, text}}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, %{short_key: capture}}
+          {:ok, new_pos, ref_stack, short_key: capture}
 
         :fail ->
           :fail
@@ -4158,7 +4128,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__133(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -4170,7 +4140,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__134(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{short_val: {:rule, :value, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, short_val: {:rule, :value, sub_captures}}
 
         _fail ->
           :fail
@@ -4190,7 +4160,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__136(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{arrow_key: {:rule, :value, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, arrow_key: {:rule, :value, sub_captures}}
 
         _fail ->
           :fail
@@ -4199,7 +4169,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__138(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -4210,14 +4180,14 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__139(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :ANON_7) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
 
     def parse_expr__141(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -4229,7 +4199,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__142(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{arrow_val: {:rule, :value, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, arrow_val: {:rule, :value, sub_captures}}
 
         _fail ->
           :fail
@@ -4261,14 +4231,14 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__143(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :ANON_4) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
 
     def parse_expr__145(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -4280,7 +4250,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__148(stream, pos, ref_stack, context) do
       case parse_rule__map_entry(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{map_entry: {:rule, :map_entry, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, map_entry: {:rule, :map_entry, sub_captures}}
 
         _fail ->
           :fail
@@ -4289,7 +4259,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__152(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -4301,7 +4271,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__153(stream, pos, ref_stack, context) do
       case parse_rule__map_entry(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{map_entry: {:rule, :map_entry, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, map_entry: {:rule, :map_entry, sub_captures}}
 
         _fail ->
           :fail
@@ -4336,7 +4306,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__155(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -4347,7 +4317,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__156(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :ANON_5) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -4373,14 +4343,14 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__157(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :ANON_2) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
 
     def parse_expr__159(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -4392,7 +4362,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__162(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{value: {:rule, :value, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
 
         _fail ->
           :fail
@@ -4401,7 +4371,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__166(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -4413,7 +4383,7 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__167(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, %{value: {:rule, :value, sub_captures}}}
+          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
 
         _fail ->
           :fail
@@ -4448,7 +4418,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__169(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -4459,7 +4429,7 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__170(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :ANON_3) do
-        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, %{}}
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
@@ -4496,7 +4466,8 @@ defmodule Dextrin.Text.Grammar.Native do
     )
 
     @doc "Matches `input` against the grammar's root rule, requiring the entire (tokenized) input to be consumed. A bare recognizer -- no `Ichor.Actions` involved. `context` is read-only and only ever consulted by a `Grammar.IR.Custom` `@native(...)` node, if the grammar has one."
-    @spec parse(String.t(), term()) :: {:ok, non_neg_integer(), map()} | {:error, Ichor.Error.t()}
+    @spec parse(String.t(), term()) ::
+            {:ok, non_neg_integer(), Ichor.Capture.raw_captures()} | {:error, Ichor.Error.t()}
     def parse(input, context \\ nil) do
       with {:ok, tokens} <- tokenize(input, context) do
         stream = List.to_tuple(tokens)

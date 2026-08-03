@@ -71,8 +71,8 @@ defmodule Dextrin.MixProject do
       # generates lib/dextrin/text/grammar/native.ex ahead of time --
       # it's never referenced by any code that ships, hence `only:
       # :dev, runtime: false`.
-      {:ichor_runtime, "~> 0.1.0"},
-      {:ichor, "~> 0.2.1", only: :dev, runtime: false},
+      {:ichor_runtime, "~> 0.2"},
+      {:ichor, "~> 0.2", only: :dev, runtime: false},
       {:decimal, "~> 2.1"}
     ]
   end

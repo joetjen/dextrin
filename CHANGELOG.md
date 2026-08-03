@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped `ichor_runtime` to `~> 0.2` (and dev-only `ichor` to `~> 0.3`, its
+  matching release) for the fix to `Ichor.Actions`' `eval_all` sometimes
+  evaluating sibling captures out of source order. Regenerated
+  `lib/dextrin/text/grammar/native.ex` via `mix ichor.gen` and updated
+  the private `@ordered`-map re-entry helper in `Dextrin.Text.Actions`
+  for `ichor_runtime`'s breaking change to raw capture data: an ordered
+  `[{name, value}]` list instead of a plain map. No user-visible
+  behavior change.
+
 ## [0.1.0] - 2026-07-30
 
 ### Added

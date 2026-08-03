@@ -478,31 +478,33 @@ defmodule Dextrin.Text.Actions do
   # handler, so pair order in the source text survives into
   # `Dextrin.OrderedMap.pairs`.
   defp eval_ordered_map(value_cap, ctx) do
-    case value_cap.node do
-      {:rule, :value,
-       %{
-         value_body: {:rule, :value_body, %{map_lit: {:rule, :map_lit, map_lit_captures}}}
-       }} ->
-        # `Map.get(..., :map_entry, [])`, not a `%{map_entry: raw_entries}`
-        # destructure — an empty `%{}` has no `:map_entry` key in its
-        # captures at all (same reason the ordinary, non-`@ordered`
-        # `map_lit` handler below needs the same default), so requiring
-        # the key present rejected `@ordered %{}` outright as if it
-        # weren't a map literal, instead of an ordered map with zero
-        # pairs.
-        map_lit_captures
-        |> Map.get(:map_entry, [])
-        |> List.wrap()
-        |> Result.map_ok(ctx, fn raw_entry, ctx ->
-          Ichor.Actions.evaluate_node(raw_entry, __MODULE__, ctx)
-        end)
-        |> case do
-          {:ok, pairs, ctx} -> {:ok, OrderedMap.new(pairs), ctx}
-          {:error, _} = err -> err
-        end
-
-      _ ->
-        {:error, action_error("@ordered requires a map literal argument")}
+    # Raw capture nodes are now an ordered `[{name, value}]` list rather
+    # than a map (ichor_runtime 0.2), so each nested capture is fetched
+    # by key via `Elixir.Keyword` — `Keyword` in this module is
+    # `Dextrin.Keyword`, hence the fully-qualified calls below.
+    with {:rule, :value, value_caps} <- value_cap.node,
+         {:ok, {:rule, :value_body, value_body_caps}} <-
+           Elixir.Keyword.fetch(value_caps, :value_body),
+         {:ok, {:rule, :map_lit, map_lit_captures}} <-
+           Elixir.Keyword.fetch(value_body_caps, :map_lit) do
+      # `Elixir.Keyword.get(..., :map_entry, [])`, not a required-key
+      # fetch — an empty `%{}` has no `:map_entry` capture at all (same
+      # reason the ordinary, non-`@ordered` `map_lit` handler below needs
+      # the same default), so requiring the key present rejected
+      # `@ordered %{}` outright as if it weren't a map literal, instead
+      # of an ordered map with zero pairs.
+      map_lit_captures
+      |> Elixir.Keyword.get(:map_entry, [])
+      |> List.wrap()
+      |> Result.map_ok(ctx, fn raw_entry, ctx ->
+        Ichor.Actions.evaluate_node(raw_entry, __MODULE__, ctx)
+      end)
+      |> case do
+        {:ok, pairs, ctx} -> {:ok, OrderedMap.new(pairs), ctx}
+        {:error, _} = err -> err
+      end
+    else
+      _ -> {:error, action_error("@ordered requires a map literal argument")}
     end
   end
 
