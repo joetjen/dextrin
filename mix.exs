@@ -128,7 +128,7 @@ defmodule Dextrin.MixProject do
       "guides/dxn/DXN_EXAMPLES.md",
       "guides/dxn/DXN_CHEATSHEET.md",
       "CHANGELOG.md",
-      "CONTRIBUTION.md",
+      "CONTRIBUTING.md",
       "LICENSE"
     ]
   end
@@ -137,7 +137,7 @@ defmodule Dextrin.MixProject do
     [
       Guides: ["guides/TUTORIAL.md", "guides/EXAMPLES.md", "guides/CHEATSHEET.md"],
       "DXN Format": Path.wildcard("guides/dxn/*.md"),
-      Project: ["CHANGELOG.md", "CONTRIBUTION.md", "LICENSE"]
+      Project: ["CHANGELOG.md", "CONTRIBUTING.md", "LICENSE"]
     ]
   end
 
