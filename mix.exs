@@ -73,7 +73,7 @@ defmodule Dextrin.MixProject do
       # :dev, runtime: false`.
       {:ichor_runtime, "~> 0.2"},
       {:ichor, "~> 0.2", only: :dev, runtime: false},
-      {:decimal, "~> 2.1"}
+      {:decimal, "~> 3.1"}
     ]
   end
 
