@@ -100,7 +100,10 @@ defmodule Dextrin.MixProject do
   defp package do
     [
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/joetjen/dextrin"},
+      links: %{
+        "GitHub" => "https://github.com/joetjen/dextrin",
+        "Docs (main)" => "https://joetjen.github.io/dextrin"
+      },
       files:
         ~w(lib priv/grammar priv/unicode priv/schema .formatter.exs mix.exs README.md CHANGELOG.md LICENSE)
     ]

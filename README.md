@@ -3,6 +3,7 @@
 [![CI](https://github.com/joetjen/dextrin/actions/workflows/ci.yml/badge.svg)](https://github.com/joetjen/dextrin/actions/workflows/ci.yml)
 [![Hex.pm](https://img.shields.io/hexpm/v/dextrin.svg)](https://hex.pm/packages/dextrin)
 [![Documentation](https://img.shields.io/badge/hex-docs-blue.svg)](https://hexdocs.pm/dextrin)
+[![Docs (main)](https://img.shields.io/badge/docs-main-blue.svg)](https://joetjen.github.io/dextrin/)
 
 Dextrin is an Elixir implementation of DXN (Data eXchange Notation): a
 human-writable text format (`.dxn`), a compact binary format (`.dxnb`)
