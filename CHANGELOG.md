@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `decimal` bumped `~> 2.1` -> `~> 3.0` -- `mix hex.audit` flagged the resolved `2.4.1` against a real, published MEDIUM-severity advisory (EEF-CVE-2026-32686, "unbounded exponent in decimal enables unauthenticated DoS") while adding a downstream consumer. This package parses untrusted `.dxn`/`.dxnb` input directly into `Decimal.new/1,3` (`lib/dextrin/text/actions.ex`, `lib/dextrin/binary/decoder.ex`) -- exactly the attack surface the advisory describes, not an incidental transitive path. Every `Decimal.*` call this package makes (`new/1`, `new/3`, `to_float/1`, `to_string/2`) is unchanged, stable core API across 2.x and 3.x -- confirmed by the full existing test suite passing unmodified against `3.1.1`.
+
 ## [0.1.2] - 2026-08-14
 
 ### Added

@@ -73,7 +73,20 @@ defmodule Dextrin.MixProject do
       # :dev, runtime: false`.
       {:ichor_runtime, "~> 0.2"},
       {:ichor, "~> 0.2", only: :dev, runtime: false},
-      {:decimal, "~> 2.1"}
+
+      # `~> 3.0`, not `~> 2.1` -- 2.4.1 (the version that constraint
+      # resolved to) carries a real, published MEDIUM-severity DoS
+      # advisory (EEF-CVE-2026-32686, "unbounded exponent in decimal
+      # enables unauthenticated DoS"), confirmed via `mix hex.audit`
+      # while adding a downstream consumer. This library parses
+      # untrusted `.dxn`/`.dxnb` input directly into `Decimal.new/1,3`
+      # (`lib/dextrin/text/actions.ex`, `lib/dextrin/binary/decoder.ex`)
+      # -- exactly the attack surface the advisory describes, not an
+      # incidental transitive path. Every `Decimal.*` call this package
+      # makes (`new/1`, `new/3`, `to_float/1`, `to_string/2`) is
+      # unchanged, stable core API across 2.x and 3.x -- confirmed by
+      # this package's own test suite passing unmodified against 3.1.1.
+      {:decimal, "~> 3.0"}
     ]
   end
 
