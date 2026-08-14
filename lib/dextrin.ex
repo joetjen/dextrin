@@ -30,6 +30,13 @@ defmodule Dextrin do
   within `dextrin`-produced documents. Don't assume interop with some
   *other* CBOR-based format that happens to also use a tag in that
   range; it isn't reserved for DXN outside this library's own output.
+
+  This is the reference implementation. Two sibling ports read/write
+  the exact same `.dxn`/`.dxnb`/`.dxns` documents:
+  [`node-dextrin`](https://www.npmjs.com/package/dextrin) (Node.js, on
+  npm) and [`php-dextrin`](https://packagist.org/packages/joetjen/dextrin)
+  (PHP, on Packagist) — see the README's own "Other language
+  implementations" section for the full comparison.
   """
 
   alias Dextrin.Registry

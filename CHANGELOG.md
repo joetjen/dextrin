@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-08-14
+
+### Added
+
+- `Dextrin`'s own moduledoc now names its two sibling ports
+  (`node-dextrin` on npm, `php-dextrin` on Packagist) directly,
+  alongside the existing README "Other language implementations"
+  section and `mix.exs` package links.
+
+### Fixed
+
+- `Dextrin.Text.Formatter` (`encode/2`'s `pretty: true` path) rendered
+  a map entry's *key* incorrectly in two cases, both traced to
+  `render_entry/4` conflating "render this as a value" with "render
+  this as a keyword key":
+  - A string-typed key that happened to look like a bare identifier
+    (e.g. `"id"`) rendered as keyword-shorthand (`id: 1`) instead of
+    the quoted arrow form (`"id" => 1`) — silently changing the key's
+    type from `string` to `keyword` on the next decode. This is also
+    why a schema-materialized struct (whose field map is always
+    string-keyed) round-tripped incorrectly once pretty-printed.
+  - A map keyed by exactly the atom `:nan`, `:positive_infinity`, or
+    `:negative_infinity` — the same atoms a *float* `NaN`/`Infinity`/
+    `-Infinity` decodes to — rendered the key as the float sigil
+    (`Infinity => ...`) instead of the keyword it actually was
+    (`positive_infinity: ...`), because the key fell through to the
+    same code path that (correctly, in *value* position) special-cases
+    those three atoms.
+
+  `Dextrin.Text.Printer` (the compact, non-pretty path) was not
+  affected — only the multi-line formatter had this bug. Found via a
+  cross-language round-trip check against `node-dextrin`/`php-dextrin`.
+
 ## [0.1.1] - 2026-08-03
 
 ### Changed
