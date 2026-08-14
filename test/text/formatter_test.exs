@@ -72,9 +72,48 @@ defmodule Dextrin.Text.FormatterTest do
       assert Formatter.pretty(%{1 => "one"}) == {:ok, "%{\n  1 => \"one\"\n}"}
     end
 
+    test "a plain map with a raw (trusted) atom key uses keyword-shorthand" do
+      assert Formatter.pretty(%{x: 1}) == {:ok, "%{\n  x: 1\n}"}
+    end
+
+    # Regression: a string-typed key that happens to look like a bare
+    # identifier used to be indistinguishable, inside render_entry/4,
+    # from a Dextrin.Struct field name (also a bare binary string) —
+    # both fell into the same clause, so a genuinely string-keyed map
+    # entry rendered as `id: 1` (keyword shorthand) instead of
+    # `"id" => 1`, silently changing the key's type on re-decode.
+    test "a plain map with a string key that looks like a bare identifier keeps its string-ness (quoted arrow form)" do
+      assert Formatter.pretty(%{"id" => 1}) == {:ok, "%{\n  \"id\" => 1\n}"}
+      assert {:ok, text} = Formatter.pretty(%{"id" => 1})
+      assert Dextrin.decode(text) == {:ok, %{"id" => 1}}
+    end
+
+    # Regression: :nan/:positive_infinity/:negative_infinity are the
+    # exact atoms a *float value* Infinity/-Infinity/NaN decodes to
+    # (see Dextrin.Value's own moduledoc) — render_entry/4 used to have
+    # no dedicated atom-key clause, so a map keyed by one of these three
+    # atoms fell through to the generic key-is-a-value delegate, which
+    # deliberately prints those three atoms as the float sigils in
+    # *value* position. In *key* position that's wrong: the key is a
+    # keyword named e.g. "positive_infinity", not the float value.
+    test "a plain map keyed by :nan/:positive_infinity/:negative_infinity renders the key as a keyword, not a float sigil" do
+      assert Formatter.pretty(%{positive_infinity: :ok}) ==
+               {:ok, "%{\n  positive_infinity: :ok\n}"}
+
+      assert Formatter.pretty(%{negative_infinity: :ok}) ==
+               {:ok, "%{\n  negative_infinity: :ok\n}"}
+
+      assert Formatter.pretty(%{nan: :ok}) == {:ok, "%{\n  nan: :ok\n}"}
+    end
+
     test "a keyed struct" do
       s = Struct.keyed("Point", [{"x", 1}, {"y", 2}])
       assert Formatter.pretty(s) == {:ok, "%Point{\n  x: 1\n  y: 2\n}"}
+    end
+
+    test "a keyed struct whose field value is a float special value still prints via the float sigil (value position, unaffected)" do
+      s = Struct.keyed("Reading", [{"value", :positive_infinity}])
+      assert Formatter.pretty(s) == {:ok, "%Reading{\n  value: Infinity\n}"}
     end
 
     test "a positional struct" do

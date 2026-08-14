@@ -82,7 +82,16 @@ defmodule Dextrin.Text.Formatter do
   end
 
   defp render(%Struct{name: name, fields: {:keyed, pairs}}, depth, opts) when pairs != [] do
-    with {:ok, body} <- render_entries("{", pairs, "}", depth, opts) do
+    # Wrapped as Dextrin.Keyword before reaching render_entries/5, same
+    # as Dextrin.Text.Printer.print/2's own struct clause — struct
+    # field names are always keyword-shaped per DXN.md §1.2's map_entry
+    # grammar, and render_entry/4 needs that distinction made here,
+    # up front, rather than trying to guess from a bare binary string
+    # alone whether it's a field name or a genuine string-typed map key
+    # (see render_entry/4's own doc for why that guess used to be wrong).
+    keyed = Enum.map(pairs, fn {k, v} -> {Dextrin.Keyword.new(k), v} end)
+
+    with {:ok, body} <- render_entries("{", keyed, "}", depth, opts) do
       {:ok, "%" <> name <> body}
     end
   end
@@ -186,35 +195,44 @@ defmodule Dextrin.Text.Formatter do
   # §1.2's `map_entry`); any other name has no colon form at all and
   # must render as an ordinary keyword value on the arrow's left side.
   defp render_entry(%Dextrin.Keyword{name: name}, value, depth, opts) do
-    if Printer.bare_identifier?(name) do
-      with {:ok, rendered} <- render(value, depth, opts), do: {:ok, "#{name}: #{rendered}"}
-    else
-      with {:ok, printed_key} <- Printer.print(Dextrin.Keyword.new(name), opts),
-           {:ok, rendered} <- render(value, depth, opts) do
-        {:ok, "#{printed_key} => #{rendered}"}
-      end
-    end
+    render_keyword_entry(name, value, depth, opts)
   end
 
-  # Struct-keyed pairs use plain string names, not Keyword-wrapped
-  # (Dextrin.Struct.keyed/2's own shape) — distinct from a map's keys,
-  # but `%Name{ ... }`'s body is the same `map_entry` grammar (`DXN.md`
-  # §1.2), so the same colon-shorthand-vs-arrow rule applies here too.
-  defp render_entry(name, value, depth, opts) when is_binary(name) do
-    if Printer.bare_identifier?(name) do
-      with {:ok, rendered} <- render(value, depth, opts), do: {:ok, "#{name}: #{rendered}"}
-    else
-      with {:ok, printed_key} <- Printer.print(Dextrin.Keyword.new(name), opts),
-           {:ok, rendered} <- render(value, depth, opts) do
-        {:ok, "#{printed_key} => #{rendered}"}
-      end
-    end
+  # A bare atom key (`nil`/`true`/`false` excluded — those are
+  # `boolean`/`nil` values, not stand-ins for a `keyword` name) is a
+  # keyword too, same as `Printer.print_entries/2`'s own atom-key
+  # clause: `DXN.md` §1.3 documents `keyword` as "Elixir atom."
+  #
+  # This has to be its own clause, not left to fall through to the
+  # generic `Printer.print/2` delegate below — printing an atom as a
+  # *value* and printing it as a *keyword key* are different concerns
+  # that happen to collide for `:nan`/`:positive_infinity`/
+  # `:negative_infinity`, which `Printer.print/2` deliberately renders
+  # as the `NaN`/`Infinity`/`-Infinity` float sigils in value position.
+  # Falling through here rendered a map/struct entry keyed by one of
+  # those three atoms as e.g. `Infinity => Infinity` instead of
+  # `positive_infinity: Infinity` — same bug class fixed below for a
+  # string key that happens to look like a bare identifier.
+  defp render_entry(atom, value, depth, opts)
+       when is_atom(atom) and atom not in [nil, true, false] do
+    render_keyword_entry(Atom.to_string(atom), value, depth, opts)
   end
 
   defp render_entry(key, value, depth, opts) do
     with {:ok, rendered_key} <- Printer.print(key, opts),
          {:ok, rendered_value} <- render(value, depth, opts) do
       {:ok, "#{rendered_key} => #{rendered_value}"}
+    end
+  end
+
+  defp render_keyword_entry(name, value, depth, opts) do
+    if Printer.bare_identifier?(name) do
+      with {:ok, rendered} <- render(value, depth, opts), do: {:ok, "#{name}: #{rendered}"}
+    else
+      with {:ok, printed_key} <- Printer.print(Dextrin.Keyword.new(name), opts),
+           {:ok, rendered} <- render(value, depth, opts) do
+        {:ok, "#{printed_key} => #{rendered}"}
+      end
     end
   end
 end
