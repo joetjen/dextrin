@@ -133,7 +133,13 @@ defmodule Dextrin.Schema.Compiler do
     do: %{ss | items: Enum.map(items, &atomize_back/1)}
 
   defp atomize_back(%Struct{fields: {:keyed, pairs}} = s) do
-    %{s | fields: {:keyed, Enum.map(pairs, fn {k, v} -> {k, atomize_back(v)} end)}}
+    # A struct field's own shorthand key round-trips the same
+    # atom-under-trusted shape as any other keyword-shaped key now
+    # (`Dextrin.Struct`'s own moduledoc) — previously always a plain
+    # string, so there was nothing to normalize here besides the
+    # value; now the key needs the same walk as `OrderedMap`/plain-map
+    # pairs get above.
+    %{s | fields: {:keyed, Enum.map(pairs, fn {k, v} -> {atomize_back(k), atomize_back(v)} end)}}
   end
 
   defp atomize_back(%Struct{fields: {:positional, items}} = s),

@@ -44,7 +44,7 @@ defmodule Dextrin.Text.GrammarTest do
       # Dextrin.decode/2, it doesn't strip the internal
       # Dextrin.Schema.Validated provenance wrapper materialize/4
       # produces; that's Dextrin.decode/2's own job.
-      assert {:ok, %Dextrin.Schema.Validated{name: "Point", value: %{"x" => 1}}} =
+      assert {:ok, %Dextrin.Schema.Validated{name: "Point", value: %{x: 1}}} =
                Grammar.run("%Point{x: 1}", registry)
     end
   end

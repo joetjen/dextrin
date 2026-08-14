@@ -52,7 +52,7 @@ defmodule Dextrin.Schema.ProviderTest do
     {:ok, registry} =
       Dextrin.Schema.register_provider(Dextrin.Registry.new(), ProviderPointNoMaterializer)
 
-    assert {:ok, %{"a" => 1}} = Dextrin.decode(~s(%Plain{a: 1}), registry: registry)
+    assert {:ok, %{a: 1}} = Dextrin.decode(~s(%Plain{a: 1}), registry: registry)
   end
 
   test "a provider whose dxn_schema_name/0 doesn't match anything in its own document is a clear error" do
@@ -69,7 +69,7 @@ defmodule Dextrin.Schema.ProviderTest do
 
     {:ok, registry} = Dextrin.Schema.register_provider(base, ProviderPoint.DXN)
 
-    assert {:ok, %{"a" => 1}} = Dextrin.decode(~s(%Plain{a: 1}), registry: registry)
+    assert {:ok, %{a: 1}} = Dextrin.decode(~s(%Plain{a: 1}), registry: registry)
 
     assert {:ok, %ProviderPoint{x: 1, y: 2}} =
              Dextrin.decode(~s(%Point{x: 1, y: 2}), registry: registry)

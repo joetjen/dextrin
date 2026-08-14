@@ -43,13 +43,24 @@ defmodule Dextrin.Schema.Compiled do
   — without a caller needing to hand-build a `Dextrin.Struct`
   themselves first, closing the loop `Dextrin.Schema.Validator.materialize/4`
   already closes on the way in.
+
+  Returned keyed by atom, not `field_names/1`'s own `String.t()` — an
+  `application_struct`'s fields are real Elixir atoms already
+  (`Map.from_struct/1`), and atomizing a schema field name for the
+  lookup is exactly as safe as `Dextrin.Schema.Validator`'s own
+  `resolve_fields/3` already assumes (a fixed, developer-declared
+  vocabulary, never untrusted payload data) — this is what lets the
+  printer/formatter render these fields with ordinary keyword
+  shorthand (`id: 1`) instead of a quoted-string arrow entry.
   """
-  @spec field_values(t(), struct()) :: [{String.t(), term()}]
+  @spec field_values(t(), struct()) :: [{atom(), term()}]
   def field_values(%__MODULE__{} = compiled, application_struct)
       when is_struct(application_struct) do
-    field_map =
-      application_struct |> Map.from_struct() |> Map.new(fn {k, v} -> {Atom.to_string(k), v} end)
+    field_map = Map.from_struct(application_struct)
 
-    Enum.map(field_names(compiled), fn name -> {name, Map.get(field_map, name)} end)
+    Enum.map(field_names(compiled), fn name ->
+      atom_name = String.to_atom(name)
+      {atom_name, Map.get(field_map, atom_name)}
+    end)
   end
 end

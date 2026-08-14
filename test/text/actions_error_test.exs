@@ -61,8 +61,11 @@ defmodule Dextrin.Text.ActionsErrorTest do
   end
 
   test "a bare symbol is also an accepted struct field name, via the arrow form" do
-    assert {:ok, %Dextrin.Struct{name: "Point", fields: {:keyed, [{"sym", 2}]}}} =
-             Dextrin.decode("%Point{sym => 2}")
+    assert {:ok,
+            %Dextrin.Struct{
+              name: "Point",
+              fields: {:keyed, [{%Dextrin.Symbol{name: "sym"}, 2}]}
+            }} = Dextrin.decode("%Point{sym => 2}")
   end
 
   test "a @datetime body with no offset (neither Z nor +HH:MM) is a clear error" do
@@ -87,7 +90,10 @@ defmodule Dextrin.Text.ActionsErrorTest do
   end
 
   test "with no registry in context (nil), a struct literal still decodes to an opaque Dextrin.Struct" do
-    assert {:ok, %Dextrin.Struct{name: "Point", fields: {:keyed, [{"x", 1}]}}} =
-             Dextrin.Text.Grammar.run("%Point{x: 1}")
+    assert {:ok,
+            %Dextrin.Struct{
+              name: "Point",
+              fields: {:keyed, [{%Dextrin.Keyword{name: "x"}, 1}]}
+            }} = Dextrin.Text.Grammar.run("%Point{x: 1}")
   end
 end

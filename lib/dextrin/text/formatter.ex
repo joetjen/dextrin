@@ -82,16 +82,13 @@ defmodule Dextrin.Text.Formatter do
   end
 
   defp render(%Struct{name: name, fields: {:keyed, pairs}}, depth, opts) when pairs != [] do
-    # Wrapped as Dextrin.Keyword before reaching render_entries/5, same
-    # as Dextrin.Text.Printer.print/2's own struct clause — struct
-    # field names are always keyword-shaped per DXN.md §1.2's map_entry
-    # grammar, and render_entry/4 needs that distinction made here,
-    # up front, rather than trying to guess from a bare binary string
-    # alone whether it's a field name or a genuine string-typed map key
-    # (see render_entry/4's own doc for why that guess used to be wrong).
-    keyed = Enum.map(pairs, fn {k, v} -> {Dextrin.Keyword.new(k), v} end)
-
-    with {:ok, body} <- render_entries("{", keyed, "}", depth, opts) do
+    # `pairs`' keys already arrive as whatever shape `Dextrin.Struct`'s
+    # own field-name rule produced (atom, `Dextrin.Keyword.t()`,
+    # `Dextrin.Symbol.t()`, or `String.t()`) — `render_entry/4` already
+    # dispatches on all four for ordinary map keys, same as
+    # `Dextrin.Text.Printer.print_entries/2`, so no re-wrapping is
+    # needed here.
+    with {:ok, body} <- render_entries("{", pairs, "}", depth, opts) do
       {:ok, "%" <> name <> body}
     end
   end

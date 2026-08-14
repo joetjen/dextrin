@@ -48,10 +48,13 @@ Dextrin.decode(~s(%{x: 1, y: 2}), trusted: false)
 #=> {:ok, %{%Dextrin.Keyword{name: "x"} => 1, %Dextrin.Keyword{name: "y"} => 2}}
 ```
 
-A schema-backed `struct`'s fields are the one place names *do* come back
-as plain strings regardless of `trusted:` — see the
-[tutorial](guides/TUTORIAL.md) — since a schema always knows its field
-names up front.
+A schema-backed `struct`'s default (no-materializer) field map comes back
+atom-keyed regardless of `trusted:` — see the [tutorial](guides/TUTORIAL.md)
+— since field names there come from the compiled schema, a fixed
+vocabulary the developer wrote down, never the untrusted payload being
+decoded. An *opaque* struct (no schema registered for its name) follows
+the same `trusted:` rule as any other keyword-shaped key instead, since
+there's no schema yet to make that safety guarantee.
 
 `.dxn`'s text grammar is compiled by [Ichor](https://github.com/joetjen/ichor)
 — write the grammar once (`priv/grammar/dxn.aether`), get a lexer,

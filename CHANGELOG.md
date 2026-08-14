@@ -14,6 +14,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   alongside the existing README "Other language implementations"
   section and `mix.exs` package links.
 
+### Changed
+
+- **Breaking:** A `struct`'s keyed field *names* are no longer forced
+  to a single canonical `String.t()` representation — they now follow
+  the exact same `trusted:`-driven rule as any other DXN map key
+  (`Dextrin.Struct`'s own moduledoc):
+  - An **opaque** struct (no schema registered for its name) decodes a
+    keyword-shorthand field key (`x:`) as a real atom under `trusted:
+    true` (the default) and as `Dextrin.Keyword.t()` under `trusted:
+    false`, a symbol-syntax field key as `Dextrin.Symbol.t()`
+    regardless of `trusted:`, and a quoted-string field key as a plain
+    `String.t()` — previously every one of those was collapsed to a
+    plain string, discarding which literal form the source actually
+    used.
+  - A **schema-materialized** struct with no registered materializer
+    now decodes to an atom-keyed map (`%{x: 1, y: 2}`, not `%{"x" => 1,
+    "y" => 2}`) — matching `struct_materializer`'s own
+    `%{atom() => term()}` input type, and matching a plain trusted map.
+    Field names come from the compiled schema, a fixed vocabulary the
+    developer wrote down, never the untrusted payload, so atomizing
+    them is safe regardless of the payload's own `trusted:` setting.
+  - `Dextrin.Text.Printer`/`Dextrin.Text.Formatter` render a struct's
+    field names the same way they already render any other map key
+    (colon shorthand for an atom/`Dextrin.Keyword`, plain identifier
+    for a `Dextrin.Symbol`, quoted arrow form for a genuine string) —
+    no more force-wrapping every struct field key as `Dextrin.Keyword`
+    before printing, which previously misrendered a real string-typed
+    field name as keyword shorthand.
+
+  Code matching on `Dextrin.Struct.fields`'s `{:keyed, pairs}` shape,
+  or on a schema-materialized field map's key type, needs updating —
+  see the migration notes in the [tutorial](guides/TUTORIAL.md#6-extending-schemas-for-struct).
+
 ### Fixed
 
 - `Dextrin.Text.Formatter` (`encode/2`'s `pretty: true` path) rendered
@@ -24,8 +57,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     (e.g. `"id"`) rendered as keyword-shorthand (`id: 1`) instead of
     the quoted arrow form (`"id" => 1`) — silently changing the key's
     type from `string` to `keyword` on the next decode. This is also
-    why a schema-materialized struct (whose field map is always
-    string-keyed) round-tripped incorrectly once pretty-printed.
+    why a schema-materialized struct round-tripped incorrectly once
+    pretty-printed, back when its field map was always string-keyed
+    (see the struct field-name parity change below).
   - A map keyed by exactly the atom `:nan`, `:positive_infinity`, or
     `:negative_infinity` — the same atoms a *float* `NaN`/`Infinity`/
     `-Infinity` decodes to — rendered the key as the float sigil

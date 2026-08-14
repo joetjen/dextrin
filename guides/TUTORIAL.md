@@ -33,9 +33,12 @@ Dextrin.decode(~s(%{name: "Ada"}), trusted: false)
 #=> {:ok, %{%Dextrin.Keyword{name: "name"} => "Ada"}}
 ```
 
-A schema-backed `struct`'s fields are the one place names *do* come
-back as plain strings regardless of `trusted:` (§6 below), since a
-schema always knows its field names up front.
+A schema-backed `struct`'s default (no-materializer) field map comes
+back atom-keyed regardless of `trusted:` (§6 below), since field names
+there come from the compiled schema — a fixed vocabulary the developer
+wrote down, never the untrusted payload. An opaque struct (no schema
+registered for its name) follows the same `trusted:` rule as any other
+keyword-shaped key instead.
 
 Both directions return `{:ok, _} | {:error, %Dextrin.Error{}}` —
 `decode/2` never raises on malformed input, and `encode/2` never
@@ -186,7 +189,7 @@ document is itself just DXN data — no new grammar, no new parser:
 {:ok, registry} = Dextrin.Schema.compile(schema_doc)
 
 Dextrin.decode("%Point{x: 1, y: 2}", registry: registry)
-#=> {:ok, %{"x" => 1, "y" => 2}}
+#=> {:ok, %{x: 1, y: 2}}
 ```
 
 Field enforcement (required/optional, closed/forbidden fields,
@@ -206,7 +209,7 @@ in the value you're encoding gets checked against its own schema
 before anything is written:
 
 ```elixir
-bad = Dextrin.Struct.keyed("Point", [{"x", 1}])
+bad = Dextrin.Struct.keyed("Point", [{:x, 1}])
 Dextrin.encode(bad, registry: registry)
 #=> {:error, %Dextrin.Error{}}   # missing required field "y"
 ```
@@ -217,7 +220,7 @@ second-guess data it isn't the origin of).
 
 ## 7. Materializing real Elixir structs
 
-By default a struct materializes to a plain string-keyed map. Register
+By default a struct materializes to a plain atom-keyed map. Register
 a materializer to produce your own struct instead:
 
 ```elixir
@@ -373,7 +376,7 @@ has to separately check for.
 
 ```elixir
 MyApp.ConfigLoader.load("config.dxn")
-#=> {:ok, %{"host" => "localhost", "port" => 4000, "tags" => [%Dextrin.Symbol{name: "dev"}, %Dextrin.Symbol{name: "local"}]}}
+#=> {:ok, %{host: "localhost", port: 4000, tags: [%Dextrin.Symbol{name: "dev"}, %Dextrin.Symbol{name: "local"}]}}
 ```
 
 From here: [Examples](EXAMPLES.md) for more worked scenarios, the

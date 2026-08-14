@@ -68,7 +68,7 @@ payload = """
 """
 
 {:ok, user} = Dextrin.decode(payload, registry: registry)
-#=> {:ok, %{"id" => %Dextrin.Uuid{...}, "email" => "ada@example.com", "role" => :admin, ...}}
+#=> {:ok, %{id: %Dextrin.Uuid{...}, email: "ada@example.com", role: :admin, ...}}
 
 # A response body accidentally including a legacy field is rejected loudly, not silently dropped:
 Dextrin.decode(~s(%User{id: @uuid "...", email: "a@b.co", role: :admin, created: ~U[2024-01-01 00:00:00Z], legacy_id: 1}), registry: registry)

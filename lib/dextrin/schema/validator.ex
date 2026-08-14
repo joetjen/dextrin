@@ -48,7 +48,13 @@ defmodule Dextrin.Schema.Validator do
     end
   end
 
-  defp to_name_map(_compiled, {:keyed, pairs}), do: {:ok, Map.new(pairs)}
+  # `pairs`' keys arrive as whatever shape `Dextrin.Struct.keyed/2`'s
+  # own field-name rule produced (atom, `Dextrin.Keyword.t()`,
+  # `Dextrin.Symbol.t()`, or `String.t()` — see its moduledoc) rather
+  # than always `String.t()`; `stringify_key/1` (already used for the
+  # encode-side mirror below) collapses that to the one representation
+  # `field.name` lookups below compare against.
+  defp to_name_map(_compiled, {:keyed, pairs}), do: {:ok, Map.new(pairs, &stringify_key/1)}
 
   defp to_name_map(%Compiled{fields: schema_fields}, {:positional, items}) do
     names = Enum.map(schema_fields, & &1.name)
@@ -115,8 +121,16 @@ defmodule Dextrin.Schema.Validator do
   defp run_refine_fn(%Compiled{refine_fn: nil}, _resolved), do: :ok
   defp run_refine_fn(%Compiled{refine_fn: fun}, resolved), do: fun.(resolved)
 
-  defp materialize_result(resolved, nil),
-    do: {:ok, Map.new(resolved, fn {k, v} -> {Atom.to_string(k), v} end)}
+  # `resolved` is already atom-keyed (`resolve_fields/3` builds it via
+  # `String.to_atom(field.name)` — safe since field names come from the
+  # compiled schema, a fixed vocabulary, never the untrusted payload
+  # being validated). With no materializer registered, that's the
+  # result as-is: a schema-backed struct's default materialization
+  # gets real atom keys the same way a plain trusted map would,
+  # matching what `struct_materializer`'s own type signature already
+  # expects as *input* — no reason for "no materializer" to hand back a
+  # different key shape than a materializer itself receives.
+  defp materialize_result(resolved, nil), do: {:ok, resolved}
 
   defp materialize_result(resolved, materializer), do: materializer.(resolved)
 
@@ -179,7 +193,7 @@ defmodule Dextrin.Schema.Validator do
   end
 
   defp to_name_map_for_encode(_compiled, %Struct{fields: {:keyed, pairs}}),
-    do: {:ok, Map.new(pairs)}
+    do: {:ok, Map.new(pairs, &stringify_key/1)}
 
   defp to_name_map_for_encode(%Compiled{fields: schema_fields}, %Struct{
          fields: {:positional, items}
@@ -205,11 +219,14 @@ defmodule Dextrin.Schema.Validator do
     {:error, "expected a map or struct to validate against a schema, got #{inspect(other)}"}
   end
 
-  # A plain map decoded straight from `.dxn` source (as opposed to one
-  # a caller builds by hand before encoding) keys its shorthand entries
-  # with `Dextrin.Keyword`/`Dextrin.Symbol` structs, never bare atoms
-  # or strings -- the same three shapes `Dextrin.Text.Actions.field_name/1`
-  # already resolves a struct's own field names from.
+  # Shared by both directions: a decode-side `Dextrin.Struct.fields`
+  # keyed pair and an encode-side plain map both key their
+  # shorthand/symbol entries with `Dextrin.Keyword.t()`/
+  # `Dextrin.Symbol.t()` or a bare atom, never one canonical
+  # representation up front (see `Dextrin.Struct`'s own moduledoc) --
+  # this is what lets `resolve_field/3`'s `field.name`-keyed lookup
+  # below treat all of those the same, regardless of which literal
+  # form the source actually used.
   defp stringify_key({%Dextrin.Keyword{name: name}, v}), do: {name, v}
   defp stringify_key({%Dextrin.Symbol{name: name}, v}), do: {name, v}
   defp stringify_key({k, v}) when is_atom(k), do: {Atom.to_string(k), v}

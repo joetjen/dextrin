@@ -305,13 +305,11 @@ defmodule Dextrin.Text.Actions do
 
   defp struct_field_names(pairs) do
     Result.reduce_ok(pairs, [], fn {key, val}, acc ->
-      case field_name(key) do
-        {:ok, name} ->
-          {:ok, [{name, val} | acc]}
-
-        :error ->
-          {:error,
-           action_error("struct field name must be an identifier or string, got #{inspect(key)}")}
+      if valid_field_name?(key) do
+        {:ok, [{key, val} | acc]}
+      else
+        {:error,
+         action_error("struct field name must be an identifier or string, got #{inspect(key)}")}
       end
     end)
     |> case do
@@ -320,19 +318,19 @@ defmodule Dextrin.Text.Actions do
     end
   end
 
-  defp field_name(%Keyword{name: name}), do: {:ok, name}
-  defp field_name(%Symbol{name: name}), do: {:ok, name}
-  defp field_name(name) when is_binary(name), do: {:ok, name}
-
-  # A struct field's shorthand key (`x:`) goes through the same
-  # `keyword_value/2` `Registry.t()`-driven choice as any other
-  # keyword-shaped key — trusted (default) decodes it as a real atom.
-  # `Dextrin.Struct.keyed/2` always wants the plain string name either
-  # way, regardless of which the caller's `trusted:` setting produced.
-  defp field_name(name) when is_atom(name) and name not in [nil, true, false],
-    do: {:ok, Atom.to_string(name)}
-
-  defp field_name(_), do: :error
+  # A struct field's shorthand key (`x:`) already went through the
+  # same `keyword_value/2` `Registry.t()`-driven choice as any other
+  # keyword-shaped key by the time it reaches here — a real atom under
+  # trusted (default), a `Dextrin.Keyword.t()` under untrusted. This
+  # only validates that the key is one of the identifier-or-string
+  # shapes `map_entry`'s grammar allows for a field name; it's kept
+  # exactly as-is rather than normalized, so `Dextrin.Struct.keyed/2`'s
+  # field name round-trips the same way an ordinary map key does.
+  defp valid_field_name?(%Keyword{}), do: true
+  defp valid_field_name?(%Symbol{}), do: true
+  defp valid_field_name?(name) when is_binary(name), do: true
+  defp valid_field_name?(name) when is_atom(name) and name not in [nil, true, false], do: true
+  defp valid_field_name?(_), do: false
 
   defp materialize_struct(name, fields, ctx) do
     case ctx do

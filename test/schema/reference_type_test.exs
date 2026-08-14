@@ -46,7 +46,7 @@ defmodule Dextrin.Schema.ReferenceTypeTest do
   end
 
   test "the correct struct is still accepted", %{registry: registry} do
-    assert {:ok, %{"home" => %{"street" => "Main St"}, "homes" => []}} =
+    assert {:ok, %{home: %{street: "Main St"}, homes: []}} =
              Dextrin.decode(~s(%Person{home: %Address{street: "Main St"}, homes: []}),
                registry: registry
              )
@@ -72,7 +72,7 @@ defmodule Dextrin.Schema.ReferenceTypeTest do
   end
 
   test "a list-of reference with every element correct still succeeds", %{registry: registry} do
-    assert {:ok, %{"homes" => [%{"street" => "A"}, %{"street" => "B"}]}} =
+    assert {:ok, %{homes: [%{street: "A"}, %{street: "B"}]}} =
              Dextrin.decode(
                ~s(%Person{home: %Address{street: "A"}, homes: [%Address{street: "A"}, %Address{street: "B"}]}),
                registry: registry
@@ -112,7 +112,7 @@ defmodule Dextrin.Schema.ReferenceTypeTest do
     assert {:ok, %NamedAddress{street: "A"}} =
              Dextrin.decode(~s(%Address{street: "A"}), registry: registry)
 
-    assert {:ok, %{"home" => %NamedAddress{street: "A"}, "homes" => [%NamedAddress{street: "B"}]}} =
+    assert {:ok, %{home: %NamedAddress{street: "A"}, homes: [%NamedAddress{street: "B"}]}} =
              Dextrin.decode(
                ~s(%Person{home: %Address{street: "A"}, homes: [%Address{street: "B"}]}),
                registry: registry
@@ -123,10 +123,10 @@ defmodule Dextrin.Schema.ReferenceTypeTest do
        %{
          registry: registry
        } do
-    assert {:ok, [%{"street" => "A"}, %{"ein" => "1"}]} =
+    assert {:ok, [%{street: "A"}, %{ein: "1"}]} =
              Dextrin.decode(~s([%Address{street: "A"}, %Company{ein: "1"}]), registry: registry)
 
-    assert {:ok, %{"street" => "A"}} =
+    assert {:ok, %{street: "A"}} =
              Dextrin.decode(~s(%Address{street: "A"}), registry: registry)
   end
 

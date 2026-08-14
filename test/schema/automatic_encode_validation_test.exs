@@ -27,11 +27,11 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
   end
 
   test "a top-level Dextrin.Struct is validated with no schema: opt at all", %{registry: registry} do
-    bad = Dextrin.Struct.keyed("Bar", [{"baz", true}])
+    bad = Dextrin.Struct.keyed("Bar", [{:baz, true}])
     assert {:error, %Dextrin.Error{message: message}} = Dextrin.encode(bad, registry: registry)
     assert message =~ "Bar"
 
-    good = Dextrin.Struct.keyed("Bar", [{"baz", 1}])
+    good = Dextrin.Struct.keyed("Bar", [{:baz, 1}])
     assert {:ok, "%Bar{baz:1}"} = Dextrin.encode(good, registry: registry)
   end
 
@@ -82,7 +82,7 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
   test "validate: false opts out, for deliberately building non-conforming data", %{
     registry: registry
   } do
-    bad = Dextrin.Struct.keyed("Bar", [{"baz", true}])
+    bad = Dextrin.Struct.keyed("Bar", [{:baz, true}])
     assert {:ok, "%Bar{baz:true}"} = Dextrin.encode(bad, registry: registry, validate: false)
     assert {:ok, _bin} = Dextrin.encode_binary(bad, registry: registry, validate: false)
   end
@@ -90,14 +90,14 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
   test "a struct with no registered schema at all is untouched, not rejected", %{
     registry: registry
   } do
-    opaque = Dextrin.Struct.keyed("Unregistered", [{"anything", 1}])
+    opaque = Dextrin.Struct.keyed("Unregistered", [{:anything, 1}])
     assert {:ok, "%Unregistered{anything:1}"} = Dextrin.encode(opaque, registry: registry)
   end
 
   test "ordinary valid data still round-trips through encode/decode", %{registry: registry} do
-    value = Dextrin.Struct.keyed("Bar", [{"baz", 42}])
+    value = Dextrin.Struct.keyed("Bar", [{:baz, 42}])
     assert {:ok, text} = Dextrin.encode(value, registry: registry)
     assert {:ok, decoded} = Dextrin.decode(text, registry: registry)
-    assert decoded == %{"baz" => 42}
+    assert decoded == %{baz: 42}
   end
 end

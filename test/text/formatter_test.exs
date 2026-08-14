@@ -107,12 +107,17 @@ defmodule Dextrin.Text.FormatterTest do
     end
 
     test "a keyed struct" do
-      s = Struct.keyed("Point", [{"x", 1}, {"y", 2}])
+      s = Struct.keyed("Point", [{:x, 1}, {:y, 2}])
       assert Formatter.pretty(s) == {:ok, "%Point{\n  x: 1\n  y: 2\n}"}
     end
 
+    test "a keyed struct with a plain string field name renders the quoted arrow form, not shorthand" do
+      s = Struct.keyed("Point", [{"x", 1}, {"y", 2}])
+      assert Formatter.pretty(s) == {:ok, "%Point{\n  \"x\" => 1\n  \"y\" => 2\n}"}
+    end
+
     test "a keyed struct whose field value is a float special value still prints via the float sigil (value position, unaffected)" do
-      s = Struct.keyed("Reading", [{"value", :positive_infinity}])
+      s = Struct.keyed("Reading", [{:value, :positive_infinity}])
       assert Formatter.pretty(s) == {:ok, "%Reading{\n  value: Infinity\n}"}
     end
 

@@ -33,11 +33,22 @@ defmodule DextrinTest do
     end
 
     test "decodes struct forms as opaque without a schema" do
-      assert {:ok, %Dextrin.Struct{name: "Point", fields: {:keyed, [{"x", 1}, {"y", 2}]}}} =
+      assert {:ok, %Dextrin.Struct{name: "Point", fields: {:keyed, [x: 1, y: 2]}}} =
                Dextrin.decode("%Point{x: 1, y: 2}")
 
       assert {:ok, %Dextrin.Struct{name: "Point", fields: {:positional, [1, 2]}}} =
                Dextrin.decode("%Point[1, 2]")
+    end
+
+    test "an opaque struct's keyed field names follow the same trusted rule as an ordinary map key" do
+      assert {:ok, %Dextrin.Struct{fields: {:keyed, [x: 1]}}} =
+               Dextrin.decode("%Point{x: 1}")
+
+      assert {:ok, %Dextrin.Struct{fields: {:keyed, [{%Dextrin.Keyword{name: "x"}, 1}]}}} =
+               Dextrin.decode("%Point{x: 1}", trusted: false)
+
+      assert {:ok, %Dextrin.Struct{fields: {:keyed, [{"x", 1}]}}} =
+               Dextrin.decode(~s(%Point{"x" => 1}), trusted: false)
     end
 
     test "decodes temporal and extended types" do

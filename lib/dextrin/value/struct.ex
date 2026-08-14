@@ -14,15 +14,25 @@ defmodule Dextrin.Struct do
   also why an opaque struct decoded from `.dxnb` can't be
   cross-checked against the same struct decoded from `.dxn` without a
   schema in hand — there's nothing to compare field-by-field yet.
+
+  A keyed field *name* is likewise whatever shape the same key would
+  be as an ordinary DXN map key: a real atom under trusted decode's
+  keyword-shorthand (`x:`), a `Dextrin.Symbol.t()`/`Dextrin.Keyword.t()`
+  for symbol syntax or untrusted decode, or a plain `String.t()` for a
+  quoted-string field name — never forced to one canonical
+  representation, so a struct field round-trips the exact literal form
+  it was written in, same as a map entry does.
   """
 
-  @type fields :: {:keyed, [{String.t(), term()}]} | {:positional, [term()]}
+  @type field_name :: String.t() | atom() | Dextrin.Keyword.t() | Dextrin.Symbol.t()
+
+  @type fields :: {:keyed, [{field_name(), term()}]} | {:positional, [term()]}
 
   @type t :: %__MODULE__{name: String.t(), fields: fields()}
 
   defstruct [:name, :fields]
 
-  @spec keyed(String.t(), [{String.t(), term()}]) :: t()
+  @spec keyed(String.t(), [{field_name(), term()}]) :: t()
   def keyed(name, pairs) when is_binary(name) and is_list(pairs) do
     %__MODULE__{name: name, fields: {:keyed, pairs}}
   end

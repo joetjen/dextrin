@@ -27,7 +27,7 @@ defmodule Dextrin.Schema.StdTest do
   end
 
   test "a value satisfying every standard type decodes cleanly", %{registry: registry} do
-    assert {:ok, %{"count" => 3, "name" => "x", "ratio" => 50.0, "tags" => [1]}} =
+    assert {:ok, %{count: 3, name: "x", ratio: 50.0, tags: [1]}} =
              Dextrin.decode(~s(%Widget{count: 3, name: "x", ratio: 50.0, tags: [1]}),
                registry: registry
              )

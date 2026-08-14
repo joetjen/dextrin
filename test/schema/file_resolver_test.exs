@@ -18,7 +18,7 @@ defmodule Dextrin.Schema.FileResolverTest do
     resolver = Dextrin.Schema.FileResolver.for_paths([dir])
     registry = Dextrin.Registry.new() |> Dextrin.Registry.put_resolver(resolver)
 
-    assert {:ok, %{"x" => 1, "y" => 2}} =
+    assert {:ok, %{x: 1, y: 2}} =
              Dextrin.decode("%geo/Point{x: 1, y: 2}", registry: registry)
   end
 
@@ -31,7 +31,7 @@ defmodule Dextrin.Schema.FileResolverTest do
     resolver = Dextrin.Schema.FileResolver.for_paths([dir])
     registry = Dextrin.Registry.new() |> Dextrin.Registry.put_resolver(resolver)
 
-    assert {:ok, %{"amount" => amount}} = Dextrin.decode("%Money{amount: 5M}", registry: registry)
+    assert {:ok, %{amount: amount}} = Dextrin.decode("%Money{amount: 5M}", registry: registry)
     assert Decimal.equal?(amount, Decimal.new("5"))
   end
 
@@ -71,6 +71,6 @@ defmodule Dextrin.Schema.FileResolverTest do
     resolver = Dextrin.Schema.FileResolver.for_paths([first, second])
     registry = Dextrin.Registry.new() |> Dextrin.Registry.put_resolver(resolver)
 
-    assert {:ok, %{"amount" => _}} = Dextrin.decode("%Money{amount: 5M}", registry: registry)
+    assert {:ok, %{amount: _}} = Dextrin.decode("%Money{amount: 5M}", registry: registry)
   end
 end

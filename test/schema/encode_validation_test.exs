@@ -47,8 +47,8 @@ defmodule Dextrin.Schema.EncodeValidationTest do
   } do
     money =
       Dextrin.Struct.keyed("Money", [
-        {"amount", Decimal.new("19.99")},
-        {"currency", Dextrin.Keyword.new("usd")}
+        {:amount, Decimal.new("19.99")},
+        {:currency, Dextrin.Keyword.new("usd")}
       ])
 
     assert {:ok, "%Money{amount:19.99M,currency::usd}"} =

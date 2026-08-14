@@ -114,9 +114,14 @@ defmodule Dextrin.Text.Printer do
   end
 
   def print(%Struct{name: name, fields: {:keyed, pairs}}, opts) do
-    keyed = Enum.map(pairs, fn {k, v} -> {Dextrin.Keyword.new(k), v} end)
-
-    with {:ok, entries} <- print_entries(keyed, opts),
+    # `pairs`' keys are already whatever shape `Dextrin.Struct`'s own
+    # field-name rule produced (atom, `Dextrin.Keyword.t()`,
+    # `Dextrin.Symbol.t()`, or `String.t()`) — `print_entries/2`
+    # already dispatches on all four for ordinary map keys, so no
+    # re-wrapping is needed (or correct: force-wrapping a genuine
+    # string-typed field name here would silently render it as
+    # keyword shorthand instead of the quoted arrow form it actually is).
+    with {:ok, entries} <- print_entries(pairs, opts),
          do: {:ok, "%" <> name <> "{" <> entries <> "}"}
   end
 

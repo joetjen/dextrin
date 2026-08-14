@@ -131,8 +131,13 @@ defmodule Dextrin.Text.PrinterTest do
     end
 
     test "a keyed struct" do
-      s = Struct.keyed("Point", [{"x", 1}, {"y", 2}])
+      s = Struct.keyed("Point", [{:x, 1}, {:y, 2}])
       assert Printer.print(s) == {:ok, "%Point{x:1,y:2}"}
+    end
+
+    test "a keyed struct with a plain string field name prints the quoted arrow form, not shorthand" do
+      s = Struct.keyed("Point", [{"x", 1}, {"y", 2}])
+      assert Printer.print(s) == {:ok, ~s(%Point{"x"=>1,"y"=>2})}
     end
 
     test "a positional struct" do
