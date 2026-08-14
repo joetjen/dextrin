@@ -11,6 +11,12 @@ built on CBOR, and a schema format (`.dxns`) that's just more DXN data
 — all three sharing one in-memory value representation and one
 extension mechanism.
 
+This is the reference implementation. [`node-dextrin`](https://github.com/joetjen/node-dextrin)
+(Node.js, on npm) and [`php-dextrin`](https://github.com/joetjen/php-dextrin)
+(PHP, on Packagist) are sibling ports of the same format — see
+[Other language implementations](#other-language-implementations)
+below.
+
 ```elixir
 {:ok, value} = Dextrin.decode(~s(%{x: 1, y: 2}))
 value
@@ -133,6 +139,20 @@ def deps do
   ]
 end
 ```
+
+## Other language implementations
+
+DXN's format spec (`guides/dxn/DXN.md`) is implementation-independent
+— this library, `node-dextrin`, and `php-dextrin` all satisfy the same
+document, and stay close to this project's own in-memory shape-per-type
+choices wherever their host language allows, so recognizing one
+implementation gets you most of the way to recognizing the others.
+
+| Language | Package | Source |
+| --- | --- | --- |
+| Elixir (this project) | [`dextrin` on Hex.pm](https://hex.pm/packages/dextrin) | [joetjen/dextrin](https://github.com/joetjen/dextrin) |
+| Node.js | [`dextrin` on npm](https://www.npmjs.com/package/dextrin) | [joetjen/node-dextrin](https://github.com/joetjen/node-dextrin) |
+| PHP | [`joetjen/dextrin` on Packagist](https://packagist.org/packages/joetjen/dextrin) | [joetjen/php-dextrin](https://github.com/joetjen/php-dextrin) |
 
 ## Where to go next
 

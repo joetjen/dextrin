@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Dextrin`'s own moduledoc now names its two sibling ports
+  (`node-dextrin` on npm, `php-dextrin` on Packagist) directly,
+  alongside the existing README "Other language implementations"
+  section and `mix.exs` package links.
+
 ### Fixed
 
 - `Dextrin.Text.Formatter` (`encode/2`'s `pretty: true` path) rendered
