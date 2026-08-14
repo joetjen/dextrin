@@ -102,7 +102,9 @@ defmodule Dextrin.MixProject do
       licenses: ["MIT"],
       links: %{
         "GitHub" => "https://github.com/joetjen/dextrin",
-        "Docs (main)" => "https://joetjen.github.io/dextrin"
+        "Docs (main)" => "https://joetjen.github.io/dextrin",
+        "node-dextrin (npm)" => "https://www.npmjs.com/package/dextrin",
+        "php-dextrin (Packagist)" => "https://packagist.org/packages/joetjen/dextrin"
       },
       files:
         ~w(lib priv/grammar priv/unicode priv/schema .formatter.exs mix.exs README.md CHANGELOG.md LICENSE)
