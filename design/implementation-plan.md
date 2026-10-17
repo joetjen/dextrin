@@ -226,7 +226,16 @@ relying on a struct is guaranteed only the declared fields. Elixir
 structs already behave this way (extra keys in the map); so do Praxis
 records on the BEAM.
 
-- **Text:** extra fields are ordinary keyed entries.
+- **Text:** extra fields are ordinary keyed entries. A positional
+  struct carries them as entries after its items,
+  `%User(3)["a" "a@x" nickname: "b", 3 => :x]`, which is what a
+  `.dxnb` document becomes as text without its schema. All items come
+  first; an item after an entry is an error. Grammar: a positional item
+  is a value **not followed by `=>`** (a negative lookahead in
+  `dxn.aether`, one value of lookahead in the Node and PHP parsers);
+  shorthand entries need nothing, since `name:` lexes as one map-key
+  token. Chosen over a trailing `@extra %{...}` item that would mirror
+  tag 215, because it reads like the keyed form.
 - **Binary:** extra fields travel as **one trailing item, a CBOR map
   from name to value, under new private tag 215 ("extra fields")**:
   `["User(3)", "a", "a@x", 215({"nickname": "b"})]`. Chosen over a

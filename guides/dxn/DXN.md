@@ -78,7 +78,7 @@ set_lit      = "@{" , { value } , "}" ;
 
 map_lit      = "%{" , { map_entry } , "}" ;
 map_entry    = ( identifier , ":" , value )          (* shorthand — plain-atom keys only *)
-             | ( value , "=>" , value ) ;             (* arrow — any key type *)
+             | ( value , "=>" , value ) ;             (* arrow — a key type of §1.6 *)
 
 struct_lit   = "%" , identifier ,
                  ( ( "{" , { map_entry } , "}" )      (* keyed *)
@@ -153,6 +153,109 @@ types[30]{type,category,dxn_syntax,notes}:
   and `months` are calendar-relative (variable length), so they, along
   with weeks/days/hours/minutes/seconds, are tracked as independent
   fields (see §2.3 for the exact field set, shared with `.dxnb`).
+
+### 1.5 Canonical form
+
+Every value has exactly one **canonical form**: a `.dxn` rendering
+fixed down to the byte, so that two implementations' values can be
+compared as text, and so that map-key identity (§1.6) has one
+definition. A conforming implementation MUST be able to produce it.
+Parsing a value's canonical form yields an equal value.
+
+General rules:
+
+- No header, no comments, no `@_`.
+- Exactly one space between consecutive items or entries; nothing after
+  an opening or before a closing bracket; no commas, no newlines.
+- **Canonical order** compares the canonical forms of two values by
+  Unicode code point, first difference wins, a proper prefix sorts
+  first. (UTF-8 byte order is the same order; UTF-16 code-unit order is
+  not.)
+
+Per type:
+
+```toon
+canonical[30]{type,form}:
+  nil,"nil"
+  boolean,"true | false"
+  integer,"optional -, then decimal digits without leading zeros"
+  float,"see the float rules below"
+  decimal,"coefficient with exactly scale fractional digits, then M; a positive exponent is written out with zeros; zero has no sign"
+  rational,"numerator/denominator as held, not reduced; the sign on the numerator, the denominator positive"
+  string,"see the string rules below"
+  char,"? then the character; ?s for space; \\ escape forms for \\, whitespace and control characters"
+  symbol,"the identifier"
+  keyword,":name when name is an identifier and not reserved, else :""..."" with string escaping"
+  list,"[ items ]"
+  tuple,"{ items }"
+  array,"@array[ items ]"
+  map,"%{ entries } in canonical order of their keys"
+  ordered-map,"@ordered %{ entries } in held order"
+  set,"@{ items } in canonical order"
+  sorted-set,"@sorted-set @{ items } in canonical order"
+  struct,"%Name(N){ entries } keyed, or %Name(N)[ items ] positional, as held; (N) when the version is known; keyed entries in held order, since in a %schema body the order is the field order"
+  map entry,"name: value when the key is a keyword whose name is an identifier and not reserved, else key => value"
+  date,"~D[YYYY-MM-DD]"
+  time,"~T[HH:MM:SS] then .fraction with trailing zeros removed, omitted when zero"
+  timestamp,"~U[YYYY-MM-DD HH:MM:SS] then the fraction as for time, then Z"
+  datetime,"@datetime ""YYYY-MM-DDTHH:MM:SS"" with the fraction as for time, then ±HH:MM"
+  duration,"@duration ""P..."" with fields in the order of §2.3, zero fields omitted, PT0S when all are zero"
+  uuid,"@uuid ""8-4-4-4-12"" in lowercase hex"
+  uri,"@uri ""..."" as held, with string escaping"
+  bytes,"@bytes ""..."" in standard base64 with padding"
+  regex,"~r/pattern/flags with the flags in canonical order"
+  custom-tag,"@name value"
+  extra fields,"in a keyed struct, entries in held order; in a positional struct, entries after the items, in canonical order of their keys (§4.8)"
+```
+
+**Floats.** Take the shortest decimal digit string *d₁…dₖ* that reads
+back as exactly the same IEEE 754 double, and its exponent *n* such
+that the value is 0.*d₁…dₖ* × 10ⁿ. Then:
+
+- if *k* ≤ *n* ≤ 21: the digits, *n* − *k* zeros, then `.0`
+  (`100.0`, `123456789012345680000.0`);
+- if 0 < *n* < *k*: the digits with a `.` after the *n*th
+  (`1.5`, `123.456`);
+- if −6 < *n* ≤ 0: `0.`, −*n* zeros, then the digits (`0.1`, `0.000001`);
+- otherwise: *d₁*, `.`, then *d₂…dₖ* or `0` when *k* = 1, then `e`, then
+  *n* − 1, with a `-` only when negative (`1.0e21`, `1.5e-7`,
+  `2.5e300`);
+- a negative value gets a leading `-`, **including negative zero**
+  (`-0.0`);
+- `NaN`, `Infinity`, `-Infinity` as written.
+
+These are ECMAScript's `Number.prototype.toString` thresholds, with
+`.0` added to whole numbers and no `+` in exponents.
+
+**Strings.** `"`, then each code point: `"` as `\"`, `\` as `\\`,
+U+000A as `\n`, U+0009 as `\t`, U+000D as `\r`, every other code point
+below U+0020 and U+007F as `\x{…}` in lowercase hex without leading
+zeros, everything else literally; then `"`.
+
+### 1.6 Map keys
+
+A map key, and the key of a struct's extra field (§4.8), MUST be one of
+`string`, `keyword`, `integer`, `uuid`, `date`, `bytes`, `symbol`,
+`char`. Any other key is an error (`key/not-allowed`, §5), in text, in
+binary and when encoding.
+
+Two keys are the same key exactly when their canonical forms (§1.5) are
+equal: same type, same value, no normalization. So `1` and `"1"` are
+different keys, as are `:x` and `"x"`. A key that occurs twice in one
+map keeps its last value.
+
+The allowed types are those whose identity is exact and obvious in
+every language. Excluded, and why:
+
+- `float`, `decimal`, `rational`: `1` and `1.0`, `0.0` and `-0.0`,
+  `NaN`, `1.0M` and `1.00M`, `2/4` and `1/2` are answered differently
+  by different languages, and the BEAM has no `NaN` or infinities.
+- `time`, `timestamp`, `datetime`, `duration`, `uri`: precision,
+  offsets, `P1D` against `PT24H`, URI normalization.
+- `nil` and `boolean`: they collide with other keys in some languages
+  (in PHP, `nil` with `""` and `true` with `1` as array keys), and they
+  are rare as keys anyway.
+- `regex`, custom tags, and every collection.
 
 ---
 
@@ -498,3 +601,33 @@ also implementation-defined — `.dxns` documents themselves are
 normatively cross-implementation because a schema *shape* is plain
 data; a `refine-fn:` name is deliberately an escape hatch to logic that
 isn't.
+
+---
+
+## 5. Errors
+
+Implementations report errors in their own way (§4.7), but every error
+a conforming reader, writer or schema compiler raises belongs to
+exactly one **category**, and an implementation MUST expose it on the
+error value. Categories are compared exactly; messages are not
+normative.
+
+```toon
+categories[16]{category,raised_when}:
+  syntax,"text does not parse"
+  binary,"a .dxnb document is malformed: magic, version, a tag's payload"
+  key/not-allowed,"a map or extra-field key has a type §1.6 does not allow"
+  encode/unsupported,"a host value has no DXN meaning"
+  schema/compile,"a .dxns document is not a valid schema"
+  schema/duplicate-version,"a (name, version) is loaded twice"
+  schema/not-loaded,"a replace names a (name, version) that is not loaded"
+  schema/unknown-version,"a struct's version is older than the latest loaded and not loaded itself"
+  schema/no-materializer,"an older version arrives and no materializer is registered"
+  schema/field-count,"a positional struct's item count differs from its own version's field count"
+  schema/missing-field,"a required field is absent"
+  schema/type-mismatch,"a field's value does not match its declared type"
+  schema/undeclared-field,"a strict decode meets a field the schema does not declare"
+  schema/shadowed-field,"an extra field has the name of a declared field"
+  schema/materializer,"a materializer answers an error, or a value the latest schema rejects"
+  schema/version-discipline,"the compatibility check: changed content under the same version, or a version going down"
+```
