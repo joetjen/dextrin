@@ -82,7 +82,13 @@ implementation, then turn green one implementation at a time.
 - **Adapters:** each implementation gets a `conformance` subcommand
   that reads a file of many cases and writes a file of results, so a
   run pays BEAM or PHP startup once, not per case. Both batch files are
-  **DXN**, which every implementation reads natively.
+  **JSON**: the runner must not read DXN through any implementation
+  under test, and the batch carries only plumbing (case ids,
+  operations, paths, and results as strings: canonical forms, base64
+  bytes, error categories). Every value under test stays in real
+  `.dxn`/`.dxnb` files and canonical-form strings. (DXN was the first
+  choice; it would have made the suite depend on one implementation's
+  correctness for all of them.)
   - Elixir: `mix dextrin.conformance`
   - Node: `dextrin conformance` (`bin/dextrin.js`)
   - PHP: `dextrin conformance` (`bin/dextrin`)
@@ -350,14 +356,33 @@ command in each CLI (`mix dextrin.compat OLD NEW` and equivalents):
 There are no compatibility modes and no append-only rule. CI compares
 against the previous release's schema files.
 
-### B9. Order of work, per feature
+### B9. Defects found while planning
+
+Fixed in phase B, each caught first by a conformance case:
+
+- Node loses the sign of `-0.0` (prints `0.0`).
+- PHP prints floats with 14 significant digits, so
+  `123456789012345680000.0` comes back as `1.2345678901235E+20`.
+- §2.2 says a sorted set is in "sorted order" without saying by what;
+  §1.5's canonical order now defines it.
+
+- **Error categories inside a text decode.** A schema violation found
+  while decoding text comes back through Ichor as an action error, and
+  `Ichor.Error` has no field to carry a category, so the Elixir
+  implementation can only call it `syntax` today. Phase A assigns
+  `syntax`, `binary` and `encode/unsupported`, and leaves schema errors
+  with no category (answered as `uncategorised`, which no case
+  expects). Settle how a category survives Ichor when the schema
+  reporting is reworked here.
+
+### B10. Order of work, per feature
 
 Elixir first, then the Praxis port, Node and PHP, each against the same
 conformance cases. Removing the exact-field-count checks
 (`validator.ex:59` and `:192`, `validator.cjs:82` and `:281`,
 `Validator.php:109` and `:327`, `validator.prax:93`) falls out of B3. The Node and PHP map fixes in B7 come before extra fields (B5), which build on them.
 
-### B10. Documentation
+### B11. Documentation
 
 - `DXN.md`: §1.1/§1.2 (the `(N)` syntax), §2.1 and §2.3 (tag 215,
   versioned type names), §4.4 (the schema body and header), §4.7

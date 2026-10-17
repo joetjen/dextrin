@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `Dextrin.Canonical.print/1` -- the canonical form of a value
+  (`DXN.md` §1.5): one `.dxn` rendering fixed down to the byte, with
+  maps and sets in canonical order, floats by one exact algorithm and
+  one fixed set of string escapes, so values from different
+  implementations compare as text.
+- `Dextrin.Error`'s `category` -- the error's kind as `DXN.md` §5 names
+  it (`"syntax"`, `"binary"`, `"encode/unsupported"`, ...), so errors
+  compare across implementations without comparing messages.
+  `Dextrin.Error.action/2` takes it; schema errors have none yet.
+- `mix dextrin.conformance REQUEST ANSWER` and `Dextrin.Conformance` --
+  this implementation's adapter for the Dextrin Conformance Suite,
+  answering a JSON batch of cases with canonical forms, base64 bytes or
+  error categories.
+
+### Changed
+
+- `DXN.md` gains §1.5 (canonical form), §1.6 (map keys: only `string`,
+  `keyword`, `integer`, `uuid`, `date`, `bytes`, `symbol` and `char`)
+  and §5 (error categories). The map-key rule is specified but not yet
+  enforced.
+
 ## [0.1.3] - 2026-08-18
 
 ### Fixed

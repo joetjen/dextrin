@@ -186,7 +186,10 @@ defmodule Dextrin.Text.Printer do
   # the lack of a matching clause crash with `FunctionClauseError`.
   def print(other, _opts) do
     {:error,
-     Dextrin.Error.action("cannot encode value with no DXN representation: #{inspect(other)}")}
+     Dextrin.Error.action(
+       "cannot encode value with no DXN representation: #{inspect(other)}",
+       "encode/unsupported"
+     )}
   end
 
   defp print_via_tag_encoder(other, module, opts) do
@@ -198,12 +201,18 @@ defmodule Dextrin.Text.Printer do
       else
         {:error, reason} ->
           {:error,
-           Dextrin.Error.action("tag encoder for #{inspect(module)} failed: #{inspect(reason)}")}
+           Dextrin.Error.action(
+             "tag encoder for #{inspect(module)} failed: #{inspect(reason)}",
+             "encode/unsupported"
+           )}
       end
     else
       _ ->
         {:error,
-         Dextrin.Error.action("cannot encode value with no DXN representation: #{inspect(other)}")}
+         Dextrin.Error.action(
+           "cannot encode value with no DXN representation: #{inspect(other)}",
+           "encode/unsupported"
+         )}
     end
   end
 
