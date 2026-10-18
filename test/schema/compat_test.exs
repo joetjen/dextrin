@@ -43,6 +43,21 @@ defmodule Dextrin.Schema.CompatTest do
              Compat.check(loaded([@v1]), loaded([changed]))
   end
 
+  test "a changed type, requiredness or default is a change; a description is not" do
+    base = "%{User: %schema{name: :string}}"
+
+    for changed <- [
+          "%{User: %schema{name: :integer}}",
+          "%{User: %schema{name?: :string}}",
+          ~s(%{User: %schema{name: %field{type: :string, default: "x"}}})
+        ] do
+      assert %{problems: [_]} = Compat.check(loaded([base]), loaded([changed]))
+    end
+
+    described = ~s(%{User: %schema{name: %field{type: :string, description: "the name"}}})
+    assert %{problems: []} = Compat.check(loaded([base]), loaded([described]))
+  end
+
   test "a version that went down is a problem" do
     assert %{problems: [%{schema: "User", problem: :version_went_down, from: 2, to: 1}]} =
              Compat.check(loaded([@v1, @v2]), loaded([@v1]))
