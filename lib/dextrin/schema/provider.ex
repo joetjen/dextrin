@@ -1,8 +1,7 @@
 defmodule Dextrin.Schema.Provider do
   @moduledoc """
   Lets a struct's *own* library ship a DXN schema for it — field
-  names, types, required/optional, closed/forbidden, refinements, a
-  materializer — without that library ever taking a hard dependency on
+  names, types, required/optional, refinements, a materializer — without that library ever taking a hard dependency on
   `dextrin`. This is the `struct` (schema-backed) counterpart to what
   `Dextrin.Registry.put_tag_encoder/4` already does for simple
   scalar-wrapping `custom-tag` values: an extension point owned by the
@@ -100,9 +99,7 @@ defmodule Dextrin.Schema.Provider do
           @impl true
           def dxn_schema, do: \"\"\"
           %{
-            Money: %schema{
-              fields: @ordered %{ amount: :decimal, currency: {:enum :usd :eur :gbp} }
-            }
+            Money: %schema{ amount: :decimal, currency: {:enum :usd :eur :gbp} }
           }
           \"\"\"
 

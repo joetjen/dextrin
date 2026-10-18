@@ -12,7 +12,7 @@ defmodule Dextrin.Schema.FileResolverTest do
   @tag :tmp_dir
   test "resolves a namespaced reference to <namespace>.dxns", %{tmp_dir: dir} do
     File.write!(Path.join(dir, "geo.dxns"), """
-    %{ Point: %schema{ fields: @ordered %{ x: :integer, y: :integer } } }
+    %{ Point: %schema{ x: :integer, y: :integer } }
     """)
 
     resolver = Dextrin.Schema.FileResolver.for_paths([dir])
@@ -25,7 +25,7 @@ defmodule Dextrin.Schema.FileResolverTest do
   @tag :tmp_dir
   test "resolves a bare (non-namespaced) reference to <name>.dxns", %{tmp_dir: dir} do
     File.write!(Path.join(dir, "Money.dxns"), """
-    %{ Money: %schema{ fields: @ordered %{ amount: :decimal } } }
+    %{ Money: %schema{ amount: :decimal } }
     """)
 
     resolver = Dextrin.Schema.FileResolver.for_paths([dir])
@@ -47,7 +47,7 @@ defmodule Dextrin.Schema.FileResolverTest do
   @tag :tmp_dir
   test "a file that exists but lacks the requested entry falls back to opaque", %{tmp_dir: dir} do
     File.write!(Path.join(dir, "geo.dxns"), """
-    %{ Point: %schema{ fields: @ordered %{ x: :integer, y: :integer } } }
+    %{ Point: %schema{ x: :integer, y: :integer } }
     """)
 
     resolver = Dextrin.Schema.FileResolver.for_paths([dir])
@@ -65,7 +65,7 @@ defmodule Dextrin.Schema.FileResolverTest do
     File.mkdir_p!(second)
 
     File.write!(Path.join(second, "Money.dxns"), """
-    %{ Money: %schema{ fields: @ordered %{ amount: :decimal } } }
+    %{ Money: %schema{ amount: :decimal } }
     """)
 
     resolver = Dextrin.Schema.FileResolver.for_paths([first, second])

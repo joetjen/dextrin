@@ -17,19 +17,22 @@ defmodule Dextrin.Schema do
   """
 
   alias Dextrin.Registry
-  alias Dextrin.Schema.{Compiled, Validator}
+  alias Dextrin.Schema.Validator
 
   @doc """
   Compiles a decoded `.dxns` document (see `Dextrin.decode/2`) into
   `base_registry` — a struct schema for each `%schema{}` entry, and a
   reusable named type for every other entry, e.g.
-  `PositiveInt: {:refine :integer {min: 1}}`. `predicates` resolves any
-  `refine-fn:` names used in the document.
+  `PositiveInt: {:refine :integer {min: 1}}`.
+
+  Each document describes one version of each schema it holds
+  (`%schema(N){...}`); compiling a second version of a schema into a
+  registry adds it beside the first, and compiling a version already
+  there is a `schema/duplicate-version` error.
   """
-  @spec compile(term(), Registry.t(), %{optional(String.t()) => Compiled.refine_fn()}) ::
-          {:ok, Registry.t()} | {:error, term()}
-  def compile(schema_doc, base_registry \\ Registry.new(), predicates \\ %{}) do
-    Dextrin.Schema.Compiler.compile(schema_doc, base_registry, predicates)
+  @spec compile(term(), Registry.t()) :: {:ok, Registry.t()} | {:error, Dextrin.Error.t()}
+  def compile(schema_doc, base_registry \\ Registry.new()) do
+    Dextrin.Schema.Compiler.compile(schema_doc, base_registry)
   end
 
   @doc """

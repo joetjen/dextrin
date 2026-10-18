@@ -7,7 +7,7 @@ defmodule Dextrin.SchemaTest do
   @moduledoc """
   End-to-end schema tests: compile a `.dxns` document,
   then decode `.dxn`/`.dxnb` struct values against it, both the happy
-  path and every documented violation (required/closed/forbidden).
+  path and every documented violation (required fields, declared types).
   """
 
   use ExUnit.Case, async: true
@@ -15,20 +15,14 @@ defmodule Dextrin.SchemaTest do
   @dxns """
   %{
     Point: %schema{
-      fields: @ordered %{
         x: :integer
         y: :integer
       }
-    }
     Money: %schema{
-      closed:    true
-      forbidden: [legacy_amount_cents]
-      fields: @ordered %{
         amount:   :decimal
         currency: {:enum :usd :eur :gbp}
         note?:    :string
       }
-    }
   }
   """
 
@@ -70,23 +64,6 @@ defmodule Dextrin.SchemaTest do
   test "optional field may be present", %{registry: registry} do
     assert {:ok, %{"note" => "a gift"}} =
              Dextrin.decode(~s(%Money{amount: 19.99M, currency: :usd, note: "a gift"}),
-               registry: registry
-             )
-  end
-
-  test "closed schema rejects an undeclared field", %{registry: registry} do
-    assert {:error, %Dextrin.Error{}} =
-             Dextrin.decode(~s(%Money{amount: 19.99M, currency: :usd, extra: 1}),
-               registry: registry
-             )
-  end
-
-  test "forbidden field is rejected even though the schema is closed with no such declared field",
-       %{
-         registry: registry
-       } do
-    assert {:error, %Dextrin.Error{}} =
-             Dextrin.decode(~s(%Money{amount: 19.99M, currency: :usd, legacy_amount_cents: 1999}),
                registry: registry
              )
   end
@@ -158,10 +135,8 @@ defmodule Dextrin.SchemaTest do
       dxns = """
       %{
         Widget: %schema{
-          fields: @ordered %{
             count?: %field{type: :integer, default: 0, description: "how many"}
           }
-        }
       }
       """
 
@@ -174,7 +149,7 @@ defmodule Dextrin.SchemaTest do
 
     test "%field{} with no explicit type: defaults to :any" do
       dxns = """
-      %{ Widget: %schema{ fields: @ordered %{ value: %field{description: "whatever"} } } }
+      %{ Widget: %schema{ value: %field{description: "whatever"} } }
       """
 
       {:ok, doc} = Dextrin.decode(dxns)
@@ -187,95 +162,30 @@ defmodule Dextrin.SchemaTest do
     end
   end
 
-  describe "refine-fn: cross-field validation" do
-    @range_dxns """
-    %{
-      DateRange: %schema{
-        refine-fn: date-range/valid
-        fields: @ordered %{ starts: :date, ends: :date }
-      }
-    }
-    """
-
-    test "a passing predicate lets a value through" do
-      predicates = %{
-        "date-range/valid" => fn %{starts: s, ends: e} ->
-          if Date.compare(s, e) != :gt, do: :ok, else: {:error, "starts must not be after ends"}
-        end
-      }
-
-      {:ok, doc} = Dextrin.decode(@range_dxns)
-      {:ok, registry} = Dextrin.Schema.compile(doc, Dextrin.Registry.new(), predicates)
-
-      assert {:ok, %{"starts" => _, "ends" => _}} =
-               Dextrin.decode(~s(%DateRange{starts: ~D[2024-01-01], ends: ~D[2024-06-01]}),
-                 registry: registry
-               )
-    end
-
-    test "a failing predicate rejects the value with its own message" do
-      predicates = %{
-        "date-range/valid" => fn %{starts: s, ends: e} ->
-          if Date.compare(s, e) != :gt, do: :ok, else: {:error, "starts must not be after ends"}
-        end
-      }
-
-      {:ok, doc} = Dextrin.decode(@range_dxns)
-      {:ok, registry} = Dextrin.Schema.compile(doc, Dextrin.Registry.new(), predicates)
-
-      assert {:error, %Dextrin.Error{message: message}} =
-               Dextrin.decode(~s(%DateRange{starts: ~D[2024-06-01], ends: ~D[2024-01-01]}),
-                 registry: registry
-               )
-
-      assert message =~ "starts must not be after ends"
-    end
-
-    test "an unresolvable refine-fn name fails to compile with a clear error" do
-      assert {:error, message} = Dextrin.Schema.compile(elem(Dextrin.decode(@range_dxns), 1))
-      assert message =~ "date-range/valid"
-      assert message =~ "not found"
-    end
-  end
-
-  test "a schema whose fields: isn't an @ordered map fails to compile with a clear error" do
-    {:ok, doc} = Dextrin.decode("%{ Broken: %schema{ fields: %{ x: :integer } } }")
-    assert {:error, message} = Dextrin.Schema.compile(doc)
-    assert message =~ "@ordered"
-  end
-
   test "a %schema{} entry given positionally (not keyed) fails to compile with a clear error" do
     {:ok, doc} = Dextrin.decode("%{ Point: %schema[1, 2] }")
-    assert {:error, message} = Dextrin.Schema.compile(doc)
-    assert message =~ "expected a %schema{} entry"
+
+    assert {:error, %Dextrin.Error{category: "schema/compile", message: message}} =
+             Dextrin.Schema.compile(doc)
+
+    assert message =~ "lists its fields by name"
   end
 
   test "an unrecognized type expression nested inside {:one-of ...} fails to compile", %{
     registry: registry
   } do
     dxns = """
-    %{ Bad: %schema{ fields: @ordered %{ v: {:one-of :integer :not-a-real-type} } } }
+    %{ Bad: %schema{ v: {:one-of :integer :not-a-real-type} } }
     """
 
     {:ok, doc} = Dextrin.decode(dxns)
-    assert {:error, message} = Dextrin.Schema.compile(doc, registry)
+    assert {:error, %Dextrin.Error{message: message}} = Dextrin.Schema.compile(doc, registry)
     assert message =~ "unrecognized type expression"
-  end
-
-  test "forbidden: accepts keyword-literal entries too, not just bare symbols", %{
-    registry: registry
-  } do
-    dxns = """
-    %{ Legacy: %schema{ forbidden: [:legacy_amount_cents], fields: @ordered %{ x: :integer } } }
-    """
-
-    {:ok, doc} = Dextrin.decode(dxns)
-    assert {:ok, _registry} = Dextrin.Schema.compile(doc, registry)
   end
 
   describe "a .dxns document's entry name may come from any map-key form" do
     test "a bare symbol key (arrow form)" do
-      {:ok, doc} = Dextrin.decode("%{ sym => %schema{ fields: @ordered %{ x: :integer } } }")
+      {:ok, doc} = Dextrin.decode("%{ sym => %schema{ x: :integer } }")
       assert {:ok, registry} = Dextrin.Schema.compile(doc)
 
       assert {:ok, %Dextrin.Schema.Compiled{name: "sym"}, _registry} =
@@ -284,7 +194,7 @@ defmodule Dextrin.SchemaTest do
 
     test "a string key (arrow form)" do
       {:ok, doc} =
-        Dextrin.decode(~s(%{ "Point" => %schema{ fields: @ordered %{ x: :integer } } }))
+        Dextrin.decode(~s(%{ "Point" => %schema{ x: :integer } }))
 
       assert {:ok, registry} = Dextrin.Schema.compile(doc)
 

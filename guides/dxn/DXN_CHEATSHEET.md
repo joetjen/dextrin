@@ -83,7 +83,7 @@ Name                            bare symbol -- a struct name or a named type
 {:all-of T U}                    intersection
 {:nilable T}                     sugar for {:one-of :nil T}
 {:refine T %{constraints}}       base type + constraints, see below
-%schema{fields: @ordered %{}}    struct/record shape
+%schema{}    struct/record shape
 ```
 
 ## `refine` constraints
@@ -98,10 +98,6 @@ min-count / max-count                                       list/set/tuple
 
 ```text
 %schema{
-  closed:    true | false        # default false -- unlisted fields preserved, not rejected
-  forbidden: [name, ...]         # explicit deny-list, reported by name specifically
-  refine-fn: ns/predicate-name   # cross-field/whole-value check
-  fields: @ordered %{
     required_field:  type_expr
     optional_field?: type_expr           # trailing "?" on the key = optional
     described_field: %field{
@@ -110,7 +106,6 @@ min-count / max-count                                       list/set/tuple
       description: "..."
     }
   }
-}
 ```
 
 ## Named types

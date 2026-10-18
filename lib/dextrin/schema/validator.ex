@@ -1,7 +1,7 @@
 defmodule Dextrin.Schema.Validator do
   @moduledoc """
   Checks a value's fields against a `Dextrin.Schema.Compiled` schema
-  (required/closed/forbidden/refine) — shared by decode (`materialize/4`,
+  (required fields and declared types) — shared by decode (`materialize/4`,
   which also produces a materialized result) and encode-time validation
   (`validate_for_encode/3`/`validate_tree_for_encode/2`, which never
   transforms `value`). Both directions reuse the exact same
@@ -39,10 +39,7 @@ defmodule Dextrin.Schema.Validator do
           {:ok, Validated.t()} | {:error, String.t()}
   def materialize(%Compiled{} = compiled, fields, materializer, registry) do
     with {:ok, given} <- to_name_map(compiled, fields),
-         :ok <- check_forbidden(compiled, given),
-         :ok <- check_closed(compiled, given),
          {:ok, resolved} <- resolve_fields(compiled, given, registry),
-         :ok <- run_refine_fn(compiled, resolved),
          {:ok, result} <- materialize_result(resolved, materializer) do
       {:ok, %Validated{name: compiled.name, value: result}}
     end
@@ -57,24 +54,6 @@ defmodule Dextrin.Schema.Validator do
       {:ok, Map.new(Enum.zip(names, items))}
     else
       {:error, "expected #{length(names)} positional field(s), got #{length(items)}"}
-    end
-  end
-
-  defp check_forbidden(%Compiled{forbidden: forbidden}, given) do
-    case Enum.find(forbidden, &Map.has_key?(given, &1)) do
-      nil -> :ok
-      name -> {:error, "field #{inspect(name)} is forbidden"}
-    end
-  end
-
-  defp check_closed(%Compiled{closed: false}, _given), do: :ok
-
-  defp check_closed(%Compiled{closed: true, fields: fields}, given) do
-    allowed = MapSet.new(fields, & &1.name)
-
-    case Enum.find(Map.keys(given), &(not MapSet.member?(allowed, &1))) do
-      nil -> :ok
-      extra -> {:error, "unknown field #{inspect(extra)} (schema is closed)"}
     end
   end
 
@@ -111,9 +90,6 @@ defmodule Dextrin.Schema.Validator do
       {:error, "field #{inspect(name)} does not match its declared type"}
     end
   end
-
-  defp run_refine_fn(%Compiled{refine_fn: nil}, _resolved), do: :ok
-  defp run_refine_fn(%Compiled{refine_fn: fun}, resolved), do: fun.(resolved)
 
   defp materialize_result(resolved, nil),
     do: {:ok, Map.new(resolved, fn {k, v} -> {Atom.to_string(k), v} end)}
@@ -170,10 +146,7 @@ defmodule Dextrin.Schema.Validator do
   defp check_compiled(compiled, value, registry) do
     with {:ok, given} <- to_name_map_for_encode(compiled, value),
          {:ok, given} <- wrap_given(given, registry),
-         :ok <- check_forbidden(compiled, given),
-         :ok <- check_closed(compiled, given),
-         {:ok, resolved} <- resolve_fields(compiled, given, registry),
-         :ok <- run_refine_fn(compiled, resolved) do
+         {:ok, _resolved} <- resolve_fields(compiled, given, registry) do
       :ok
     end
   end

@@ -171,7 +171,7 @@ defmodule Dextrin.Text.FormatterTest do
 
   describe "opts (e.g. registry) thread through recursively" do
     test "a registered struct nested inside a list is still resolved via the registry" do
-      {:ok, doc} = Dextrin.decode("%{ Thing: %schema{ fields: @ordered %{ a: :integer } } }")
+      {:ok, doc} = Dextrin.decode("%{ Thing: %schema{ a: :integer } }")
       {:ok, registry} = Dextrin.Schema.compile(doc)
       registry = Dextrin.Registry.put_struct_module(registry, "Thing", NestedStruct)
 

@@ -37,7 +37,7 @@ defmodule Dextrin.Text.GrammarTest do
     end
 
     test "threads a registry through as context" do
-      {:ok, doc} = Dextrin.decode("%{ Point: %schema{ fields: @ordered %{ x: :integer } } }")
+      {:ok, doc} = Dextrin.decode("%{ Point: %schema{ x: :integer } }")
       {:ok, registry} = Dextrin.Schema.compile(doc)
 
       # Grammar.run/2 is the raw grammar-level entry point -- unlike

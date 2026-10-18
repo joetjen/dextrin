@@ -248,7 +248,7 @@ defmodule Dextrin.Text.PrinterTest do
 
     test "a struct registered via put_struct_module/3 prints as its schema's own keyed struct form" do
       {:ok, doc} =
-        Dextrin.decode("%{ Plain: %schema{ fields: @ordered %{ a: :integer } } }")
+        Dextrin.decode("%{ Plain: %schema{ a: :integer } }")
 
       {:ok, registry} = Dextrin.Schema.compile(doc)
       registry = Dextrin.Registry.put_struct_module(registry, "Plain", PlainStruct)

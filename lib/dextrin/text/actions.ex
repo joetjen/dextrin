@@ -244,16 +244,17 @@ defmodule Dextrin.Text.Actions do
   end
 
   def handle_rule(:struct_lit, %{name: name_cap} = captures, ctx) do
-    with {:ok, name, ctx} <- name_cap.eval.(ctx) do
+    with {:ok, name, ctx} <- name_cap.eval.(ctx),
+         {:ok, version, ctx} <- struct_version(captures, ctx) do
       cond do
         Map.has_key?(captures, :keyed) ->
           with {:ok, {:keyed, pairs}, ctx} <- captures.keyed.eval.(ctx) do
-            materialize_struct(name, {:keyed, pairs}, ctx)
+            materialize_struct(name, {:keyed, pairs}, version, ctx)
           end
 
         Map.has_key?(captures, :positional) ->
           with {:ok, {:positional, items}, ctx} <- captures.positional.eval.(ctx) do
-            materialize_struct(name, {:positional, items}, ctx)
+            materialize_struct(name, {:positional, items}, version, ctx)
           end
       end
     end
@@ -335,7 +336,18 @@ defmodule Dextrin.Text.Actions do
 
   defp field_name(_), do: :error
 
-  defp materialize_struct(name, fields, ctx) do
+  # `%Name(3){...}`: the schema version, a positive integer (DXN.md §4.8).
+  defp struct_version(%{version: version_cap}, ctx) do
+    with {:ok, version, ctx} <- version_cap.eval.(ctx) do
+      if version > 0,
+        do: {:ok, version, ctx},
+        else: {:error, action_error("a struct version is a positive integer, got #{version}")}
+    end
+  end
+
+  defp struct_version(_captures, ctx), do: {:ok, nil, ctx}
+
+  defp materialize_struct(name, fields, version, ctx) do
     case ctx do
       %Registry{} = registry ->
         case Registry.fetch_struct_schema(registry, name) do
@@ -358,16 +370,18 @@ defmodule Dextrin.Text.Actions do
             end
 
           {:unknown, registry} ->
-            {:ok, opaque_struct(name, fields), registry}
+            {:ok, opaque_struct(name, fields, version), registry}
         end
 
       _ ->
-        {:ok, opaque_struct(name, fields), ctx}
+        {:ok, opaque_struct(name, fields, version), ctx}
     end
   end
 
-  defp opaque_struct(name, {:keyed, pairs}), do: Struct.keyed(name, pairs)
-  defp opaque_struct(name, {:positional, items}), do: Struct.positional(name, items)
+  defp opaque_struct(name, {:keyed, pairs}, version), do: Struct.keyed(name, pairs, version)
+
+  defp opaque_struct(name, {:positional, items}, version),
+    do: Struct.positional(name, items, version)
 
   defp decode_char_escape("\\" <> rest) do
     case Escapes.decode_escape(rest) do

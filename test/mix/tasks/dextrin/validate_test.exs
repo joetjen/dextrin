@@ -57,7 +57,7 @@ defmodule Mix.Tasks.Dextrin.ValidateTest do
 
     File.write!(
       schema_path,
-      "%{ Point: %schema{ fields: @ordered %{ x: :integer, y: :integer } } }"
+      "%{ Point: %schema{ x: :integer, y: :integer } }"
     )
 
     output =
@@ -74,7 +74,7 @@ defmodule Mix.Tasks.Dextrin.ValidateTest do
 
     File.write!(
       schema_path,
-      "%{ Point: %schema{ fields: @ordered %{ x: :integer, y: :integer } } }"
+      "%{ Point: %schema{ x: :integer, y: :integer } }"
     )
 
     assert_raise Mix.Error, ~r/does not satisfy schema Point.*missing required field/, fn ->
@@ -91,7 +91,7 @@ defmodule Mix.Tasks.Dextrin.ValidateTest do
 
     File.write!(
       schema_path,
-      "%{ Point: %schema{ fields: @ordered %{ x: :integer, y: :integer } } }"
+      "%{ Point: %schema{ x: :integer, y: :integer } }"
     )
 
     output =
@@ -109,7 +109,7 @@ defmodule Mix.Tasks.Dextrin.ValidateTest do
 
     File.write!(
       schema_path,
-      "%{ Point: %schema{ fields: @ordered %{ x: :integer, y: :integer } } }"
+      "%{ Point: %schema{ x: :integer, y: :integer } }"
     )
 
     assert_raise Mix.Error, ~r/^#{Regex.escape(data_path)}: .*missing required field/, fn ->

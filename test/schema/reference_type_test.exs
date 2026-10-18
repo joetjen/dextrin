@@ -20,14 +20,12 @@ defmodule Dextrin.Schema.ReferenceTypeTest do
 
   @dxns """
   %{
-    Address: %schema{ fields: @ordered %{ street: :string } }
-    Company: %schema{ fields: @ordered %{ ein: :string } }
+    Address: %schema{ street: :string }
+    Company: %schema{ ein: :string }
     Person: %schema{
-      fields: @ordered %{
         home:  Address
         homes: {:list-of Address}
       }
-    }
   }
   """
 

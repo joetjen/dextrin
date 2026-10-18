@@ -16,12 +16,10 @@ defmodule Dextrin.Schema.NamedTypeTest do
     Tag:         {:refine :string %{min-length: 1, max-length: 20}}
 
     Money: %schema{
-      fields: @ordered %{
         amount:   PositiveInt
         discount: Percentage
         tags:     {:list-of Tag}
       }
-    }
   }
   """
 
@@ -78,11 +76,9 @@ defmodule Dextrin.Schema.NamedTypeTest do
       Dextrin.decode("""
       %{
         Pair: %schema{
-          fields: @ordered %{
             a: Even
             b: Even
           }
-        }
       }
       """)
 
@@ -94,7 +90,10 @@ defmodule Dextrin.Schema.NamedTypeTest do
 
   test "a malformed named-type entry (neither a valid schema nor a valid type_expr) is a clear compile error" do
     {:ok, doc} = Dextrin.decode(~s(%{ Broken: {:not-a-real-form 1 2} }))
-    assert {:error, reason} = Dextrin.Schema.compile(doc)
+
+    assert {:error, %Dextrin.Error{category: "schema/compile", message: reason}} =
+             Dextrin.Schema.compile(doc)
+
     assert reason =~ "Broken"
   end
 
@@ -128,9 +127,7 @@ defmodule Dextrin.Schema.NamedTypeTest do
     {:ok, doc} =
       Dextrin.decode("""
       %{
-        Pair: %schema{
-          fields: @ordered %{ a: Even }
-        }
+        Pair: %schema{ a: Even }
       }
       """)
 

@@ -137,7 +137,7 @@ Address                        bare symbol — a struct name or a named type
 {:all-of A B}                  intersection — matches all
 {:nilable T}                   sugar for {:one-of :nil T}
 {:refine T %{constraints}}     base type + refine constraints (below)
-%schema{fields: @ordered %{}}  struct/record shape
+%schema{}  struct/record shape
 ```
 
 ## `refine` constraints
@@ -152,15 +152,10 @@ min-count / max-count                                      -- list/set/tuple
 
 ```elixir
 %schema{
-  closed:    true              # no field outside `fields` may be present at all
-  forbidden: [legacy_field]    # explicit deny-list, reported by name
-  refine-fn: ns/predicate-name # cross-field/whole-value check, resolved from `predicates`
-  fields: @ordered %{
     required_field:  :integer
     optional_field?: :string             # trailing `?` = optional
     with_default:    %field{type: :integer, default: 0, description: "..."}
   }
-}
 ```
 
 ## Standard named types (`Dextrin.Schema.Std`)

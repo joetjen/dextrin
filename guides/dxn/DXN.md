@@ -80,7 +80,7 @@ map_lit      = "%{" , { map_entry } , "}" ;
 map_entry    = ( identifier , ":" , value )          (* shorthand — plain-atom keys only *)
              | ( value , "=>" , value ) ;             (* arrow — a key type of §1.6 *)
 
-struct_lit   = "%" , identifier ,
+struct_lit   = "%" , identifier , [ "(" , integer , ")" ] ,   (* version, §4.8 *)
                  ( ( "{" , { map_entry } , "}" )      (* keyed *)
                  | ( "[" , { value } , "]" ) ) ;       (* positional *)
 
@@ -477,7 +477,7 @@ type_expr[13]{form,dxn_shape,meaning}:
   all-of,"{:all-of a b}","intersection — value must match every variant"
   nilable,"{:nilable t}","sugar for {:one-of :nil t}"
   refine,"{:refine t %{constraints}}","base type plus constraints, §4.2"
-  struct,"%schema{fields: @ordered %{...}}","struct/record shape, §4.4"
+  struct,"%schema{...}","struct/record shape, §4.4"
 ```
 
 A bare `type_expr` (no wrapping tuple/struct) is always a `primitive`
@@ -510,16 +510,12 @@ No separate flag: a field key ending in `?` is optional; any other key
 is required. `?` is already a legal `ident_char` (§1.1) — no grammar
 addition. The `?` itself is not part of the field's name.
 
-### 4.4 Struct schemas (`%schema{}`/`%field{}`)
+### 4.4 Struct schemas (`%schema(N){}`/`%field{}`)
 
 ```ebnf
 schema_entry = identifier , ":" , schema_form ;
-schema_form  = "%schema{" ,
-                 [ "closed:" , boolean ] ,
-                 [ "forbidden:" , "[" , { identifier } , "]" ] ,
-                 [ "refine-fn:" , identifier ] ,
-                 "fields:" , "@ordered" , "%{" , { field_entry } , "}" ,
-               "}" ;
+schema_form  = "%schema" , [ "(" , version , ")" ] , "{" , { field_entry } , "}" ;
+version      = positive integer ;
 field_entry  = ( identifier , [ "?" ] , ":" , type_expr )
              | ( identifier , [ "?" ] , ":" , field_form ) ;
 field_form   = "%field{" , "type:" , type_expr ,
@@ -527,26 +523,23 @@ field_form   = "%field{" , "type:" , type_expr ,
                "}" ;
 ```
 
-```toon
-schema_keys[3]{key,default,meaning}:
-  closed,false,"if true, no field outside fields: may be present at all"
-  forbidden,[],"explicit deny-list of field names, checked even on an open schema"
-  refine-fn,none,"names a cross-field/whole-value predicate, resolved outside this document (implementation-defined mechanism)"
+```text
+User: %schema(3){
+  name: :string,
+  email: %field{type: :string, description: "where mail goes"},
+  id?: :uuid
+}
 ```
 
-`fields:` MUST be `@ordered %{...}`, not a plain `map` — field order
-is the canonical position ↔ name mapping a struct's positional wire
-form (§2.1) needs; a plain `map`'s "no ordering guarantee" (§1.4) would
-leave that mapping undefined. A keyed `%Name{...}` text literal may
-still list its own fields in any order — names alone resolve those —
-this requirement is on the *schema's* `fields:` only.
+**The body lists the fields directly, and the order they are written in
+is the order of the fields**: the canonical position ↔ name mapping a
+struct's positional wire form (§2.1) needs. A field named twice is an
+error. A keyed `%Name{...}` *data* literal may still list its fields in
+any order — names alone resolve those; the order requirement is on the
+schema's body only.
 
-`closed` and `forbidden` are independent: `closed` alone rejects any
-field not listed in `fields:`, reported generically ("unknown field");
-`forbidden` rejects specific named fields even when the schema is
-otherwise open, reported by name specifically — the distinction matters
-because a deprecated/renamed field deserves a more specific error than
-"never heard of this field."
+**The header holds only the version** (§4.8). A schema written without
+one, `%schema{...}`, is version 1.
 
 `%field{type:, default:, description:}` is reached only when a field
 needs metadata beyond a bare `type_expr` — a default value (used when
@@ -594,19 +587,35 @@ struct:
 
 - every required field (§4.3) is present;
 - every present field's value matches its declared `type_expr`
-  (§4.1/§4.2);
-- if `closed: true`, no field outside `fields:` is present at all;
-- no field named in `forbidden:` is present, regardless of `closed`.
+  (§4.1/§4.2).
 
-A violation of any of these MUST be reported as an error, distinctly
-from a value that simply fails to parse at all — but *how* it's
-reported (exception, error tuple, a validation-result value, ...) is
-implementation-defined. Whether `refine-fn:` predicates run at all,
-and how a predicate name is resolved to actual executable logic, is
-also implementation-defined — `.dxns` documents themselves are
-normatively cross-implementation because a schema *shape* is plain
-data; a `refine-fn:` name is deliberately an escape hatch to logic that
-isn't.
+A struct carries fields beyond those its schema declares without being
+an error: code relying on a struct is guaranteed only the declared
+fields.
+
+A violation MUST be reported as an error, distinctly from a value that
+simply fails to parse at all — but *how* it's reported (exception,
+error tuple, a validation-result value, ...) is implementation-defined;
+its category (§5) is not.
+
+### 4.8 Schema versions
+
+**Each `.dxns` document describes one version of each schema it
+holds**, written in the schema's header: `%schema(3){...}`, version 1
+when there is no header. Versions are positive integers. A reader loads
+any number of documents and keeps every schema by its name *and* its
+version, so `User` versions 1, 2 and 3 can be loaded side by side, from
+three documents.
+
+- **Loading a version already loaded is an error**
+  (`schema/duplicate-version`, §5): two documents that both claim to be
+  `User` v3 are a mistake, not an update.
+- **Replacing a loaded version is a separate, explicit operation** — the
+  hot swap of a running system. It only ever replaces: naming a version
+  that is not loaded is an error (`schema/not-loaded`), so a typo never
+  quietly adds one.
+- **A struct literal may carry the version it was written with**:
+  `%User(3){...}`, `%User(3)[...]`.
 
 ---
 

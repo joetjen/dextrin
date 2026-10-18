@@ -16,8 +16,8 @@ defmodule Dextrin.Schema.MultiDocumentTest do
 
   use ExUnit.Case, async: true
 
-  @point_dxns ~s(%{ Point: %schema{ fields: @ordered %{ x: :integer, y: :integer } } })
-  @money_dxns ~s(%{ Money: %schema{ fields: @ordered %{ amount: :decimal } } })
+  @point_dxns ~s(%{ Point: %schema{ x: :integer, y: :integer } })
+  @money_dxns ~s(%{ Money: %schema{ amount: :decimal } })
 
   test "compile/3's base_registry composes multiple documents into one registry" do
     {:ok, point_doc} = Dextrin.decode(@point_dxns)

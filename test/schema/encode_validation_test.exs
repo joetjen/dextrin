@@ -22,17 +22,13 @@ defmodule Dextrin.Schema.EncodeValidationTest do
 
   @dxns """
   %{
-    Address: %schema{ fields: @ordered %{ street: :string } }
+    Address: %schema{ street: :string }
     Money: %schema{
-      closed:    true
-      forbidden: [legacy_amount_cents]
-      fields: @ordered %{
         amount:   :decimal
         currency: {:enum :usd :eur :gbp}
         note?:    :string
       }
-    }
-    Person: %schema{ fields: @ordered %{ home: Address } }
+    Person: %schema{ home: Address }
   }
   """
 
@@ -69,28 +65,6 @@ defmodule Dextrin.Schema.EncodeValidationTest do
       Dextrin.Struct.keyed("Money", [
         {"amount", Decimal.new("1")},
         {"currency", Dextrin.Keyword.new("gbx")}
-      ])
-
-    assert {:error, %Dextrin.Error{}} = Dextrin.encode(money, registry: registry, schema: "Money")
-  end
-
-  test "a forbidden field is rejected even though nothing else is wrong", %{registry: registry} do
-    money =
-      Dextrin.Struct.keyed("Money", [
-        {"amount", Decimal.new("1")},
-        {"currency", Dextrin.Keyword.new("usd")},
-        {"legacy_amount_cents", 100}
-      ])
-
-    assert {:error, %Dextrin.Error{}} = Dextrin.encode(money, registry: registry, schema: "Money")
-  end
-
-  test "a closed schema rejects an undeclared field", %{registry: registry} do
-    money =
-      Dextrin.Struct.keyed("Money", [
-        {"amount", Decimal.new("1")},
-        {"currency", Dextrin.Keyword.new("usd")},
-        {"extra", 1}
       ])
 
     assert {:error, %Dextrin.Error{}} = Dextrin.encode(money, registry: registry, schema: "Money")

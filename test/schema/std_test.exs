@@ -12,13 +12,11 @@ defmodule Dextrin.Schema.StdTest do
       Dextrin.decode("""
       %{
         Widget: %schema{
-          fields: @ordered %{
             count: PositiveInteger
             name:  NonEmptyString
             ratio: Percentage
             tags:  NonEmptyList
           }
-        }
       }
       """)
 

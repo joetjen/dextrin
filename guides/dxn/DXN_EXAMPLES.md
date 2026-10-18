@@ -92,22 +92,17 @@ for the Elixir-API-level equivalents of several of these.
   Tag:        {:refine :string %{min-length: 1, max-length: 20}}
 
   Address: %schema{
-    fields: @ordered %{
       street: :string
       city:   :string
       zip?:   :string
     }
-  }
 
   Customer: %schema{
-    closed: true
-    fields: @ordered %{
       name:    :string
       address: Address
       loyalty: Percentage
       tags?:   {:list-of Tag}
     }
-  }
 }
 ```
 
@@ -122,9 +117,7 @@ Given `Address.dxns`:
 
 ```
 %{
-  Address: %schema{
-    fields: @ordered %{ street: :string, city: :string }
-  }
+  Address: %schema{ street: :string, city: :string }
 }
 ```
 
@@ -133,11 +126,9 @@ Given `Address.dxns`:
 ```
 %{
   Customer: %schema{
-    fields: @ordered %{
       name: :string
       home: Address/Address
     }
-  }
 }
 ```
 
@@ -147,25 +138,39 @@ file-resolution convention decides what "Address" maps to on disk
 (one reasonable default: `Address/Address` -> `<search-path>/Address.dxns`,
 entry `Address`).
 
-## A closed schema with a forbidden field
+## A schema, version by version
+
+Each `.dxns` document describes one version of a schema, in its header.
+The fields are the body, in order:
 
 ```
+# user-v1.dxns
 %{
-  Money: %schema{
-    closed:    true
-    forbidden: [legacy_amount_cents]
-    fields: @ordered %{
-      amount:   :decimal
-      currency: {:enum :usd :eur :gbp}
-    }
+  User: %schema{
+    name: :string
+    email: :string
+  }
+}
+
+# user-v2.dxns
+%{
+  User: %schema(2){
+    name: :string
+    email: :string
+    id?: :uuid
   }
 }
 ```
 
-Data containing `legacy_amount_cents` is rejected with a specific,
-named reason ("legacy_amount_cents is forbidden") rather than the
-generic "unknown field" a plain `closed: true` alone would give a
-field that was simply never declared.
+The first has no header, so it is version 1. Load both and a reader
+keeps `User` v1 and v2 side by side; loading `user-v2.dxns` a second
+time is an error (`schema/duplicate-version`), because two documents
+claiming to be `User` v2 is a mistake rather than an update. A struct
+can say which version it was written with:
+
+```
+%User(2){name: "Ada", email: "ada@example.com"}
+```
 
 ## Value sharing in `.dxnb` (binary-only, described in text)
 

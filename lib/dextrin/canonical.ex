@@ -72,11 +72,11 @@ defmodule Dextrin.Canonical do
   defp text(%SortedSet{items: items}), do: "@sorted-set @{" <> sorted_items(items) <> "}"
   defp text(%OrderedMap{pairs: pairs}), do: "@ordered %{" <> entries(pairs) <> "}"
 
-  defp text(%Struct{name: name, fields: {:keyed, pairs}}),
-    do: "%" <> name <> "{" <> field_entries(pairs) <> "}"
+  defp text(%Struct{name: name, version: version, fields: {:keyed, pairs}}),
+    do: Struct.head(name, version) <> "{" <> field_entries(pairs) <> "}"
 
-  defp text(%Struct{name: name, fields: {:positional, values}}),
-    do: "%" <> name <> "[" <> items(values) <> "]"
+  defp text(%Struct{name: name, version: version, fields: {:positional, values}}),
+    do: Struct.head(name, version) <> "[" <> items(values) <> "]"
 
   defp text(%Date{} = date), do: "~D[" <> Date.to_iso8601(date) <> "]"
   defp text(%Time{} = time), do: "~T[" <> time(time) <> "]"

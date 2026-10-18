@@ -177,9 +177,7 @@ document is itself just DXN data — no new grammar, no new parser:
 ```elixir
 {:ok, schema_doc} = Dextrin.decode("""
 %{
-  Point: %schema{
-    fields: @ordered %{ x: :integer, y: :integer }
-  }
+  Point: %schema{ x: :integer, y: :integer }
 }
 """)
 
@@ -189,7 +187,7 @@ Dextrin.decode("%Point{x: 1, y: 2}", registry: registry)
 #=> {:ok, %{"x" => 1, "y" => 2}}
 ```
 
-Field enforcement (required/optional, closed/forbidden fields,
+Field enforcement (required fields, declared types and their
 refinements) happens automatically at decode time, in both `decode/2`
 and `decode_binary/2` — a violation comes back as an ordinary
 `{:error, %Dextrin.Error{}}`, indistinguishable by shape from a syntax
@@ -260,7 +258,7 @@ type instead — purely data, composing the fixed type_expr vocabulary:
 {:ok, doc} = Dextrin.decode("""
 %{
   PositiveInt: {:refine :integer %{min: 1}}
-  Point: %schema{ fields: @ordered %{ x: PositiveInt, y: :integer } }
+  Point: %schema{ x: PositiveInt, y: :integer }
 }
 """)
 ```
@@ -291,7 +289,7 @@ if Code.ensure_loaded?(Dextrin.Schema.Provider) do
 
     @impl true
     def dxn_schema, do: """
-    %{ Point: %schema{ fields: @ordered %{ x: :integer, y: :integer } } }
+    %{ Point: %schema{ x: :integer, y: :integer } }
     """
 
     @impl true
@@ -332,12 +330,10 @@ defmodule MyApp.ConfigLoader do
   @schema """
   %{
     Server: %schema{
-      fields: @ordered %{
         host:  NonEmptyString
         port:  {:refine :integer %{min: 1, max: 65535}}
         tags?: {:list-of :symbol}
       }
-    }
   }
   """
 

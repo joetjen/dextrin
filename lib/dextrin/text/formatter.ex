@@ -83,7 +83,8 @@ defmodule Dextrin.Text.Formatter do
          do: render_entries("%{", Map.to_list(map), "}", depth, opts)
   end
 
-  defp render(%Struct{name: name, fields: {:keyed, pairs}}, depth, opts) when pairs != [] do
+  defp render(%Struct{name: name, version: version, fields: {:keyed, pairs}}, depth, opts)
+       when pairs != [] do
     # Wrapped as Dextrin.Keyword before reaching render_entries/5, same
     # as Dextrin.Text.Printer.print/2's own struct clause — struct
     # field names are always keyword-shaped per DXN.md §1.2's map_entry
@@ -94,13 +95,14 @@ defmodule Dextrin.Text.Formatter do
     keyed = Enum.map(pairs, fn {k, v} -> {Dextrin.Keyword.new(k), v} end)
 
     with {:ok, body} <- render_entries("{", keyed, "}", depth, opts) do
-      {:ok, "%" <> name <> body}
+      {:ok, Struct.head(name, version) <> body}
     end
   end
 
-  defp render(%Struct{name: name, fields: {:positional, items}}, depth, opts) when items != [] do
+  defp render(%Struct{name: name, version: version, fields: {:positional, items}}, depth, opts)
+       when items != [] do
     with {:ok, body} <- bracketed("[", items, "]", depth, opts, &render/3) do
-      {:ok, "%" <> name <> body}
+      {:ok, Struct.head(name, version) <> body}
     end
   end
 

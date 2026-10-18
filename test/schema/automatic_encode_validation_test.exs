@@ -17,7 +17,7 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
   end
 
   @dxns """
-  %{ Bar: %schema{ fields: @ordered %{ baz: :integer } } }
+  %{ Bar: %schema{ baz: :integer } }
   """
 
   setup do
@@ -41,8 +41,8 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
     {:ok, doc} =
       Dextrin.decode("""
       %{
-        Bar: %schema{ fields: @ordered %{ baz: :integer } }
-        Holder: %schema{ fields: @ordered %{ payload: :any } }
+        Bar: %schema{ baz: :integer }
+        Holder: %schema{ payload: :any }
       }
       """)
 

@@ -12,9 +12,7 @@ defmodule Dextrin.Test.Support.ProviderPoint.DXN do
     """
     %{
       PositiveInt: {:refine :integer %{min: 1}}
-      Point: %schema{
-        fields: @ordered %{ x: PositiveInt, y: :integer }
-      }
+      Point: %schema{ x: PositiveInt, y: :integer }
     }
     """
   end
@@ -37,9 +35,7 @@ defmodule Dextrin.Test.Support.ProviderPointNoMaterializer do
   def dxn_schema do
     """
     %{
-      Plain: %schema{
-        fields: @ordered %{ a: :integer }
-      }
+      Plain: %schema{ a: :integer }
     }
     """
   end
@@ -59,7 +55,7 @@ defmodule Dextrin.Test.Support.ProviderWithWrongName do
   def dxn_schema do
     """
     %{
-      Real: %schema{ fields: @ordered %{ a: :integer } }
+      Real: %schema{ a: :integer }
     }
     """
   end

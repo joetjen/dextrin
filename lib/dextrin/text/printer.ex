@@ -115,16 +115,16 @@ defmodule Dextrin.Text.Printer do
          do: {:ok, "%{" <> entries <> "}"}
   end
 
-  def print(%Struct{name: name, fields: {:keyed, pairs}}, opts) do
+  def print(%Struct{name: name, version: version, fields: {:keyed, pairs}}, opts) do
     keyed = Enum.map(pairs, fn {k, v} -> {Dextrin.Keyword.new(k), v} end)
 
     with {:ok, entries} <- print_entries(keyed, opts),
-         do: {:ok, "%" <> name <> "{" <> entries <> "}"}
+         do: {:ok, Struct.head(name, version) <> "{" <> entries <> "}"}
   end
 
-  def print(%Struct{name: name, fields: {:positional, items}}, opts) do
+  def print(%Struct{name: name, version: version, fields: {:positional, items}}, opts) do
     with {:ok, printed} <- print_all(items, opts),
-         do: {:ok, "%" <> name <> "[" <> Enum.join(printed, ",") <> "]"}
+         do: {:ok, Struct.head(name, version) <> "[" <> Enum.join(printed, ",") <> "]"}
   end
 
   def print(%Date{} = date, _opts), do: {:ok, "~D[" <> Date.to_iso8601(date) <> "]"}

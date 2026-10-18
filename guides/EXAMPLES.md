@@ -43,15 +43,12 @@ you don't fully trust the contents of, and use
 schema_source = """
 %{
   User: %schema{
-    closed: true
-    fields: @ordered %{
       id:       :uuid
       email:    NonEmptyString
       role:     {:enum :admin :member :guest}
       created:  :timestamp
       note?:    :string
     }
-  }
 }
 """
 
@@ -69,10 +66,6 @@ payload = """
 
 {:ok, user} = Dextrin.decode(payload, registry: registry)
 #=> {:ok, %{"id" => %Dextrin.Uuid{...}, "email" => "ada@example.com", "role" => :admin, ...}}
-
-# A response body accidentally including a legacy field is rejected loudly, not silently dropped:
-Dextrin.decode(~s(%User{id: @uuid "...", email: "a@b.co", role: :admin, created: ~U[2024-01-01 00:00:00Z], legacy_id: 1}), registry: registry)
-#=> {:error, %Dextrin.Error{message: "struct \"User\" violates its schema: unknown field \"legacy_id\" (schema is closed)", ...}}
 ```
 
 ## An event log, streamed to `.dxnb` for storage
@@ -108,11 +101,9 @@ an app-level convention.
 schema_source = """
 %{
   Money: %schema{
-    fields: @ordered %{
       amount:   :decimal
       currency: {:enum :usd :eur :gbp}
     }
-  }
 }
 """
 
@@ -126,35 +117,6 @@ registry =
 
 Dextrin.decode(~s(%Money{amount: 19.99M, currency: :usd}), registry: registry)
 #=> {:ok, %{amount: #Decimal<19.99>, currency: "usd"}}
-```
-
-## Cross-field validation with `refine-fn`
-
-A `type_expr` can only describe shape, not "field A implies field B" —
-`refine-fn:` names a predicate resolved from a `predicates` map passed
-to `compile/3`:
-
-```elixir
-schema_source = """
-%{
-  DateRange: %schema{
-    refine-fn: date-range/valid
-    fields: @ordered %{ starts: :date, ends: :date }
-  }
-}
-"""
-
-predicates = %{
-  "date-range/valid" => fn %{starts: s, ends: e} ->
-    if Date.compare(s, e) != :gt, do: :ok, else: {:error, "starts must not be after ends"}
-  end
-}
-
-{:ok, doc} = Dextrin.decode(schema_source)
-{:ok, registry} = Dextrin.Schema.compile(doc, Dextrin.Registry.new(), predicates)
-
-Dextrin.decode(~s(%DateRange{starts: ~D[2024-06-01], ends: ~D[2024-01-01]}), registry: registry)
-#=> {:error, %Dextrin.Error{message: "struct \"DateRange\" violates its schema: starts must not be after ends", ...}}
 ```
 
 ## A third-party struct provider, end to end
@@ -195,9 +157,7 @@ if Code.ensure_loaded?(Dextrin.Schema.Provider) do
     def dxn_schema, do: """
     %{
       Degrees: {:refine :float %{min: -180.0, max: 180.0}}
-      LatLng: %schema{
-        fields: @ordered %{ lat: Degrees, lng: Degrees }
-      }
+      LatLng: %schema{ lat: Degrees, lng: Degrees }
     }
     """
 
@@ -261,11 +221,9 @@ mix dextrin.gen.schema MyApp.Point --out point.dxns --name Point
 ```
 %{
   Point: %schema{
-    fields: @ordered %{
       x?: :integer
       y?: :integer
     }
-  }
 }
 ```
 

@@ -28,6 +28,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `DXN.md` gains §1.5 (canonical form), §1.6 (map keys: only `string`,
   `keyword`, `integer`, `uuid`, `date`, `bytes`, `symbol` and `char`)
   and §5 (error categories).
+- **Schemas are versioned** (`DXN.md` §4.8). A schema is written
+  `%schema(N){field: type, ...}`: the body lists the fields directly, in
+  the order `.dxnb` encodes them, and the header holds only the version
+  (version 1 without one). `fields:` and `@ordered` are gone. Each
+  `.dxns` document describes one version; the registry keeps schemas by
+  name *and* version (`Dextrin.Registry.fetch_struct_schema/3`, with `/2`
+  answering the latest). Loading a version already loaded is a
+  `schema/duplicate-version` error; `Dextrin.Registry.replace_struct_schema/3`
+  hot-swaps a loaded version and refuses one that is not
+  (`schema/not-loaded`).
+- **A struct literal may carry its version**: `%User(3){...}`,
+  `%User(3)[...]`, kept in `Dextrin.Struct`'s new `version` field and
+  written back by the printer, the formatter and the canonical form.
+- **Removed: `closed:`, `forbidden:` and `refine-fn:`**, and with them
+  `Dextrin.Schema.compile/3`'s and `Dextrin.Schema.FileResolver.for_paths/2`'s
+  `predicates` argument. A struct may carry fields its schema does not
+  declare. A strict decode option and a per-schema materializer take
+  their places in later changes.
+- Schema compile errors are `Dextrin.Error`s with the `schema/compile`
+  category, not bare strings.
 - **A map key must be one of the eight types of `DXN.md` §1.6**
   (`string`, `keyword`, `integer`, `uuid`, `date`, `bytes`, `symbol`,
   `char`). Any other key -- a float, `nil`, a boolean, a time, a

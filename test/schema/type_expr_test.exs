@@ -11,8 +11,8 @@ defmodule Dextrin.Schema.TypeExprTest do
   defp registry_for(type_expr_text) do
     dxns = """
     %{
-      Other: %schema{ fields: @ordered %{ x: :integer } }
-      T: %schema{ fields: @ordered %{ v: #{type_expr_text} } }
+      Other: %schema{ x: :integer }
+      T: %schema{ v: #{type_expr_text} }
     }
     """
 
@@ -265,7 +265,7 @@ defmodule Dextrin.Schema.TypeExprTest do
     end
 
     test "matches when the struct's own module is registered for that schema name" do
-      dxns = "%{ Point: %schema{ fields: @ordered %{ x: :integer } } }"
+      dxns = "%{ Point: %schema{ x: :integer } }"
       {:ok, doc} = Dextrin.decode(dxns)
       {:ok, registry} = Dextrin.Schema.compile(doc)
       registry = Dextrin.Registry.put_struct_module(registry, "Point", RealPoint)
@@ -276,8 +276,8 @@ defmodule Dextrin.Schema.TypeExprTest do
     test "rejects a real struct whose module doesn't match the name's own registered module" do
       dxns = """
       %{
-        Point: %schema{ fields: @ordered %{ x: :integer } }
-        Other: %schema{ fields: @ordered %{ y: :integer } }
+        Point: %schema{ x: :integer }
+        Other: %schema{ y: :integer }
       }
       """
 
@@ -290,7 +290,7 @@ defmodule Dextrin.Schema.TypeExprTest do
     end
 
     test "an unregistered *name* is trusted too -- nothing registered to check the module against" do
-      dxns = "%{ Point: %schema{ fields: @ordered %{ x: :integer } } }"
+      dxns = "%{ Point: %schema{ x: :integer } }"
       {:ok, doc} = Dextrin.decode(dxns)
       {:ok, registry} = Dextrin.Schema.compile(doc)
       registry = Dextrin.Registry.put_struct_module(registry, "Point", RealPoint)
