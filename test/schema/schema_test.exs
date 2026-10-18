@@ -113,7 +113,9 @@ defmodule Dextrin.SchemaTest do
   test "validate/3 rejects anything that isn't a Dextrin.Struct named after the schema", %{
     registry: registry
   } do
-    assert {:error, message} = Dextrin.Schema.validate(%{"x" => 1}, registry, "Point")
+    assert {:error, %Dextrin.Error{message: message, category: "schema/type-mismatch"}} =
+             Dextrin.Schema.validate(%{"x" => 1}, registry, "Point")
+
     assert message =~ "expected a Dextrin.Struct named"
 
     wrong_name = Dextrin.Struct.keyed("NotPoint", [{"x", 1}, {"y", 2}])
@@ -124,10 +126,15 @@ defmodule Dextrin.SchemaTest do
     registry: registry
   } do
     opaque = Dextrin.Struct.keyed("Ghost", [{"x", 1}])
-    assert {:error, message} = Dextrin.Schema.validate(opaque, registry, "Ghost")
+
+    assert {:error, %Dextrin.Error{message: message}} =
+             Dextrin.Schema.validate(opaque, registry, "Ghost")
+
     assert message =~ "no compiled schema registered"
 
-    assert {:error, message} = Dextrin.Schema.validate_encode(%{"x" => 1}, registry, "Ghost")
+    assert {:error, %Dextrin.Error{message: message}} =
+             Dextrin.Schema.validate_encode(%{"x" => 1}, registry, "Ghost")
+
     assert message =~ "no compiled schema registered"
   end
 

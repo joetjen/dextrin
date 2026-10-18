@@ -30,6 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Every schema violation carries its `DXN.md` §5 category**:
+  `schema/field-count`, `schema/missing-field`, `schema/type-mismatch`
+  and `schema/shadowed-field`, decoding text or binary and encoding
+  alike. They came back as `syntax` from text, `binary` from binary,
+  and with no category from an encode. `Dextrin.Schema.validate/3`,
+  `validate_encode/3` and `validate_encode_tree/2` answer a
+  `Dextrin.Error` instead of a string.
+
 - `DXN.md` gains §1.5 (canonical form), §1.6 (map keys: only `string`,
   `keyword`, `integer`, `uuid`, `date`, `bytes`, `symbol` and `char`)
   and §5 (error categories).

@@ -311,7 +311,7 @@ cbor_map[29]{type,cbor_major_or_tag,payload,integrity_note}:
   map,"major5 (untagged)","pairs","default/untagged case"
   ordered-map,"tag T_ORDERED","major5 pairs","order preserved by tag presence, not byte sequence"
   set,"tag T_SET","major4 items",""
-  sorted-set,"tag T_SORTED_SET","major4 items, sorted order",""
+  sorted-set,"tag T_SORTED_SET","major4 items, in canonical order (§1.5)",""
   struct,"tag T_STRUCT","[type-name-or-ref, field..., extras?]","positional only, §2.1; the type name carries the version, `User(3)` (§4.8); extra fields, when there are any, as one trailing `T_EXTRA` map (§4.7)"
   array,"tag T_ARRAY","major4 items",""
   date,"tag T_DATE","integer days since 1970-01-01","Unix epoch, day granularity"

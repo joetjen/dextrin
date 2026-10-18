@@ -72,7 +72,10 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
     registry = Dextrin.Registry.put_struct_module(registry, "Bar", TestBar)
 
     bad = struct(TestBar, baz: true)
-    assert {:error, message} = Dextrin.Schema.validate_encode_tree(bad, registry)
+
+    assert {:error, %Dextrin.Error{message: message, category: "schema/type-mismatch"}} =
+             Dextrin.Schema.validate_encode_tree(bad, registry)
+
     assert message =~ "Bar"
 
     good = struct(TestBar, baz: 1)

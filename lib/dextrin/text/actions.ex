@@ -354,9 +354,6 @@ defmodule Dextrin.Text.Actions do
 
           {:error, %Dextrin.Error{}} = error ->
             error
-
-          {:error, reason} ->
-            {:error, action_error("struct #{inspect(name)} violates its schema: #{reason}")}
         end
 
       _ ->

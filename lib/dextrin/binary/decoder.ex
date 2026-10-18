@@ -575,10 +575,6 @@ defmodule Dextrin.Binary.Decoder do
 
           {:error, %Dextrin.Error{}} = error ->
             error
-
-          {:error, reason} ->
-            {:error,
-             Dextrin.Error.binary("struct #{inspect(name)} violates its schema: #{reason}")}
         end
 
       _ ->

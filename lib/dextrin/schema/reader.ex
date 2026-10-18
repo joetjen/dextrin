@@ -46,7 +46,7 @@ defmodule Dextrin.Schema.Reader do
   @spec read(Registry.t(), String.t(), pos_integer() | nil, Validator.fields()) ::
           {:ok, term(), Registry.t()}
           | {:unknown, Registry.t()}
-          | {:error, Dextrin.Error.t() | String.t()}
+          | {:error, Dextrin.Error.t()}
   def read(%Registry{} = registry, name, version, fields, extra \\ []) do
     case Registry.fetch_struct_schema(registry, name) do
       {:ok, %Compiled{} = latest, registry} ->
@@ -185,7 +185,7 @@ defmodule Dextrin.Schema.Reader do
           {:error, reason} ->
             materializer_error(
               name,
-              "answered a value version #{latest.version} rejects: #{reason}"
+              "answered a value version #{latest.version} rejects: #{reason.message}"
             )
         end
 

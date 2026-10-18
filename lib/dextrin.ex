@@ -176,9 +176,9 @@ defmodule Dextrin do
           :ok ->
             :ok
 
-          {:error, reason} ->
+          {:error, %Dextrin.Error{} = error} ->
             {:error,
-             Dextrin.Error.action("value violates schema #{inspect(schema_name)}: #{reason}")}
+             %{error | message: "value violates schema #{inspect(schema_name)}: #{error.message}"}}
         end
 
       :error ->
@@ -190,7 +190,7 @@ defmodule Dextrin do
     if Keyword.get(opts, :validate, true) do
       case Dextrin.Schema.validate_encode_tree(value, registry) do
         :ok -> :ok
-        {:error, reason} -> {:error, Dextrin.Error.action(reason)}
+        {:error, %Dextrin.Error{}} = error -> error
       end
     else
       :ok

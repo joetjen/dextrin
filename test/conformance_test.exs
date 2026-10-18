@@ -34,6 +34,48 @@ defmodule Dextrin.ConformanceTest do
              [%{"id" => "a", "error" => "binary"}]
   end
 
+  @user "%{User: %schema(2){name: :string}}"
+
+  test "a case's schemas are loaded before it runs" do
+    assert answer([
+             %{
+               "id" => "a",
+               "operation" => "decode",
+               "text" => ~s|%User{name: "x"}|,
+               "schemas" => [@user]
+             }
+           ]) == [%{"id" => "a", "canonical" => ~s|%User(2){name: "x"}|}]
+  end
+
+  test "and a schema violation answers its category" do
+    assert answer([
+             %{
+               "id" => "a",
+               "operation" => "decode",
+               "text" => "%User{name: 1}",
+               "schemas" => [@user]
+             }
+           ]) == [%{"id" => "a", "error" => "schema/type-mismatch"}]
+  end
+
+  test "a strict case decodes strictly" do
+    assert answer([
+             %{
+               "id" => "a",
+               "operation" => "decode",
+               "text" => ~s|%User{name: "x", nick: "y"}|,
+               "schemas" => [@user],
+               "strict" => true
+             }
+           ]) == [%{"id" => "a", "error" => "schema/undeclared-field"}]
+  end
+
+  test "a schema that does not compile answers its category" do
+    assert answer([
+             %{"id" => "a", "operation" => "decode", "text" => "1", "schemas" => ["%{User: 1}"]}
+           ]) == [%{"id" => "a", "error" => "schema/compile"}]
+  end
+
   test "an encode answers the exact bytes, as base64" do
     assert answer([%{"id" => "a", "operation" => "encode", "text" => "42"}]) ==
              [%{"id" => "a", "binary" => "RFgBGCo="}]

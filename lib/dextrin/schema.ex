@@ -42,7 +42,7 @@ defmodule Dextrin.Schema do
   decoded before a schema became available, or checking against a
   different schema than the one originally used.
   """
-  @spec validate(term(), Registry.t(), String.t()) :: :ok | {:error, term()}
+  @spec validate(term(), Registry.t(), String.t()) :: :ok | {:error, Dextrin.Error.t()}
   def validate(
         %Dextrin.Struct{name: name, version: version, fields: fields},
         %Registry{} = registry,
@@ -56,7 +56,8 @@ defmodule Dextrin.Schema do
         :ok
 
       {:unknown, _registry} ->
-        {:error, "no compiled schema registered for #{inspect(schema_name)}"}
+        {:error,
+         Dextrin.Error.action("no compiled schema registered for #{inspect(schema_name)}")}
 
       {:error, _} = error ->
         error
@@ -64,7 +65,11 @@ defmodule Dextrin.Schema do
   end
 
   def validate(value, %Registry{}, schema_name) do
-    {:error, "expected a Dextrin.Struct named #{inspect(schema_name)}, got #{inspect(value)}"}
+    {:error,
+     Dextrin.Error.action(
+       "expected a Dextrin.Struct named #{inspect(schema_name)}, got #{inspect(value)}",
+       "schema/type-mismatch"
+     )}
   end
 
   @doc """
@@ -78,14 +83,15 @@ defmodule Dextrin.Schema do
   wrong shape. `Dextrin.encode/2`/`encode_binary/2`'s `schema:` opt
   calls this automatically.
   """
-  @spec validate_encode(term(), Registry.t(), String.t()) :: :ok | {:error, term()}
+  @spec validate_encode(term(), Registry.t(), String.t()) :: :ok | {:error, Dextrin.Error.t()}
   def validate_encode(value, %Registry{} = registry, schema_name) do
     case Registry.fetch_struct_schema(registry, schema_name) do
       {:ok, compiled, _registry} ->
         Validator.validate_for_encode(compiled, value, registry)
 
       {:unknown, _registry} ->
-        {:error, "no compiled schema registered for #{inspect(schema_name)}"}
+        {:error,
+         Dextrin.Error.action("no compiled schema registered for #{inspect(schema_name)}")}
     end
   end
 
@@ -99,7 +105,7 @@ defmodule Dextrin.Schema do
   `encode_binary/2` call this automatically by default (opt out with
   `validate: false`).
   """
-  @spec validate_encode_tree(term(), Registry.t()) :: :ok | {:error, term()}
+  @spec validate_encode_tree(term(), Registry.t()) :: :ok | {:error, Dextrin.Error.t()}
   def validate_encode_tree(value, %Registry{} = registry) do
     Validator.validate_tree_for_encode(value, registry)
   end
