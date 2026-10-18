@@ -178,6 +178,7 @@ mix dextrin.validate data.dxn [--format text|binary] [--schema s.dxns --as Name]
 mix dextrin.encode data.dxn [--out data.dxnb] [--share]
 mix dextrin.decode data.dxnb [--out data.dxn]
 mix dextrin.format data.dxn [--mode pretty|condense] [--in-place]
+mix dextrin.compat old-schemas/ schemas/
 mix dextrin.gen.schema MyApp.SomeStruct [--out schema.dxns] [--name Name]
 mix dextrin.gen.unicode [--file PATH] [--force]
 ```

@@ -22,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   this implementation's adapter for the Dextrin Conformance Suite,
   answering a JSON batch of cases with canonical forms, base64 bytes or
   error categories.
+- `Dextrin.Schema.Compat.check/2` and `mix dextrin.compat OLD NEW` --
+  the version discipline check (`DXN.md` §4.8), for CI against the
+  previous release's schema files: a version whose content changed
+  without a new version, or a version that went down, fails; what the
+  latest version's materializer has to upgrade is listed either way.
 
 ### Changed
 

@@ -718,6 +718,17 @@ assigns values to the wrong fields, without an error whenever the types
 agree. This is accepted as unavoidable: a schema whose older readers
 must keep working only ever appends fields.
 
+**Version discipline.** Implementations provide a check, for CI, that
+compares a previous release's schemas with the current ones: a version
+present in both whose content changed — a field added, removed or
+moved, or one whose type, requiredness or default changed — is an
+error, because two documents claiming to be `User` v3 must mean the
+same thing; and a schema's latest version never goes down. It also
+lists, for each schema, the older versions still loaded beside the
+latest and which fields were added, removed and changed since: the
+checklist for the materializer. There are no compatibility modes and
+no append-only rule.
+
 **Deploying a change.** A *compatible* change — fields appended at the
 end, and nothing else — deploys in either order: a newer producer is
 read by an older reader, which matches what it knows and ignores the

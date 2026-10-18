@@ -124,7 +124,7 @@ readability happens to matter for a given use.
   Plain immutable data, threaded explicitly — never a process or ETS
   table.
 - **`mix dextrin.*`** — `validate`, `encode`, `decode`, `format`,
-  `gen.schema` (scaffold a `.dxns` file from an existing Elixir
+  `compat` (the schema version discipline check, for CI), `gen.schema` (scaffold a `.dxns` file from an existing Elixir
   struct), and `gen.unicode` (regenerate the grammar's Unicode
   identifier ranges from the latest UCD data).
 
