@@ -87,6 +87,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are written as its extras (`Dextrin.Struct.runtime_extra/1`).
 - A keyed struct entry whose key is not a name — `%Point{1 => 2}` — is an
   extra field instead of an error.
+- **A struct is matched only by a struct** (`DXN.md` §4.7). A field
+  typed `User` accepts a struct named `User`, or the application struct
+  registered for `User`; a plain map, any other value, and an application
+  struct registered for no schema or another are type errors. Until now
+  every non-struct value, and every unregistered application struct, was
+  accepted. `DXN.md` §4.7 states the rule and its test: a host value
+  always means the same DXN type, schema or not.
 - **Removed: `closed:`, `forbidden:` and `refine-fn:`**, and with them
   `Dextrin.Schema.compile/3`'s and `Dextrin.Schema.FileResolver.for_paths/2`'s
   `predicates` argument. A struct may carry fields its schema does not

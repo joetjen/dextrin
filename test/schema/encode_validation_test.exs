@@ -127,12 +127,14 @@ defmodule Dextrin.Schema.EncodeValidationTest do
       assert :ok = Dextrin.Schema.validate_encode(right, registry, "Person")
     end
 
-    test "without put_struct_module registered, a reference field can't be checked and is trusted",
+    test "without put_struct_module registered, an application struct is not the referenced one",
          %{
            registry: registry
          } do
+      # A value matches only its declared type (DXN.md §4.7): with no
+      # module registered for "Address", nothing says this struct is one.
       wrong = %{"home" => struct(TestCompany, ein: "1")}
-      assert :ok = Dextrin.Schema.validate_encode(wrong, registry, "Person")
+      assert {:error, _} = Dextrin.Schema.validate_encode(wrong, registry, "Person")
     end
 
     test "a Dextrin.Struct checks its own name directly, with no put_struct_module needed", %{

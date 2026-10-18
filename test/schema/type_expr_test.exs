@@ -41,10 +41,11 @@ defmodule Dextrin.Schema.TypeExprTest do
       assert {:error, %Dextrin.Error{}} = field(r, ~s("x"))
     end
 
-    test "reference trusts any non-struct value — no registry access, no provenance to check" do
+    test "reference refuses any value that is not a struct -- a map is not a struct" do
       r = registry_for("Other")
-      assert {:ok, %{"v" => 1}} = field(r, "1")
-      assert {:ok, %{"v" => "anything"}} = field(r, ~s("anything"))
+      assert {:error, %Dextrin.Error{}} = field(r, "1")
+      assert {:error, %Dextrin.Error{}} = field(r, ~s("anything"))
+      assert {:error, %Dextrin.Error{}} = field(r, "%{x: 1}")
     end
 
     test "reference catches a wrong struct name on an opaque (unregistered) value" do
@@ -294,22 +295,22 @@ defmodule Dextrin.Schema.TypeExprTest do
       refute Dextrin.Schema.TypeExpr.matches?({:reference, "Other"}, %RealPoint{x: 1}, registry)
     end
 
-    test "an unregistered *name* is trusted too -- nothing registered to check the module against" do
+    test "an application struct does not match a name nothing is registered for" do
       dxns = "%{ Point: %schema{ x: :integer } }"
       {:ok, doc} = Dextrin.decode(dxns)
       {:ok, registry} = Dextrin.Schema.compile(doc)
       registry = Dextrin.Registry.put_struct_module(registry, "Point", RealPoint)
 
-      assert Dextrin.Schema.TypeExpr.matches?(
+      refute Dextrin.Schema.TypeExpr.matches?(
                {:reference, "NeverRegistered"},
                %RealPoint{x: 1},
                registry
              )
     end
 
-    test "an unregistered real struct is trusted (nothing to check it against)" do
+    test "an unregistered real struct is not the referenced one" do
       registry = Dextrin.Registry.new()
-      assert Dextrin.Schema.TypeExpr.matches?({:reference, "Point"}, %RealPoint{x: 1}, registry)
+      refute Dextrin.Schema.TypeExpr.matches?({:reference, "Point"}, %RealPoint{x: 1}, registry)
     end
   end
 end

@@ -591,6 +591,21 @@ struct:
 - every present field's value matches its declared `type_expr`
   (§4.1/§4.2).
 
+**A value matches only its declared type, and nothing is converted to
+make it match.** An integer is not a string, however easy the
+conversion; a map is not a struct. A field typed `User` accepts only a
+`User` struct: a struct named `User` (checked against `User`'s schema,
+or opaque when there is none, §1.4), or the application value a reader
+has registered as `User`'s. Everything else is a type error, plain maps
+included; whoever needs a struct writes it as one.
+
+**Representation is not conversion.** A language without integers may
+hold a DXN integer as a string; that is its representation. A language
+that has integers and turns one into a string because a field says
+`:string` converts. The test is normative: **a host value always means
+the same DXN type, with or without a schema. A schema can accept or
+reject a value, but never changes what it means.**
+
 **A struct guarantees its declared fields and may carry more.** Code
 relying on a struct is guaranteed only the declared fields; the rest are
 its **extra fields**, which a reader keeps rather than drops:
