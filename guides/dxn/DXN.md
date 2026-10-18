@@ -636,6 +636,32 @@ says so with its tag, `%Config(2){...}`.
 any version of `User`; the nested struct's own tag decides how it is
 read. `User(2)` is not a type expression.
 
+**Reading a struct by its version.** A reader compares the version a
+struct was written with against the versions it has loaded:
+
+- **No version, or the latest loaded:** the struct is read with the
+  latest schema, exactly — in `.dxnb` its item count must match.
+- **Newer than anything loaded:** the struct is read against the latest
+  loaded version. Every field that version requires must be present with
+  a matching type; optional fields that are missing are absent and take
+  their defaults. Text matches fields by name. `.dxnb` **assumes
+  positions are unchanged**: items beyond the reader's own fields are
+  silently dropped, and fields beyond the items are missing.
+- **Older than the latest, and loaded:** the struct is read with its
+  own version's schema and handed to the schema's materializer, which
+  upgrades it. Without a materializer it is an error
+  (`schema/no-materializer`): reading old data as though it were the
+  latest would be a guess.
+- **Older, and not loaded:** an error (`schema/unknown-version`), even
+  with a materializer — without the writer's schema there are no field
+  names to hand it.
+
+**The risk of reading forward is normative.** If a newer version
+reordered, inserted or removed fields, an older reader of `.dxnb`
+assigns values to the wrong fields, without an error whenever the types
+agree. This is accepted as unavoidable: a schema whose older readers
+must keep working only ever appends fields.
+
 **Deploying a change.** A *compatible* change — fields appended at the
 end, and nothing else — deploys in either order: a newer producer is
 read by an older reader, which matches what it knows and ignores the

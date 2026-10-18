@@ -502,33 +502,23 @@ defmodule Dextrin.Binary.Decoder do
   defp build_named_struct(name, version, fields, opts) do
     case Keyword.get(opts, :registry) do
       %Registry{} = registry ->
-        case Registry.fetch_struct_schema(registry, name) do
-          {:ok, compiled, _registry} ->
-            materializer =
-              case Registry.fetch_materializer(registry, name) do
-                {:ok, fun} -> fun
-                :error -> nil
-              end
-
-            # Same fail-fast, decode-time enforcement as the text
-            # pipeline — .dxnb structs are always positional (`DXN.md`
-            # §2.1), so this is the only shape possible here.
-            case Dextrin.Schema.Validator.materialize(
-                   compiled,
-                   {:positional, fields},
-                   materializer,
-                   registry
-                 ) do
-              {:ok, materialized} ->
-                {:ok, materialized}
-
-              {:error, reason} ->
-                {:error,
-                 Dextrin.Error.binary("struct #{inspect(name)} violates its schema: #{reason}")}
-            end
+        # Same fail-fast, decode-time enforcement as the text pipeline,
+        # through the same Dextrin.Schema.Reader — .dxnb structs are
+        # always positional (`DXN.md` §2.1), so this is the only shape
+        # possible here.
+        case Dextrin.Schema.Reader.read(registry, name, version, {:positional, fields}) do
+          {:ok, materialized, _registry} ->
+            {:ok, materialized}
 
           {:unknown, _registry} ->
             {:ok, Struct.positional(name, fields, version)}
+
+          {:error, %Dextrin.Error{}} = error ->
+            error
+
+          {:error, reason} ->
+            {:error,
+             Dextrin.Error.binary("struct #{inspect(name)} violates its schema: #{reason}")}
         end
 
       _ ->

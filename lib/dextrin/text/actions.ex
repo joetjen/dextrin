@@ -350,27 +350,22 @@ defmodule Dextrin.Text.Actions do
   defp materialize_struct(name, fields, version, ctx) do
     case ctx do
       %Registry{} = registry ->
-        case Registry.fetch_struct_schema(registry, name) do
-          {:ok, compiled, registry} ->
-            materializer =
-              case Registry.fetch_materializer(registry, name) do
-                {:ok, fun} -> fun
-                :error -> nil
-              end
-
-            # Fail-fast, decode-time enforcement — a schema violation
-            # is an ordinary decode error, same channel as bad syntax,
-            # with no lenient escape hatch to get the value anyway.
-            case Dextrin.Schema.Validator.materialize(compiled, fields, materializer, registry) do
-              {:ok, materialized} ->
-                {:ok, materialized, registry}
-
-              {:error, reason} ->
-                {:error, action_error("struct #{inspect(name)} violates its schema: #{reason}")}
-            end
+        # Fail-fast, decode-time enforcement — a schema violation is an
+        # ordinary decode error, same channel as bad syntax, with no
+        # lenient escape hatch to get the value anyway. Which schema it
+        # is read with depends on its version (Dextrin.Schema.Reader).
+        case Dextrin.Schema.Reader.read(registry, name, version, fields) do
+          {:ok, materialized, registry} ->
+            {:ok, materialized, registry}
 
           {:unknown, registry} ->
             {:ok, opaque_struct(name, fields, version), registry}
+
+          {:error, %Dextrin.Error{}} = error ->
+            error
+
+          {:error, reason} ->
+            {:error, action_error("struct #{inspect(name)} violates its schema: #{reason}")}
         end
 
       _ ->

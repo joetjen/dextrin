@@ -254,7 +254,21 @@ The `(1)` is the schema's version. A schema with no header is version
 versions of `Point` side by side. Encoding always writes the latest
 one loaded, so the reader knows exactly which shape it is looking at;
 a struct written without one, `%Point{...}`, is read as the latest.
-See DXN.md §4.8 for how to deploy a schema change.
+
+A reader that meets a struct written with another version than its
+latest does one of three things. A **newer** version is read against
+the latest the reader has, matching fields by name in text and by
+position in `.dxnb`; anything it does not know is dropped. An **older**
+version it has loaded is handed to the schema's materializer to be
+upgraded, and refused (`schema/no-materializer`) when there is none.
+An older version it has *not* loaded is refused
+(`schema/unknown-version`).
+
+**Reading forward in `.dxnb` trusts the positions.** If a newer version
+reordered, inserted or removed fields, an older reader puts values in
+the wrong fields — with no error at all when the types happen to agree.
+A schema whose older readers must keep working only ever *appends*
+fields. See DXN.md §4.8 for this and for how to deploy a schema change.
 
 ## 8. Named types and the standard library
 
