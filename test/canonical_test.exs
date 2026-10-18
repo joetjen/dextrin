@@ -29,11 +29,22 @@ defmodule Dextrin.CanonicalTest do
                "123456789012345678901234567890"
     end
 
-    test "a decimal keeps its scale, writes out a positive exponent, and has an unsigned zero" do
+    test "a decimal is written as it was given: its scale and its sign kept" do
       assert canonical(Decimal.new("1.50")) == "1.50M"
       assert canonical(Decimal.new("-2.5")) == "-2.5M"
+      assert canonical(Decimal.new("-0.0")) == "-0.0M"
+      assert canonical(Decimal.new("0.00")) == "0.00M"
+    end
+
+    test "a positive exponent, which text cannot write, is written out with zeros" do
       assert canonical(Decimal.new("1E+3")) == "1000M"
-      assert canonical(Decimal.new("-0.0")) == "0.0M"
+    end
+
+    test "every encoder writes a decimal as it was given, text and binary alike" do
+      assert Dextrin.encode(Decimal.new("1.50")) == {:ok, "1.50M"}
+
+      refute Dextrin.encode_binary(Decimal.new("1.50")) ==
+               Dextrin.encode_binary(Decimal.new("1.5"))
     end
 
     test "a rational is written as held, not reduced" do

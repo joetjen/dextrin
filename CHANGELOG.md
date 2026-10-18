@@ -29,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `keyword`, `integer`, `uuid`, `date`, `bytes`, `symbol` and `char`)
   and §5 (error categories). The map-key rule is specified but not yet
   enforced.
+- `DXN.md` §1.5 states that nothing is normalised: a value is written
+  as it was given, so `1.50M` keeps its scale and `-0.0M` its sign, in
+  the canonical form as in every encoder.
 
 ## [0.1.3] - 2026-08-18
 

@@ -375,6 +375,16 @@ Fixed in phase B, each caught first by a conformance case:
   expects). Settle how a category survives Ichor when the schema
   reporting is reworked here.
 
+### B9a. Nothing is normalised
+
+Decided 2026-10-18: every value is encoded exactly as it was given.
+`1.50M` stays `1.50M` (`[-2, 150]` in `.dxnb`), `-0.0M` keeps its sign,
+`2/4` stays `2/4`. The Praxis runtime canonicalises decimals when it
+builds one (`praxis.runtime.decimal`: `0.10M` and `0.1M` are one value
+in the language), so **the Praxis port holds a DXN decimal in a
+`dextrin.decimal` record**, for the same reason it already wraps
+rationals.
+
 ### B10. Order of work, per feature
 
 Elixir first, then the Praxis port, Node and PHP, each against the same
@@ -494,6 +504,11 @@ Kept so the reasoning is not lost, including what was wrong with it.
   three scalars have ambiguous identity (`float`, `decimal`,
   `rational`) while three non-scalars are exact and common keys
   (`uuid`, `date`, `bytes`).
+- **Normalising decimals** (`1.50M` written as `1.5M`, every encoder
+  writing the normalised form), briefly chosen to match the Praxis
+  runtime's own canonical decimals, then reverted the same day: an
+  encoder writes values as they were given, and a language that cannot
+  hold the scale natively wraps the value instead.
 - **Two release rounds** (A and B first, C later). Dropped: the interim
   release would have been replaced shortly anyway.
 - **A separate upgrade function beside the materializer.** Merged: one

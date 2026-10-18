@@ -218,8 +218,9 @@ defmodule Dextrin.Canonical do
     end
   end
 
-  # DXN.md §1.5: the coefficient with exactly `scale` fractional digits,
-  # a positive exponent written out with zeros, and an unsigned zero.
+  # DXN.md §1.5: as it was given -- the coefficient with exactly
+  # `scale` fractional digits and its sign, negative zero included; only
+  # a positive exponent, which text cannot write, is spelled out.
   defp decimal(%Decimal{coef: coef, exp: exp, sign: sign}) do
     digits = Integer.to_string(coef)
 
@@ -235,7 +236,7 @@ defmodule Dextrin.Canonical do
           whole <> "." <> fraction
       end
 
-    if sign == -1 and coef != 0, do: "-" <> body <> "M", else: body <> "M"
+    if sign == -1, do: "-" <> body <> "M", else: body <> "M"
   end
 
   # ---- text ---------------------------------------------------------------------

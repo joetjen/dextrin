@@ -180,7 +180,7 @@ canonical[30]{type,form}:
   boolean,"true | false"
   integer,"optional -, then decimal digits without leading zeros"
   float,"see the float rules below"
-  decimal,"coefficient with exactly scale fractional digits, then M; a positive exponent is written out with zeros; zero has no sign"
+  decimal,"as given: the coefficient with exactly scale fractional digits and its sign, negative zero included, then M; a positive exponent, which text cannot write, is written out with zeros"
   rational,"numerator/denominator as held, not reduced; the sign on the numerator, the denominator positive"
   string,"see the string rules below"
   char,"? then the character; ?s for space; \\ escape forms for \\, whitespace and control characters"
@@ -207,6 +207,11 @@ canonical[30]{type,form}:
   custom-tag,"@name value"
   extra fields,"in a keyed struct, entries in held order; in a positional struct, entries after the items, in canonical order of their keys (§4.8)"
 ```
+
+**Nothing is normalised.** A value is written as it was given: `1.50M`
+stays `1.50M` (and `[-2, 150]` in `.dxnb`), `2/4` stays `2/4`. A
+language whose own numbers normalise holds such a value in a type that
+does not.
 
 **Floats.** Take the shortest decimal digit string *d₁…dₖ* that reads
 back as exactly the same IEEE 754 double, and its exponent *n* such
@@ -248,8 +253,9 @@ The allowed types are those whose identity is exact and obvious in
 every language. Excluded, and why:
 
 - `float`, `decimal`, `rational`: `1` and `1.0`, `0.0` and `-0.0`,
-  `NaN`, `1.0M` and `1.00M`, `2/4` and `1/2` are answered differently
-  by different languages, and the BEAM has no `NaN` or infinities.
+  `NaN`, `1.0M` and `1.00M`, `2/4` and `1/2` are distinct DXN values
+  that some languages hold as one, and the BEAM has no `NaN` or
+  infinities.
 - `time`, `timestamp`, `datetime`, `duration`, `uri`: precision,
   offsets, `P1D` against `PT24H`, URI normalization.
 - `nil` and `boolean`: they collide with other keys in some languages
