@@ -197,6 +197,25 @@ defmodule Dextrin.Registry do
   end
 
   @doc """
+  `struct` as it is written here: carrying the latest loaded version of
+  its schema (DXN.md §4.8), whatever version it says itself. A struct
+  whose name has no schema keeps its own version, or none.
+
+  Every writer goes through this -- text, the formatter and binary -- so
+  encoding never writes a version other than the latest, and never
+  writes one no schema stands behind.
+  """
+  @spec as_written(t() | nil, Dextrin.Struct.t()) :: Dextrin.Struct.t()
+  def as_written(%__MODULE__{} = registry, %Dextrin.Struct{name: name} = struct) do
+    case fetch_struct_schema(registry, name) do
+      {:ok, %Compiled{version: version}, _registry} -> %{struct | version: version}
+      {:unknown, _registry} -> struct
+    end
+  end
+
+  def as_written(_no_registry, %Dextrin.Struct{} = struct), do: struct
+
+  @doc """
   Looks up version `version` of the schema `name` -- the one a struct
   written `%Name(3){...}` is read with. Unlike `fetch_struct_schema/2`, a
   miss does not fall back to another version: a struct is only ever read

@@ -40,8 +40,40 @@ defmodule Dextrin.Struct do
       Dextrin.Struct.head("P", 3)   #=> "%P(3)"
   """
   @spec head(String.t(), pos_integer() | nil) :: String.t()
-  def head(name, nil), do: "%" <> name
-  def head(name, version), do: "%" <> name <> "(" <> Integer.to_string(version) <> ")"
+  def head(name, version), do: "%" <> type_name(name, version)
+
+  @doc """
+  The struct's name as `.dxnb` writes it: `Name`, or `Name(3)` when it
+  carries a version (DXN.md §2.4, §4.8).
+
+      Dextrin.Struct.type_name("P", 3)     #=> "P(3)"
+      Dextrin.Struct.type_name("P", nil)   #=> "P"
+  """
+  @spec type_name(String.t(), pos_integer() | nil) :: String.t()
+  def type_name(name, nil), do: name
+  def type_name(name, version), do: name <> "(" <> Integer.to_string(version) <> ")"
+
+  @doc """
+  The other direction: a `.dxnb` type name read back into its name and
+  version. A version that is not a positive integer is `:error`.
+
+      Dextrin.Struct.parse_type_name("P(3)")   #=> {:ok, "P", 3}
+      Dextrin.Struct.parse_type_name("P")      #=> {:ok, "P", nil}
+      Dextrin.Struct.parse_type_name("P(0)")   #=> :error
+  """
+  @spec parse_type_name(String.t()) :: {:ok, String.t(), pos_integer() | nil} | :error
+  def parse_type_name(text) when is_binary(text) do
+    case Regex.run(~r/\A(.+)\((-?[0-9]+)\)\z/s, text, capture: :all_but_first) do
+      nil ->
+        if String.contains?(text, ["(", ")"]), do: :error, else: {:ok, text, nil}
+
+      [name, digits] ->
+        case String.to_integer(digits) do
+          version when version > 0 -> {:ok, name, version}
+          _ -> :error
+        end
+    end
+  end
 
   @doc "A struct written by position, at `version` when one is given."
   @spec positional(String.t(), [term()], pos_integer() | nil) :: t()

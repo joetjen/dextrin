@@ -32,7 +32,7 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
     assert message =~ "Bar"
 
     good = Dextrin.Struct.keyed("Bar", [{"baz", 1}])
-    assert {:ok, "%Bar{baz:1}"} = Dextrin.encode(good, registry: registry)
+    assert {:ok, "%Bar(1){baz:1}"} = Dextrin.encode(good, registry: registry)
   end
 
   test "a named struct nested inside an untyped (:any) field is still caught", %{
@@ -83,7 +83,7 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
     registry: registry
   } do
     bad = Dextrin.Struct.keyed("Bar", [{"baz", true}])
-    assert {:ok, "%Bar{baz:true}"} = Dextrin.encode(bad, registry: registry, validate: false)
+    assert {:ok, "%Bar(1){baz:true}"} = Dextrin.encode(bad, registry: registry, validate: false)
     assert {:ok, _bin} = Dextrin.encode_binary(bad, registry: registry, validate: false)
   end
 

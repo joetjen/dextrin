@@ -41,6 +41,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A struct literal may carry its version**: `%User(3){...}`,
   `%User(3)[...]`, kept in `Dextrin.Struct`'s new `version` field and
   written back by the printer, the formatter and the canonical form.
+- **Every struct written against a schema carries the latest loaded
+  version of it**, in text (`%User(3){...}`, and `%User(1){...}` when
+  version 1 is the only one) and in `.dxnb`, where the type name becomes
+  `"User(3)"`. A struct with no schema keeps its own version, or none.
+  `Dextrin.Registry.as_written/2` decides; `Dextrin.Struct.type_name/2`
+  and `parse_type_name/1` spell it. A `.dxnb` type name whose version is
+  not a positive integer is a `binary` error. `DXN.md` §4.8 documents
+  how to deploy a schema change.
 - **Removed: `closed:`, `forbidden:` and `refine-fn:`**, and with them
   `Dextrin.Schema.compile/3`'s and `Dextrin.Schema.FileResolver.for_paths/2`'s
   `predicates` argument. A struct may carry fields its schema does not
@@ -57,6 +65,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `DXN.md` §1.5 states that nothing is normalised: a value is written
   as it was given, so `1.50M` keeps its scale and `-0.0M` its sign, in
   the canonical form as in every encoder.
+
+### Fixed
+
+- A keyed struct written to `.dxnb` went on the wire in the order of
+  its keys rather than its schema's field order, so `%Point{y: 2, x: 1}`
+  came back with its fields swapped.
 
 ## [0.1.3] - 2026-08-18
 

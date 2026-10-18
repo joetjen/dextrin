@@ -176,7 +176,7 @@ defmodule Dextrin.Text.FormatterTest do
       registry = Dextrin.Registry.put_struct_module(registry, "Thing", NestedStruct)
 
       assert Formatter.pretty([%NestedStruct{a: 1}], registry: registry) ==
-               {:ok, "[\n  %Thing{\n    a: 1\n  }\n]"}
+               {:ok, "[\n  %Thing(1){\n    a: 1\n  }\n]"}
     end
   end
 end

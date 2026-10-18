@@ -311,7 +311,7 @@ cbor_map[29]{type,cbor_major_or_tag,payload,integrity_note}:
   ordered-map,"tag T_ORDERED","major5 pairs","order preserved by tag presence, not byte sequence"
   set,"tag T_SET","major4 items",""
   sorted-set,"tag T_SORTED_SET","major4 items, sorted order",""
-  struct,"tag T_STRUCT","[type-name-or-ref, field...]","positional only, §2.1"
+  struct,"tag T_STRUCT","[type-name-or-ref, field...]","positional only, §2.1; the type name carries the version, `User(3)` (§4.8)"
   array,"tag T_ARRAY","major4 items",""
   date,"tag T_DATE","integer days since 1970-01-01","Unix epoch, day granularity"
   time,"tag T_TIME","integer microseconds since midnight",""
@@ -615,7 +615,35 @@ three documents.
   that is not loaded is an error (`schema/not-loaded`), so a typo never
   quietly adds one.
 - **A struct literal may carry the version it was written with**:
-  `%User(3){...}`, `%User(3)[...]`.
+  `%User(3){...}`, `%User(3)[...]`. In `.dxnb` the version is part of
+  the struct's type name, `"User(3)"` (§2.2), shared after its first
+  occurrence like any type name (§2.4). A version that is not a
+  positive integer is an error (`syntax`, or `binary` in `.dxnb`).
+
+**Every struct an encoder writes against a schema carries the latest
+loaded version of that schema** — `%User(3){...}`, and `%User(1){...}`
+when version 1 is the only one, so a reader never has to guess. There
+is no way to write an older version: whatever version a value says
+itself, it is checked against the latest and written as the latest. A
+struct whose name has no schema keeps the version it has, or none.
+
+**A struct without a version** — `%User{...}`, which mostly means text
+written by hand — **is read as the latest loaded version.** There is no
+way to read it as another; a document written for an older version
+says so with its tag, `%Config(2){...}`.
+
+**A struct reference names no version.** A field typed `User` accepts
+any version of `User`; the nested struct's own tag decides how it is
+read. `User(2)` is not a type expression.
+
+**Deploying a change.** A *compatible* change — fields appended at the
+end, and nothing else — deploys in either order: a newer producer is
+read by an older reader, which matches what it knows and ignores the
+rest, and an older producer is read by a newer reader through the
+materializer. A *breaking* change deploys **readers first**, then
+producers. A schema that services both read and write is changed only
+compatibly, or replaced by a new name (`UserV2`) beside the old one,
+migrating one service at a time.
 
 ---
 

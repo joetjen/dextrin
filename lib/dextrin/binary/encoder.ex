@@ -264,19 +264,18 @@ defmodule Dextrin.Binary.Encoder do
          do: {:ok, tag(Tags.t_sorted_set(), array_of(encoded))}
   end
 
-  # ---- struct (opaque only, for now — schema-driven encoding lands with Dextrin.Schema) ----
+  # ---- struct ---------------------------------------------------------------
+  #
+  # Written with the version `Registry.as_written/2` says -- the latest
+  # loaded version of its schema, or its own -- as part of the type
+  # name (DXN.md §2.4, §4.8).
 
-  defp encode_item_dispatch(%Struct{name: name, fields: {:positional, items}}, opts) do
-    encode_struct(name, items, opts)
+  defp encode_item_dispatch(%Struct{fields: {:positional, items}} = struct, opts) do
+    encode_struct(type_name(struct, opts), items, opts)
   end
 
-  defp encode_item_dispatch(%Struct{name: name, fields: {:keyed, pairs}}, opts) do
-    # No schema registered for `name` — falls back to the keyed pairs'
-    # own iteration order. A real, unavoidable limitation: an opaque
-    # struct with no schema can't be encoded to .dxnb losslessly
-    # regardless, since the positional wire form has no field names to
-    # consult in the first place (see `Dextrin.Struct`'s own moduledoc).
-    encode_struct(name, Enum.map(pairs, fn {_k, v} -> v end), opts)
+  defp encode_item_dispatch(%Struct{name: name, fields: {:keyed, pairs}} = struct, opts) do
+    encode_struct(type_name(struct, opts), positional_values(name, pairs, opts), opts)
   end
 
   # ---- temporal ---------------------------------------------------------------
@@ -393,6 +392,27 @@ defmodule Dextrin.Binary.Encoder do
       _ ->
         {:error,
          Dextrin.Error.binary("cannot encode value with no DXN representation: #{inspect(other)}")}
+    end
+  end
+
+  defp type_name(%Struct{name: name} = struct, opts) do
+    Struct.type_name(
+      name,
+      Dextrin.Registry.as_written(Keyword.get(opts, :registry), struct).version
+    )
+  end
+
+  # A keyed struct goes on the wire by position, so its values are put in
+  # its schema's field order. With no schema there is no order to consult
+  # -- the positional form carries no names -- and the pairs' own order
+  # is all there is (see `Dextrin.Struct`'s own moduledoc).
+  defp positional_values(name, pairs, opts) do
+    with %Dextrin.Registry{} = registry <- Keyword.get(opts, :registry),
+         {:ok, compiled, _registry} <- Dextrin.Registry.fetch_struct_schema(registry, name) do
+      named = Map.new(pairs)
+      Enum.map(Compiled.field_names(compiled), &Map.get(named, &1))
+    else
+      _ -> Enum.map(pairs, fn {_k, v} -> v end)
     end
   end
 

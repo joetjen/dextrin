@@ -246,8 +246,15 @@ hand-build a `Dextrin.Struct` first:
 
 ```elixir
 Dextrin.encode(%MyApp.Point{x: 1, y: 2}, registry: registry)
-#=> {:ok, "%Point{x:1,y:2}"}
+#=> {:ok, "%Point(1){x:1,y:2}"}
 ```
+
+The `(1)` is the schema's version. A schema with no header is version
+1; `%schema(2){...}` is version 2, and a registry can hold several
+versions of `Point` side by side. Encoding always writes the latest
+one loaded, so the reader knows exactly which shape it is looking at;
+a struct written without one, `%Point{...}`, is read as the latest.
+See DXN.md §4.8 for how to deploy a schema change.
 
 ## 8. Named types and the standard library
 
@@ -313,7 +320,7 @@ in one call, wherever it's already building its registry:
 Dextrin.decode("%Point{x: 1, y: 2}", registry: registry)
 #=> {:ok, %MyLib.Point{x: 1, y: 2}}
 Dextrin.encode(%MyLib.Point{x: 1, y: 2}, registry: registry)
-#=> {:ok, "%Point{x:1,y:2}"}
+#=> {:ok, "%Point(1){x:1,y:2}"}
 ```
 
 `dxn_materialize/1` is optional — without it, decoding falls back to

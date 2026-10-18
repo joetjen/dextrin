@@ -125,7 +125,7 @@ defmodule Dextrin.Schema.Provider do
       #=> {:ok, %SomeLib.Money{amount: Decimal.new("19.99"), currency: :usd}}
 
       Dextrin.encode(%SomeLib.Money{amount: Decimal.new("19.99"), currency: :usd}, registry: registry)
-      #=> {:ok, "%Money{amount: 19.99M, currency: :usd}"}
+      #=> {:ok, "%Money(1){amount:19.99M,currency::usd}"}
 
   An application depending on `some_lib` alone never compiles
   `SomeLib.Money.DXN` at all, and never touches `dextrin`.

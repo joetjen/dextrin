@@ -253,7 +253,7 @@ defmodule Dextrin.Text.PrinterTest do
       {:ok, registry} = Dextrin.Schema.compile(doc)
       registry = Dextrin.Registry.put_struct_module(registry, "Plain", PlainStruct)
 
-      assert Printer.print(%PlainStruct{a: 1}, registry: registry) == {:ok, "%Plain{a:1}"}
+      assert Printer.print(%PlainStruct{a: 1}, registry: registry) == {:ok, "%Plain(1){a:1}"}
     end
   end
 end

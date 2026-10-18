@@ -481,7 +481,25 @@ defmodule Dextrin.Binary.Decoder do
   defp build_sorted_set(_),
     do: {:error, Dextrin.Error.binary("malformed sorted-set (tag 207) payload")}
 
-  defp build_struct([name | fields], opts) when is_binary(name) do
+  # The type name carries the version the struct was written with,
+  # `"User(3)"` (DXN.md §2.4, §4.8).
+  defp build_struct([type_name | fields], opts) when is_binary(type_name) do
+    case Struct.parse_type_name(type_name) do
+      {:ok, name, version} ->
+        build_named_struct(name, version, fields, opts)
+
+      :error ->
+        {:error,
+         Dextrin.Error.binary(
+           "struct type name #{inspect(type_name)} has a version that is not a positive integer"
+         )}
+    end
+  end
+
+  defp build_struct(_, _opts),
+    do: {:error, Dextrin.Error.binary("malformed struct (tag #{Tags.t_struct()}) payload")}
+
+  defp build_named_struct(name, version, fields, opts) do
     case Keyword.get(opts, :registry) do
       %Registry{} = registry ->
         case Registry.fetch_struct_schema(registry, name) do
@@ -510,16 +528,13 @@ defmodule Dextrin.Binary.Decoder do
             end
 
           {:unknown, _registry} ->
-            {:ok, Struct.positional(name, fields)}
+            {:ok, Struct.positional(name, fields, version)}
         end
 
       _ ->
-        {:ok, Struct.positional(name, fields)}
+        {:ok, Struct.positional(name, fields, version)}
     end
   end
-
-  defp build_struct(_, _opts),
-    do: {:error, Dextrin.Error.binary("malformed struct (tag #{Tags.t_struct()}) payload")}
 
   defp build_time(total_micro) when is_integer(total_micro) and total_micro >= 0 do
     {microsecond, rem1} = {rem(total_micro, 1_000_000), div(total_micro, 1_000_000)}

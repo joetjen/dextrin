@@ -184,7 +184,7 @@ Dextrin.decode(~s(%LatLng{lat: 51.05, lng: 13.74}), registry: registry)
 #=> {:ok, %Geo.LatLng{lat: 51.05, lng: 13.74}}
 
 Dextrin.encode(%Geo.LatLng{lat: 51.05, lng: 13.74}, registry: registry)
-#=> {:ok, "%LatLng{lat:51.05,lng:13.74}"}
+#=> {:ok, "%LatLng(1){lat:51.05,lng:13.74}"}
 
 # Degrees' own refine constraint is enforced automatically, same as
 # any other schema -- no special handling needed on either side:

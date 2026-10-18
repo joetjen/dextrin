@@ -115,16 +115,19 @@ defmodule Dextrin.Text.Printer do
          do: {:ok, "%{" <> entries <> "}"}
   end
 
-  def print(%Struct{name: name, version: version, fields: {:keyed, pairs}}, opts) do
+  def print(%Struct{name: name, fields: {:keyed, pairs}} = struct, opts) do
     keyed = Enum.map(pairs, fn {k, v} -> {Dextrin.Keyword.new(k), v} end)
 
     with {:ok, entries} <- print_entries(keyed, opts),
-         do: {:ok, Struct.head(name, version) <> "{" <> entries <> "}"}
+         do: {:ok, Struct.head(name, written_version(struct, opts)) <> "{" <> entries <> "}"}
   end
 
-  def print(%Struct{name: name, version: version, fields: {:positional, items}}, opts) do
+  def print(%Struct{name: name, fields: {:positional, items}} = struct, opts) do
     with {:ok, printed} <- print_all(items, opts),
-         do: {:ok, Struct.head(name, version) <> "[" <> Enum.join(printed, ",") <> "]"}
+         do:
+           {:ok,
+            Struct.head(name, written_version(struct, opts)) <>
+              "[" <> Enum.join(printed, ",") <> "]"}
   end
 
   def print(%Date{} = date, _opts), do: {:ok, "~D[" <> Date.to_iso8601(date) <> "]"}
@@ -366,4 +369,11 @@ defmodule Dextrin.Text.Printer do
         %{acc | second: div(micro, 1_000_000), microsecond: {rem(micro, 1_000_000), 6}}
     end)
   end
+
+  # The version a struct is written with: the latest loaded version of
+  # its schema, or its own when there is no schema (DXN.md §4.8).
+  @doc false
+  @spec written_version(Struct.t(), keyword()) :: pos_integer() | nil
+  def written_version(struct, opts),
+    do: Registry.as_written(Keyword.get(opts, :registry), struct).version
 end
