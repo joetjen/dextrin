@@ -237,6 +237,7 @@ defmodule Dextrin.Text.Actions do
 
   def handle_rule(:map_entry, %{arrow_key: key_cap, arrow_val: val_cap}, ctx) do
     with {:ok, key, ctx} <- key_cap.eval.(ctx),
+         :ok <- allowed_key(key, key_cap),
          {:ok, val, ctx} <- val_cap.eval.(ctx) do
       {:ok, {key, val}, ctx}
     end
@@ -609,6 +610,26 @@ defmodule Dextrin.Text.Actions do
   end
 
   defp pad2(n), do: n |> Integer.to_string() |> String.pad_leading(2, "0")
+
+  # DXN.md §1.6: an arrow entry's key must be one of the eight allowed
+  # types. A float key written as `NaN` or `Infinity` decodes to the
+  # same atom a keyword of that name does, so it is refused by the token
+  # it was written as -- the one thing the value cannot say.
+  defp allowed_key(key, key_cap) do
+    if key in [:nan, :positive_infinity, :negative_infinity] and float_token?(key_cap.node) do
+      {:error, Dextrin.MapKey.refusal(key)}
+    else
+      Dextrin.MapKey.check(key)
+    end
+  end
+
+  defp float_token?({:token, :FLOAT, _text}), do: true
+  defp float_token?({:rule, _name, captures}), do: Enum.any?(captures, &captured_float?/1)
+  defp float_token?(_node), do: false
+
+  defp captured_float?({_name, node}) when is_tuple(node), do: float_token?(node)
+  defp captured_float?({_name, nodes}) when is_list(nodes), do: Enum.any?(nodes, &float_token?/1)
+  defp captured_float?(_other), do: false
 
   defp action_error(message), do: Ichor.Error.new(message: message, stage: :action)
 end

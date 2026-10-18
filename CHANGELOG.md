@@ -27,8 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `DXN.md` gains §1.5 (canonical form), §1.6 (map keys: only `string`,
   `keyword`, `integer`, `uuid`, `date`, `bytes`, `symbol` and `char`)
-  and §5 (error categories). The map-key rule is specified but not yet
-  enforced.
+  and §5 (error categories).
+- **A map key must be one of the eight types of `DXN.md` §1.6**
+  (`string`, `keyword`, `integer`, `uuid`, `date`, `bytes`, `symbol`,
+  `char`). Any other key -- a float, `nil`, a boolean, a time, a
+  collection, ... -- is refused as `key/not-allowed` when decoding text
+  or binary and when encoding, in maps and ordered maps alike.
+  `Dextrin.MapKey` holds the rule.
 - `DXN.md` §1.5 states that nothing is normalised: a value is written
   as it was given, so `1.50M` keeps its scale and `-0.0M` its sign, in
   the canonical form as in every encoder.

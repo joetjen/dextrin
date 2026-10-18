@@ -639,9 +639,26 @@ defmodule Dextrin.Binary.Decoder do
 
   # ---- shared helpers ---------------------------------------------------------
 
-  defp decode_map_pairs(pair_count, bin, opts) do
-    with {:ok, items, rest} <- decode_n_items(bin, pair_count * 2, opts) do
-      {:ok, pairs_from_flat(items), rest}
+  # DXN.md §1.6: every key must be one of the eight allowed types. A key
+  # whose first byte is major type 7 -- a float, `nil`, `true`, `false` --
+  # is refused before it is decoded, because a NaN or an infinity decodes
+  # to the same atom a keyword does and its value could not say which it
+  # was; every other key is judged by its value.
+  defp decode_map_pairs(pair_count, bin, opts), do: decode_map_pairs(pair_count, bin, opts, [])
+
+  defp decode_map_pairs(0, bin, _opts, acc), do: {:ok, Enum.reverse(acc), bin}
+
+  defp decode_map_pairs(_n, <<7::3, _::5, _::binary>> = bin, opts, _acc) do
+    with {:ok, key, _rest} <- decode_item(bin, opts) do
+      {:error, Dextrin.MapKey.refusal(key)}
+    end
+  end
+
+  defp decode_map_pairs(n, bin, opts, acc) do
+    with {:ok, key, rest} <- decode_item(bin, opts),
+         :ok <- Dextrin.MapKey.check(key),
+         {:ok, value, rest2} <- decode_item(rest, opts) do
+      decode_map_pairs(n - 1, rest2, opts, [{key, value} | acc])
     end
   end
 
@@ -653,12 +670,6 @@ defmodule Dextrin.Binary.Decoder do
     with {:ok, value, rest} <- decode_item(bin, opts) do
       decode_n_items(rest, n - 1, opts, [value | acc])
     end
-  end
-
-  defp pairs_from_flat(items) do
-    items
-    |> Enum.chunk_every(2)
-    |> Enum.map(fn [k, v] -> {k, v} end)
   end
 
   defp decode_float(bits) do

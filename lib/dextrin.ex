@@ -76,6 +76,12 @@ defmodule Dextrin do
       {:error, %Ichor.Error{} = error} ->
         {:error, Dextrin.Error.from_ichor(error)}
 
+      # An action that refused with its own category -- a map key that
+      # is not allowed -- answers a `Dextrin.Error` already, and Ichor
+      # passes it through unchanged.
+      {:error, %Dextrin.Error{} = error} ->
+        {:error, error}
+
       {:error, errors} when is_list(errors) ->
         {:error, Enum.map(errors, &Dextrin.Error.from_ichor/1)}
     end

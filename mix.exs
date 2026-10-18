@@ -17,7 +17,7 @@ defmodule Dextrin.MixProject do
       docs: docs(),
       aliases: aliases(),
       test_coverage: [tool: ExCoveralls],
-      dialyzer: [plt_add_apps: [:mix]]
+      dialyzer: [plt_add_apps: [:mix], ignore_warnings: ".dialyzer_ignore.exs"]
     ]
   end
 

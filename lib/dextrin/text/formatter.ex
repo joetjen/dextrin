@@ -72,13 +72,15 @@ defmodule Dextrin.Text.Formatter do
   defp render(%OrderedMap{pairs: []}, _depth, _opts), do: {:ok, "@ordered %{}"}
 
   defp render(%OrderedMap{pairs: pairs}, depth, opts) do
-    with {:ok, body} <- render_entries("%{", pairs, "}", depth, opts) do
+    with :ok <- Dextrin.MapKey.check_pairs(pairs),
+         {:ok, body} <- render_entries("%{", pairs, "}", depth, opts) do
       {:ok, "@ordered " <> body}
     end
   end
 
   defp render(%{} = map, depth, opts) when not is_struct(map) and map_size(map) > 0 do
-    render_entries("%{", Map.to_list(map), "}", depth, opts)
+    with :ok <- Dextrin.MapKey.check_pairs(Map.to_list(map)),
+         do: render_entries("%{", Map.to_list(map), "}", depth, opts)
   end
 
   defp render(%Struct{name: name, fields: {:keyed, pairs}}, depth, opts) when pairs != [] do

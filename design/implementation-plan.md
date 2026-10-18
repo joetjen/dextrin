@@ -335,10 +335,13 @@ encoding, with its own category.
   turns a `1.5` key into `1`, `true` into `1` and `nil` into `:""`
   (confirmed 2026-10-17); with these types no longer allowed, that
   loss becomes impossible.
-- **Elixir: keywords from untrusted input stop becoming atoms.** Today
-  every decoded keyword is an atom, so a hostile document can exhaust
-  the atom table. The Praxis port already returns a record for
-  untrusted input; Elixir does the same.
+- *(Dropped: "Elixir stops making atoms from untrusted keywords." It
+  already does not: `trusted: false` decodes a keyword as a
+  `Dextrin.Keyword` struct, as the Praxis port does.)*
+- **A float key written `NaN` or `Infinity`** decodes, in Elixir and on
+  the BEAM generally, to the same atom as the keyword of that name, so
+  readers refuse a float key by what it was written as: the text
+  decoder by its token, the binary decoder by its CBOR major type 7.
 - **Conformance cases:** each allowed type as a key; each disallowed
   type rejected; duplicates of each merged; and the pairs that must stay
   distinct, `1` vs `"1"` and `:x` vs `"x"`.
@@ -374,6 +377,13 @@ Fixed in phase B, each caught first by a conformance case:
   with no category (answered as `uncategorised`, which no case
   expects). Settle how a category survives Ichor when the schema
   reporting is reworked here.
+  - **Decided while building B7:** an action may return a
+    `Dextrin.Error`, which Ichor passes through unchanged and
+    `Dextrin.decode/2` hands on. The generated parser's typespec admits
+    only `Ichor.Error`, so one targeted dialyzer ignore stands in
+    (`.dialyzer_ignore.exs`). **Phase C replaces it** with an optional
+    data field on `Ichor.Error`, released in `ichor_runtime` before
+    Dextrin, and the ignore entry is deleted.
 
 ### B9a. Nothing is normalised
 

@@ -104,12 +104,14 @@ defmodule Dextrin.Text.Printer do
   end
 
   def print(%OrderedMap{pairs: pairs}, opts) do
-    with {:ok, entries} <- print_entries(pairs, opts),
+    with :ok <- Dextrin.MapKey.check_pairs(pairs),
+         {:ok, entries} <- print_entries(pairs, opts),
          do: {:ok, tag_form("ordered", "%{" <> entries <> "}")}
   end
 
   def print(%{} = map, opts) when not is_struct(map) do
-    with {:ok, entries} <- print_entries(Map.to_list(map), opts),
+    with :ok <- Dextrin.MapKey.check_pairs(Map.to_list(map)),
+         {:ok, entries} <- print_entries(Map.to_list(map), opts),
          do: {:ok, "%{" <> entries <> "}"}
   end
 

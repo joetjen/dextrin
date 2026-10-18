@@ -416,7 +416,12 @@ defmodule Dextrin.Binary.Encoder do
     end
   end
 
+  # DXN.md §1.6: a map's keys are checked before anything is written.
   defp encode_pairs(pairs, opts) do
+    with :ok <- Dextrin.MapKey.check_pairs(pairs), do: encode_checked_pairs(pairs, opts)
+  end
+
+  defp encode_checked_pairs(pairs, opts) do
     Result.reduce_ok(pairs, [], fn {k, v}, acc ->
       with {:ok, key_item} <- encode_item(k, opts),
            {:ok, val_item} <- encode_item(v, opts) do
