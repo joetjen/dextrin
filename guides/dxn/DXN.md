@@ -82,7 +82,8 @@ map_entry    = ( identifier , ":" , value )          (* shorthand — plain-atom
 
 struct_lit   = "%" , identifier , [ "(" , integer , ")" ] ,   (* version, §4.8 *)
                  ( ( "{" , { map_entry } , "}" )      (* keyed *)
-                 | ( "[" , { value } , "]" ) ) ;       (* positional *)
+                 | ( "[" , { item } , { map_entry } , "]" ) ) ;   (* positional, then extra fields *)
+item         = value ;                                (* a value not followed by "=>" (§4.7) *)
 
 sigil        = date_sigil | time_sigil | instant_sigil | regex_sigil ;
 date_sigil   = "~D[" , iso_date , "]" ;
@@ -205,7 +206,7 @@ canonical[30]{type,form}:
   bytes,"@bytes ""..."" in standard base64 with padding"
   regex,"~r/pattern/flags with the flags in canonical order"
   custom-tag,"@name value"
-  extra fields,"in a keyed struct, entries in held order; in a positional struct, entries after the items, in canonical order of their keys (§4.8)"
+  extra fields,"in a keyed struct, entries after the declared fields in held order; in a positional struct, entries after the items, in canonical order of their keys (§4.7)"
 ```
 
 **Nothing is normalised.** A value is written as it was given: `1.50M`
@@ -239,7 +240,7 @@ zeros, everything else literally; then `"`.
 
 ### 1.6 Map keys
 
-A map key, and the key of a struct's extra field (§4.8), MUST be one of
+A map key, and the key of a struct's extra field (§4.7), MUST be one of
 `string`, `keyword`, `integer`, `uuid`, `date`, `bytes`, `symbol`,
 `char`. Any other key is an error (`key/not-allowed`, §5), in text, in
 binary and when encoding.
@@ -311,7 +312,7 @@ cbor_map[29]{type,cbor_major_or_tag,payload,integrity_note}:
   ordered-map,"tag T_ORDERED","major5 pairs","order preserved by tag presence, not byte sequence"
   set,"tag T_SET","major4 items",""
   sorted-set,"tag T_SORTED_SET","major4 items, sorted order",""
-  struct,"tag T_STRUCT","[type-name-or-ref, field...]","positional only, §2.1; the type name carries the version, `User(3)` (§4.8)"
+  struct,"tag T_STRUCT","[type-name-or-ref, field..., extras?]","positional only, §2.1; the type name carries the version, `User(3)` (§4.8); extra fields, when there are any, as one trailing `T_EXTRA` map (§4.7)"
   array,"tag T_ARRAY","major4 items",""
   date,"tag T_DATE","integer days since 1970-01-01","Unix epoch, day granularity"
   time,"tag T_TIME","integer microseconds since midnight",""
@@ -345,10 +346,11 @@ private_tags[15]{name,number,wraps}:
   T_DURATION,212,"bitmask byte + fields"
   T_REGEX,213,"array: [pattern, flags-byte]"
   T_CUSTOM,214,"array: [tag-ref, value]"
+  T_EXTRA,215,"map: {key: value, ...} — a struct's extra fields, only ever its last item (§4.7)"
 ```
 
 Allocated from CBOR's one-extra-byte tag range (24–255), placed at
-200–214 specifically to stay clear of the actively-managed low range
+200–215 specifically to stay clear of the actively-managed low range
 (0–40 has multiple assignments and gaps IANA could fill later). Not
 IANA-registered — collision-free only within `dextrin`-produced documents;
 register formally before any non-`dextrin` interop is expected.
@@ -589,9 +591,34 @@ struct:
 - every present field's value matches its declared `type_expr`
   (§4.1/§4.2).
 
-A struct carries fields beyond those its schema declares without being
-an error: code relying on a struct is guaranteed only the declared
-fields.
+**A struct guarantees its declared fields and may carry more.** Code
+relying on a struct is guaranteed only the declared fields; the rest are
+its **extra fields**, which a reader keeps rather than drops:
+
+- **In text** they are ordinary entries. A keyed struct's entries that
+  its schema does not declare are extras, and so is any entry whose key
+  is not a name (a keyword, symbol or string). A positional struct
+  carries them as entries after its items,
+  `%User(3)["a" "a@x" nickname: "b", 3 => :x]`: all items come first,
+  an item is a value not followed by `=>`, and an item after an entry is
+  a syntax error.
+- **In `.dxnb`** they travel as one trailing item, a map from key to
+  value under tag `T_EXTRA` (215): `["User(3)", "a", "a@x",
+  215({"nickname": "b"})]`. Tag 215 appears nowhere else.
+- **An extra field never shadows a declared one.** A name given both as
+  a declared field and as an extra — `%User(3){name: "a", "name" =>
+  "b"}`, or a positional field and a tag-215 entry of the same name — is
+  an error (`schema/shadowed-field`).
+- **An extra field's key follows the map-key rule** (§1.6).
+- **A strict decode** — an option a reader MUST offer — refuses any
+  extra field on a struct whose schema is known
+  (`schema/undeclared-field`). A config loader reads strictly, to catch
+  a typo in a hand-written file; a message consumer does not, so a
+  newer producer's fields pass through it.
+
+A struct with no schema keeps a keyed struct's named entries as its
+fields, and its other entries — those keyed by something other than a
+name, and a positional struct's trailing entries — as extras.
 
 A violation MUST be reported as an error, distinctly from a value that
 simply fails to parse at all — but *how* it's reported (exception,

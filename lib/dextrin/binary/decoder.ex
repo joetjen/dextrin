@@ -150,6 +150,9 @@ defmodule Dextrin.Binary.Decoder do
             err
         end
 
+      tag_number == Tags.t_struct() ->
+        decode_struct(rest, opts)
+
       tag_number == Tags.t_shareable() ->
         decode_shareable(rest, opts)
 
@@ -360,9 +363,6 @@ defmodule Dextrin.Binary.Decoder do
       tag == Tags.t_sorted_set() ->
         build_sorted_set(value)
 
-      tag == Tags.t_struct() ->
-        build_struct(value, opts)
-
       tag == Tags.t_date() ->
         build_date(value)
 
@@ -483,10 +483,70 @@ defmodule Dextrin.Binary.Decoder do
 
   # The type name carries the version the struct was written with,
   # `"User(3)"` (DXN.md §2.4, §4.8).
-  defp build_struct([type_name | fields], opts) when is_binary(type_name) do
+  # A struct's payload is an array, `[type-name, field..., extras?]`, read
+  # item by item so the last item may be its extra fields: a tag-215 map
+  # (DXN.md §2.3), legal nowhere else -- anywhere else it is an
+  # unrecognized tag. Read in order, so the extras keep the order they
+  # were written in.
+  defp decode_struct(rest, opts) do
+    case read_head(rest) do
+      {:ok, 4, count, rest2} when count >= 1 ->
+        with {:ok, items, rest3} <- decode_n_items(rest2, count - 1, opts),
+             {:ok, last, rest4} <- decode_last_struct_item(rest3, count, opts) do
+          {fields, extra} = split_extra(items ++ last)
+
+          case build_struct(fields, extra, opts) do
+            {:ok, value} -> {:ok, value, rest4}
+            {:error, _} = err -> err
+          end
+        end
+
+      {:ok, _major, _arg, _rest} ->
+        {:error, Dextrin.Error.binary("malformed struct (tag #{Tags.t_struct()}) payload")}
+
+      {:error, _} = err ->
+        err
+    end
+  end
+
+  # The last item of a one-item array is the type name itself; past the
+  # type name, the last item is either an ordinary field or the extras.
+  defp decode_last_struct_item(bin, 1, opts) do
+    with {:ok, item, rest} <- decode_item(bin, opts), do: {:ok, [item], rest}
+  end
+
+  defp decode_last_struct_item(bin, _count, opts) do
+    case read_head(bin) do
+      {:ok, 6, 215, rest} ->
+        case read_head(rest) do
+          {:ok, 5, pair_count, rest2} ->
+            with {:ok, pairs, rest3} <- decode_map_pairs(pair_count, rest2, opts) do
+              {:ok,
+               [{:"$dextrin_extra", Enum.map(pairs, fn {k, v} -> {Struct.extra_key(k), v} end)}],
+               rest3}
+            end
+
+          _ ->
+            {:error,
+             Dextrin.Error.binary("extra fields (tag #{Tags.t_extra()}) require a map payload")}
+        end
+
+      _ ->
+        with {:ok, item, rest} <- decode_item(bin, opts), do: {:ok, [item], rest}
+    end
+  end
+
+  defp split_extra(items) do
+    case List.last(items) do
+      {:"$dextrin_extra", extra} -> {Enum.drop(items, -1), extra}
+      _ -> {items, []}
+    end
+  end
+
+  defp build_struct([type_name | fields], extra, opts) when is_binary(type_name) do
     case Struct.parse_type_name(type_name) do
       {:ok, name, version} ->
-        build_named_struct(name, version, fields, opts)
+        build_named_struct(name, version, fields, extra, opts)
 
       :error ->
         {:error,
@@ -496,22 +556,22 @@ defmodule Dextrin.Binary.Decoder do
     end
   end
 
-  defp build_struct(_, _opts),
+  defp build_struct(_, _extra, _opts),
     do: {:error, Dextrin.Error.binary("malformed struct (tag #{Tags.t_struct()}) payload")}
 
-  defp build_named_struct(name, version, fields, opts) do
+  defp build_named_struct(name, version, fields, extra, opts) do
     case Keyword.get(opts, :registry) do
       %Registry{} = registry ->
         # Same fail-fast, decode-time enforcement as the text pipeline,
         # through the same Dextrin.Schema.Reader — .dxnb structs are
         # always positional (`DXN.md` §2.1), so this is the only shape
         # possible here.
-        case Dextrin.Schema.Reader.read(registry, name, version, {:positional, fields}) do
+        case Dextrin.Schema.Reader.read(registry, name, version, {:positional, fields}, extra) do
           {:ok, materialized, _registry} ->
             {:ok, materialized}
 
           {:unknown, _registry} ->
-            {:ok, Struct.positional(name, fields, version)}
+            {:ok, Struct.positional(name, fields, version, extra)}
 
           {:error, %Dextrin.Error{}} = error ->
             error
@@ -522,7 +582,7 @@ defmodule Dextrin.Binary.Decoder do
         end
 
       _ ->
-        {:ok, Struct.positional(name, fields, version)}
+        {:ok, Struct.positional(name, fields, version, extra)}
     end
   end
 

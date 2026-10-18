@@ -142,12 +142,26 @@ defmodule Dextrin.Schema.Validator do
   end
 
   defp check_compiled(compiled, value, registry) do
-    with {:ok, given} <- to_name_map_for_encode(compiled, value),
+    with :ok <- unshadowed(compiled, value),
+         {:ok, given} <- to_name_map_for_encode(compiled, value),
          {:ok, given} <- wrap_given(given, registry),
          {:ok, _resolved} <- resolve_fields(compiled, given, registry) do
       :ok
     end
   end
+
+  # An extra field never shadows a declared one (DXN.md §4.7), on the way
+  # out as on the way in.
+  defp unshadowed(%Compiled{} = compiled, %Struct{extra: [_ | _] = extra}) do
+    declared = MapSet.new(Compiled.field_names(compiled))
+
+    case Enum.find(extra, fn {key, _} -> MapSet.member?(declared, key) end) do
+      nil -> :ok
+      {key, _} -> {:error, "extra field #{inspect(key)} shadows a declared field"}
+    end
+  end
+
+  defp unshadowed(_compiled, _value), do: :ok
 
   defp to_name_map_for_encode(_compiled, %Struct{fields: {:keyed, pairs}}),
     do: {:ok, Map.new(pairs)}

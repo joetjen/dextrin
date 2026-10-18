@@ -248,28 +248,36 @@ defmodule Dextrin.Text.Actions do
          {:ok, version, ctx} <- struct_version(captures, ctx) do
       cond do
         Map.has_key?(captures, :keyed) ->
-          with {:ok, {:keyed, pairs}, ctx} <- captures.keyed.eval.(ctx) do
-            materialize_struct(name, {:keyed, pairs}, version, ctx)
+          with {:ok, {:keyed, pairs, extra}, ctx} <- captures.keyed.eval.(ctx) do
+            materialize_struct(name, {:keyed, pairs}, version, extra, ctx)
           end
 
         Map.has_key?(captures, :positional) ->
-          with {:ok, {:positional, items}, ctx} <- captures.positional.eval.(ctx) do
-            materialize_struct(name, {:positional, items}, version, ctx)
+          with {:ok, {:positional, items, extra}, ctx} <- captures.positional.eval.(ctx) do
+            materialize_struct(name, {:positional, items}, version, extra, ctx)
           end
       end
     end
   end
 
+  # A keyed struct's entries: those keyed by a name are its fields, any
+  # other map key (DXN.md §1.6) an extra field.
   def handle_rule(:struct_keyed, captures, ctx) do
-    with {:ok, pairs, ctx} <- eval_list(Map.get(captures, :map_entry, []), ctx),
-         {:ok, named_pairs} <- struct_field_names(pairs) do
-      {:ok, {:keyed, named_pairs}, ctx}
+    with {:ok, pairs, ctx} <- eval_list(Map.get(captures, :map_entry, []), ctx) do
+      {named, extra} = Enum.split_with(pairs, fn {key, _value} -> field_name(key) != :error end)
+
+      {:ok,
+       {:keyed, Enum.map(named, fn {key, value} -> {Struct.extra_key(key), value} end), extra},
+       ctx}
     end
   end
 
+  # A positional struct's items, then its extra fields as entries.
   def handle_rule(:struct_positional, captures, ctx) do
-    with {:ok, items, ctx} <- eval_list(Map.get(captures, :value, []), ctx) do
-      {:ok, {:positional, items}, ctx}
+    with {:ok, items, ctx} <- eval_list(Map.get(captures, :value, []), ctx),
+         {:ok, entries, ctx} <- eval_list(Map.get(captures, :map_entry, []), ctx) do
+      extra = Enum.map(entries, fn {key, value} -> {Struct.extra_key(key), value} end)
+      {:ok, {:positional, items, extra}, ctx}
     end
   end
 
@@ -305,23 +313,6 @@ defmodule Dextrin.Text.Actions do
   # below) — handled defensively rather than relying on it never happening.
   defp eval_list(cap, ctx), do: eval_list([cap], ctx)
 
-  defp struct_field_names(pairs) do
-    Result.reduce_ok(pairs, [], fn {key, val}, acc ->
-      case field_name(key) do
-        {:ok, name} ->
-          {:ok, [{name, val} | acc]}
-
-        :error ->
-          {:error,
-           action_error("struct field name must be an identifier or string, got #{inspect(key)}")}
-      end
-    end)
-    |> case do
-      {:ok, acc} -> {:ok, Enum.reverse(acc)}
-      {:error, _} = err -> err
-    end
-  end
-
   defp field_name(%Keyword{name: name}), do: {:ok, name}
   defp field_name(%Symbol{name: name}), do: {:ok, name}
   defp field_name(name) when is_binary(name), do: {:ok, name}
@@ -347,19 +338,19 @@ defmodule Dextrin.Text.Actions do
 
   defp struct_version(_captures, ctx), do: {:ok, nil, ctx}
 
-  defp materialize_struct(name, fields, version, ctx) do
+  defp materialize_struct(name, fields, version, extra, ctx) do
     case ctx do
       %Registry{} = registry ->
         # Fail-fast, decode-time enforcement — a schema violation is an
         # ordinary decode error, same channel as bad syntax, with no
         # lenient escape hatch to get the value anyway. Which schema it
         # is read with depends on its version (Dextrin.Schema.Reader).
-        case Dextrin.Schema.Reader.read(registry, name, version, fields) do
+        case Dextrin.Schema.Reader.read(registry, name, version, fields, extra) do
           {:ok, materialized, registry} ->
             {:ok, materialized, registry}
 
           {:unknown, registry} ->
-            {:ok, opaque_struct(name, fields, version), registry}
+            {:ok, opaque_struct(name, fields, version, extra), registry}
 
           {:error, %Dextrin.Error{}} = error ->
             error
@@ -369,14 +360,15 @@ defmodule Dextrin.Text.Actions do
         end
 
       _ ->
-        {:ok, opaque_struct(name, fields, version), ctx}
+        {:ok, opaque_struct(name, fields, version, extra), ctx}
     end
   end
 
-  defp opaque_struct(name, {:keyed, pairs}, version), do: Struct.keyed(name, pairs, version)
+  defp opaque_struct(name, {:keyed, pairs}, version, extra),
+    do: Struct.keyed(name, pairs, version, extra)
 
-  defp opaque_struct(name, {:positional, items}, version),
-    do: Struct.positional(name, items, version)
+  defp opaque_struct(name, {:positional, items}, version, extra),
+    do: Struct.positional(name, items, version, extra)
 
   defp decode_char_escape("\\" <> rest) do
     case Escapes.decode_escape(rest) do

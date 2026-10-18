@@ -118,16 +118,18 @@ defmodule Dextrin.Text.Printer do
   def print(%Struct{name: name, fields: {:keyed, pairs}} = struct, opts) do
     keyed = Enum.map(pairs, fn {k, v} -> {Dextrin.Keyword.new(k), v} end)
 
-    with {:ok, entries} <- print_entries(keyed, opts),
+    with {:ok, entries} <- print_entries(keyed ++ extra_entries(struct), opts),
          do: {:ok, Struct.head(name, written_version(struct, opts)) <> "{" <> entries <> "}"}
   end
 
+  # A positional struct's items, then its extra fields as entries
+  # (DXN.md §1.2).
   def print(%Struct{name: name, fields: {:positional, items}} = struct, opts) do
     with {:ok, printed} <- print_all(items, opts),
-         do:
-           {:ok,
-            Struct.head(name, written_version(struct, opts)) <>
-              "[" <> Enum.join(printed, ",") <> "]"}
+         {:ok, extra} <- print_entries(extra_entries(struct), opts) do
+      body = Enum.reject([Enum.join(printed, ","), extra], &(&1 == "")) |> Enum.join(",")
+      {:ok, Struct.head(name, written_version(struct, opts)) <> "[" <> body <> "]"}
+    end
   end
 
   def print(%Date{} = date, _opts), do: {:ok, "~D[" <> Date.to_iso8601(date) <> "]"}
@@ -175,7 +177,16 @@ defmodule Dextrin.Text.Printer do
     case Registry.fetch_schema_name_for_module(registry, module) do
       {:ok, name} ->
         {:ok, compiled, _registry} = Registry.fetch_struct_schema(registry, name)
-        print(Struct.keyed(name, Compiled.field_values(compiled, other)), opts)
+
+        print(
+          Struct.keyed(
+            name,
+            Compiled.field_values(compiled, other),
+            nil,
+            Struct.runtime_extra(other)
+          ),
+          opts
+        )
 
       :error ->
         print_via_tag_encoder(other, module, opts)
@@ -376,4 +387,15 @@ defmodule Dextrin.Text.Printer do
   @spec written_version(Struct.t(), keyword()) :: pos_integer() | nil
   def written_version(struct, opts),
     do: Registry.as_written(Keyword.get(opts, :registry), struct).version
+
+  # A struct's extra fields as entries: a name is written like a field
+  # name, any other map key as itself (DXN.md §1.2).
+  @doc false
+  @spec extra_entries(Struct.t()) :: [{term(), term()}]
+  def extra_entries(%Struct{extra: extra}) do
+    Enum.map(extra, fn
+      {key, value} when is_binary(key) -> {Dextrin.Keyword.new(key), value}
+      pair -> pair
+    end)
+  end
 end

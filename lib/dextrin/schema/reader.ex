@@ -47,22 +47,25 @@ defmodule Dextrin.Schema.Reader do
           {:ok, term(), Registry.t()}
           | {:unknown, Registry.t()}
           | {:error, Dextrin.Error.t() | String.t()}
-  def read(%Registry{} = registry, name, version, fields) do
+  def read(%Registry{} = registry, name, version, fields, extra \\ []) do
     case Registry.fetch_struct_schema(registry, name) do
-      {:ok, %Compiled{} = latest, registry} -> by_version(registry, latest, version, fields)
-      {:unknown, registry} -> {:unknown, registry}
+      {:ok, %Compiled{} = latest, registry} ->
+        by_version(registry, latest, version, fields, extra)
+
+      {:unknown, registry} ->
+        {:unknown, registry}
     end
   end
 
-  defp by_version(registry, %Compiled{version: latest} = compiled, version, fields)
+  defp by_version(registry, %Compiled{version: latest} = compiled, version, fields, extra)
        when version == nil or version == latest,
-       do: materialized(registry, compiled, compiled, fields)
+       do: materialized(registry, compiled, compiled, fields, extra)
 
-  defp by_version(registry, %Compiled{version: latest} = compiled, version, fields)
+  defp by_version(registry, %Compiled{version: latest} = compiled, version, fields, extra)
        when version > latest,
-       do: materialized(registry, compiled, compiled, forward(compiled, fields))
+       do: materialized(registry, compiled, compiled, forward(compiled, fields), extra)
 
-  defp by_version(registry, %Compiled{name: name} = latest, version, fields) do
+  defp by_version(registry, %Compiled{name: name} = latest, version, fields, extra) do
     case {Registry.fetch_struct_schema(registry, name, version), materializer(registry, name)} do
       {{:unknown, _registry}, _materializer} ->
         {:error,
@@ -80,7 +83,7 @@ defmodule Dextrin.Schema.Reader do
          )}
 
       {{:ok, older, _registry}, _materializer} ->
-        materialized(registry, older, latest, fields)
+        materialized(registry, older, latest, fields, extra)
     end
   end
 
@@ -99,18 +102,81 @@ defmodule Dextrin.Schema.Reader do
   # generic struct at `latest`'s version when there is none. Wrapped in
   # `Validated` so an outer schema's reference can tell where it came
   # from.
-  defp materialized(registry, %Compiled{name: name} = reading, %Compiled{} = latest, fields) do
-    with {:ok, pairs} <- Validator.resolve(reading, fields, registry),
-         {:ok, value} <- built(registry, materializer(registry, name), reading, latest, pairs) do
+  defp materialized(
+         registry,
+         %Compiled{name: name} = reading,
+         %Compiled{} = latest,
+         fields,
+         extra
+       ) do
+    with {:ok, fields, extra} <- separated(reading, fields, extra),
+         :ok <- strictly(registry, name, extra),
+         {:ok, pairs} <- Validator.resolve(reading, fields, registry),
+         {:ok, value} <-
+           built(registry, materializer(registry, name), reading, latest, pairs, extra) do
       {:ok, %Validated{name: name, value: value}, registry}
     end
   end
 
-  defp built(_registry, nil, _reading, %Compiled{name: name, version: version}, pairs),
-    do: {:ok, Struct.keyed(name, pairs, version)}
+  # The fields `reading` declares, apart from the extra ones (DXN.md
+  # §4.7): a keyed struct's undeclared names join the extras. A name
+  # given twice -- a declared field and an extra of the same name, or a
+  # keyed field written twice -- is refused: an extra never shadows a
+  # declared field.
+  defp separated(%Compiled{name: name} = reading, fields, extra) do
+    declared = MapSet.new(Compiled.field_names(reading))
 
-  defp built(registry, materializer, %Compiled{name: name} = reading, latest, pairs) do
-    case materializer.(name, reading.version, Map.new(pairs)) do
+    {fields, undeclared} =
+      case fields do
+        {:keyed, pairs} ->
+          {mine, others} =
+            Enum.split_with(pairs, fn {key, _} -> MapSet.member?(declared, key) end)
+
+          {{:keyed, mine}, others}
+
+        {:positional, _items} ->
+          {fields, []}
+      end
+
+    extra = undeclared ++ extra
+    given = given_names(fields, reading) ++ Enum.map(extra, fn {key, _} -> key end)
+
+    case given -- Enum.uniq(given) do
+      [] ->
+        {:ok, fields, extra}
+
+      [twice | _] ->
+        {:error,
+         Dextrin.Error.action(
+           "struct #{inspect(name)} names #{inspect(twice)} twice: an extra field never shadows a declared one",
+           "schema/shadowed-field"
+         )}
+    end
+  end
+
+  # The declared names a struct's fields give: a keyed struct's keys, and
+  # every declared name for a positional one, which fills them by
+  # position.
+  defp given_names({:keyed, pairs}, _reading), do: Enum.map(pairs, fn {key, _} -> key end)
+
+  defp given_names({:positional, _items}, reading), do: Compiled.field_names(reading)
+
+  # A strict decode refuses any extra field on a schema-backed struct.
+  defp strictly(%Registry{strict: true}, name, [{key, _} | _]) do
+    {:error,
+     Dextrin.Error.action(
+       "struct #{inspect(name)} carries #{inspect(key)}, which its schema does not declare",
+       "schema/undeclared-field"
+     )}
+  end
+
+  defp strictly(_registry, _name, _extra), do: :ok
+
+  defp built(_registry, nil, _reading, %Compiled{name: name, version: version}, pairs, extra),
+    do: {:ok, Struct.keyed(name, pairs, version, extra)}
+
+  defp built(registry, materializer, %Compiled{name: name} = reading, latest, pairs, extra) do
+    case materializer.(name, reading.version, Map.new(pairs ++ extra)) do
       {:ok, value} ->
         case Validator.validate_for_encode(latest, value, registry) do
           :ok ->

@@ -93,15 +93,20 @@ defmodule Dextrin.Text.Formatter do
     # alone whether it's a field name or a genuine string-typed map key
     # (see render_entry/4's own doc for why that guess used to be wrong).
     keyed = Enum.map(pairs, fn {k, v} -> {Dextrin.Keyword.new(k), v} end)
+    entries = keyed ++ Printer.extra_entries(struct)
 
-    with {:ok, body} <- render_entries("{", keyed, "}", depth, opts) do
+    with {:ok, body} <- render_entries("{", entries, "}", depth, opts) do
       {:ok, Struct.head(name, Dextrin.Text.Printer.written_version(struct, opts)) <> body}
     end
   end
 
+  # A positional struct's items, then its extra fields as entries, one
+  # per line like the items (DXN.md §1.2).
   defp render(%Struct{name: name, fields: {:positional, items}} = struct, depth, opts)
        when items != [] do
-    with {:ok, body} <- bracketed("[", items, "]", depth, opts, &render/3) do
+    lines = items ++ Enum.map(Printer.extra_entries(struct), &{:"$dextrin_entry", &1})
+
+    with {:ok, body} <- bracketed("[", lines, "]", depth, opts, &render_item_or_entry/3) do
       {:ok, Struct.head(name, Dextrin.Text.Printer.written_version(struct, opts)) <> body}
     end
   end
@@ -127,7 +132,12 @@ defmodule Dextrin.Text.Formatter do
         {:ok, compiled, _registry} = Dextrin.Registry.fetch_struct_schema(registry, name)
 
         render(
-          Struct.keyed(name, Dextrin.Schema.Compiled.field_values(compiled, value)),
+          Struct.keyed(
+            name,
+            Dextrin.Schema.Compiled.field_values(compiled, value),
+            nil,
+            Struct.runtime_extra(value)
+          ),
           depth,
           opts
         )
@@ -155,6 +165,11 @@ defmodule Dextrin.Text.Formatter do
       {:ok, open <> "\n" <> body <> "\n" <> outer_indent <> close}
     end
   end
+
+  defp render_item_or_entry({:"$dextrin_entry", {key, value}}, depth, opts),
+    do: render_entry(key, value, depth, opts)
+
+  defp render_item_or_entry(item, depth, opts), do: render(item, depth, opts)
 
   defp render_all(items, depth, opts, render_item) do
     Enum.reduce_while(items, {:ok, []}, fn item, {:ok, acc} ->

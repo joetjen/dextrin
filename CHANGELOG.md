@@ -73,6 +73,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   absent instead of becoming `nil`.
 - `Dextrin.Schema.Validator.materialize/4` is replaced by `resolve/3`;
   building the value is `Dextrin.Schema.Reader`'s job.
+- **A struct may carry extra fields** (`DXN.md` §4.7), kept in
+  `Dextrin.Struct`'s new `extra` list and written back with it: in text
+  as entries — after a positional struct's items,
+  `%User(3)["a" "a@x" nick: "b"]` (the grammar's positional rule gains
+  trailing entries) — and in `.dxnb` as one trailing map under the new
+  private tag 215. A keyed struct's undeclared names, and any entry keyed
+  by something other than a name, are extras. An extra never shadows a
+  declared field (`schema/shadowed-field`); the materializer receives
+  extras with the declared fields; `strict: true` refuses them
+  (`schema/undeclared-field`, `Dextrin.Registry.put_strict/2`). A
+  registered application struct's runtime keys beyond its `defstruct`
+  are written as its extras (`Dextrin.Struct.runtime_extra/1`).
+- A keyed struct entry whose key is not a name — `%Point{1 => 2}` — is an
+  extra field instead of an error.
 - **Removed: `closed:`, `forbidden:` and `refine-fn:`**, and with them
   `Dextrin.Schema.compile/3`'s and `Dextrin.Schema.FileResolver.for_paths/2`'s
   `predicates` argument. A struct may carry fields its schema does not

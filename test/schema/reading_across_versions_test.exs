@@ -86,9 +86,9 @@ defmodule Dextrin.Schema.ReadingAcrossVersionsTest do
   end
 
   describe "the writer's version is newer than anything loaded" do
-    test "is read against the latest loaded, matching text by name" do
+    test "is read against the latest loaded, matching text by name and keeping the rest as extras" do
       assert Dextrin.decode(~s|%User(3){nick: "n", name: "a"}|, registry: loaded([@v1, @v2])) ==
-               {:ok, Struct.keyed("User", [{"name", "a"}], 2)}
+               {:ok, Struct.keyed("User", [{"name", "a"}], 2, [{"nick", "n"}])}
     end
 
     test "and a field the latest requires must still be there" do

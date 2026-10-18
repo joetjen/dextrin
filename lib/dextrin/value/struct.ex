@@ -18,18 +18,30 @@ defmodule Dextrin.Struct do
   `version` is the schema version the struct was written with
   (`%Name(3){...}`, DXN.md §4.8), or `nil` when it was written without
   one, which a reader takes as the latest version it has loaded.
+
+  `extra` holds the fields a struct carries beyond its declared ones
+  (DXN.md §4.7), as `{key, value}` pairs in the order they were written:
+  a name for a named field, any other map key (§1.6) as itself. In text
+  they are entries after the fields or the items; in `.dxnb`, one
+  trailing tag-215 map. Code relying on a struct is guaranteed only its
+  declared fields.
   """
 
   @type fields :: {:keyed, [{String.t(), term()}]} | {:positional, [term()]}
 
-  @type t :: %__MODULE__{name: String.t(), version: pos_integer() | nil, fields: fields()}
+  @type t :: %__MODULE__{
+          name: String.t(),
+          version: pos_integer() | nil,
+          fields: fields(),
+          extra: [{term(), term()}]
+        }
 
-  defstruct [:name, :fields, version: nil]
+  defstruct [:name, :fields, version: nil, extra: []]
 
-  @doc "A struct written with names, at `version` when one is given."
-  @spec keyed(String.t(), [{String.t(), term()}], pos_integer() | nil) :: t()
-  def keyed(name, pairs, version \\ nil) when is_binary(name) and is_list(pairs) do
-    %__MODULE__{name: name, version: version, fields: {:keyed, pairs}}
+  @doc "A struct written with names, at `version` when one is given, carrying `extra`."
+  @spec keyed(String.t(), [{String.t(), term()}], pos_integer() | nil, [{term(), term()}]) :: t()
+  def keyed(name, pairs, version \\ nil, extra \\ []) when is_binary(name) and is_list(pairs) do
+    %__MODULE__{name: name, version: version, fields: {:keyed, pairs}, extra: extra}
   end
 
   @doc """
@@ -75,9 +87,38 @@ defmodule Dextrin.Struct do
     end
   end
 
-  @doc "A struct written by position, at `version` when one is given."
-  @spec positional(String.t(), [term()], pos_integer() | nil) :: t()
-  def positional(name, values, version \\ nil) when is_binary(name) and is_list(values) do
-    %__MODULE__{name: name, version: version, fields: {:positional, values}}
+  @doc "A struct written by position, at `version` when one is given, carrying `extra`."
+  @spec positional(String.t(), [term()], pos_integer() | nil, [{term(), term()}]) :: t()
+  def positional(name, values, version \\ nil, extra \\ [])
+      when is_binary(name) and is_list(values) do
+    %__MODULE__{name: name, version: version, fields: {:positional, values}, extra: extra}
+  end
+
+  @doc """
+  An entry's key as an extra field's key: a keyword, symbol or string is
+  a name (its text); any other map key (DXN.md §1.6) is kept as itself.
+
+      Dextrin.Struct.extra_key(%Dextrin.Keyword{name: "nick"})   #=> "nick"
+      Dextrin.Struct.extra_key(3)                                #=> 3
+  """
+  @spec extra_key(term()) :: term()
+  def extra_key(%Dextrin.Keyword{name: name}), do: name
+  def extra_key(%Dextrin.Symbol{name: name}), do: name
+  def extra_key(key) when is_atom(key) and key not in [nil, true, false], do: Atom.to_string(key)
+  def extra_key(key), do: key
+
+  @doc """
+  The extra fields an application struct carries at run time: the keys
+  of `value` its module's own `defstruct` does not declare, as named
+  extras. An Elixir struct is a map, so a key put on it after the fact
+  is the struct carrying more than it declares (DXN.md §4.7).
+  """
+  @spec runtime_extra(struct()) :: [{String.t(), term()}]
+  def runtime_extra(%module{} = value) do
+    declared = module.__struct__() |> Map.keys() |> MapSet.new()
+
+    for {key, field} <- Map.to_list(value), not MapSet.member?(declared, key) do
+      {extra_key(key), field}
+    end
   end
 end

@@ -72,11 +72,18 @@ defmodule Dextrin.Canonical do
   defp text(%SortedSet{items: items}), do: "@sorted-set @{" <> sorted_items(items) <> "}"
   defp text(%OrderedMap{pairs: pairs}), do: "@ordered %{" <> entries(pairs) <> "}"
 
-  defp text(%Struct{name: name, version: version, fields: {:keyed, pairs}}),
-    do: Struct.head(name, version) <> "{" <> field_entries(pairs) <> "}"
+  # A keyed struct's extra fields follow its declared ones as entries,
+  # in the order they were written (DXN.md §1.5).
+  defp text(%Struct{name: name, version: version, fields: {:keyed, pairs}, extra: extra}),
+    do: Struct.head(name, version) <> "{" <> field_entries(pairs ++ extra) <> "}"
 
-  defp text(%Struct{name: name, version: version, fields: {:positional, values}}),
-    do: Struct.head(name, version) <> "[" <> items(values) <> "]"
+  # A positional struct's extras in canonical order of their keys, as
+  # §1.5 fixes: in `.dxnb` they are a map, and its order is not data.
+  defp text(%Struct{name: name, version: version, fields: {:positional, values}, extra: extra}) do
+    sorted = Enum.sort_by(extra, fn {key, _} -> text(key) end)
+    body = Enum.reject([items(values), field_entries(sorted)], &(&1 == "")) |> Enum.join(" ")
+    Struct.head(name, version) <> "[" <> body <> "]"
+  end
 
   defp text(%Date{} = date), do: "~D[" <> Date.to_iso8601(date) <> "]"
   defp text(%Time{} = time), do: "~T[" <> time(time) <> "]"

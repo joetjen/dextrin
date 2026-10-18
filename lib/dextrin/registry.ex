@@ -42,7 +42,8 @@ defmodule Dextrin.Registry do
           resolver: struct_resolver() | nil,
           type_aliases: %{optional(String.t()) => TypeExpr.t()},
           struct_modules: %{optional(String.t()) => module()},
-          trusted: boolean()
+          trusted: boolean(),
+          strict: boolean()
         }
 
   defstruct tags: %{},
@@ -52,7 +53,8 @@ defmodule Dextrin.Registry do
             resolver: nil,
             type_aliases: %{},
             struct_modules: %{},
-            trusted: true
+            trusted: true,
+            strict: false
 
   @spec new() :: t()
   def new, do: %__MODULE__{}
@@ -77,6 +79,20 @@ defmodule Dextrin.Registry do
   @spec put_trusted(t(), boolean()) :: t()
   def put_trusted(%__MODULE__{} = registry, trusted?) when is_boolean(trusted?) do
     %{registry | trusted: trusted?}
+  end
+
+  @doc """
+  Marks this registry as decoding *strictly*: a schema-backed struct
+  that carries a field its schema does not declare is refused
+  (`schema/undeclared-field`, DXN.md §4.7) instead of keeping it as an
+  extra field. A config loader decodes strictly, to catch a typo in a
+  hand-written file; a message consumer does not, so a newer producer's
+  fields pass through. `Dextrin.decode/2`/`decode_binary/2` take it as
+  `strict: true`.
+  """
+  @spec put_strict(t(), boolean()) :: t()
+  def put_strict(%__MODULE__{} = registry, strict?) when is_boolean(strict?) do
+    %{registry | strict: strict?}
   end
 
   @spec put_tag(t(), String.t(), tag_decoder()) :: t()

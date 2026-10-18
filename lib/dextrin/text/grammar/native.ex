@@ -4471,7 +4471,7 @@ defmodule Dextrin.Text.Grammar.Native do
       Parser.star(&parse_expr__170/4, stream, pos, ref_stack, context)
     end
 
-    def parse_expr__173(stream, pos, ref_stack, context) do
+    def parse_expr__174(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
@@ -4481,18 +4481,50 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def parse_expr__177(stream, pos, ref_stack, _context) do
+    def parse_expr__176(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
         {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
 
-    def parse_expr__176(stream, pos, ref_stack, context) do
-      Parser.star(&parse_expr__177/4, stream, pos, ref_stack, context)
+    def parse_expr__175(stream, pos, ref_stack, context) do
+      Parser.star(&parse_expr__176/4, stream, pos, ref_stack, context)
     end
 
-    def parse_expr__178(stream, pos, ref_stack, context) do
+    def parse_expr__178(stream, pos, ref_stack, _context) do
+      case Parser.match_token(stream, pos, :ANON_7) do
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
+        :fail -> :fail
+      end
+    end
+
+    def parse_expr__177(stream, pos, ref_stack, context) do
+      Parser.not_pred(&parse_expr__178/4, stream, pos, ref_stack, context)
+    end
+
+    def parse_expr__173(stream, pos, ref_stack, context) do
+      with {:ok, pos1, ref1, cap0} <- parse_expr__174(stream, pos, ref_stack, context),
+           {:ok, pos2, ref2, cap1} <- parse_expr__175(stream, pos1, ref1, context),
+           {:ok, pos3, ref3, cap2} <- parse_expr__177(stream, pos2, ref2, context) do
+        {:ok, pos3, ref3, Parser.merge_captures(cap0, Parser.merge_captures(cap1, cap2))}
+      else
+        _fail -> :fail
+      end
+    end
+
+    def parse_expr__182(stream, pos, ref_stack, _context) do
+      case Parser.match_token(stream, pos, :TRIVIA) do
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
+        :fail -> :fail
+      end
+    end
+
+    def parse_expr__181(stream, pos, ref_stack, context) do
+      Parser.star(&parse_expr__182/4, stream, pos, ref_stack, context)
+    end
+
+    def parse_expr__184(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
@@ -4502,22 +4534,54 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def parse_expr__175(stream, pos, ref_stack, context) do
-      with {:ok, pos1, ref1, cap0} <- parse_expr__176(stream, pos, ref_stack, context),
-           {:ok, pos2, ref2, cap1} <- parse_expr__178(stream, pos1, ref1, context) do
+    def parse_expr__186(stream, pos, ref_stack, _context) do
+      case Parser.match_token(stream, pos, :TRIVIA) do
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
+        :fail -> :fail
+      end
+    end
+
+    def parse_expr__185(stream, pos, ref_stack, context) do
+      Parser.star(&parse_expr__186/4, stream, pos, ref_stack, context)
+    end
+
+    def parse_expr__188(stream, pos, ref_stack, _context) do
+      case Parser.match_token(stream, pos, :ANON_7) do
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
+        :fail -> :fail
+      end
+    end
+
+    def parse_expr__187(stream, pos, ref_stack, context) do
+      Parser.not_pred(&parse_expr__188/4, stream, pos, ref_stack, context)
+    end
+
+    def parse_expr__183(stream, pos, ref_stack, context) do
+      with {:ok, pos1, ref1, cap0} <- parse_expr__184(stream, pos, ref_stack, context),
+           {:ok, pos2, ref2, cap1} <- parse_expr__185(stream, pos1, ref1, context),
+           {:ok, pos3, ref3, cap2} <- parse_expr__187(stream, pos2, ref2, context) do
+        {:ok, pos3, ref3, Parser.merge_captures(cap0, Parser.merge_captures(cap1, cap2))}
+      else
+        _fail -> :fail
+      end
+    end
+
+    def parse_expr__180(stream, pos, ref_stack, context) do
+      with {:ok, pos1, ref1, cap0} <- parse_expr__181(stream, pos, ref_stack, context),
+           {:ok, pos2, ref2, cap1} <- parse_expr__183(stream, pos1, ref1, context) do
         {:ok, pos2, ref2, Parser.merge_captures(cap0, cap1)}
       else
         _fail -> :fail
       end
     end
 
-    def parse_expr__174(stream, pos, ref_stack, context) do
-      Parser.rep(&parse_expr__175/4, 0, :infinity, stream, pos, ref_stack, context)
+    def parse_expr__179(stream, pos, ref_stack, context) do
+      Parser.rep(&parse_expr__180/4, 0, :infinity, stream, pos, ref_stack, context)
     end
 
     def parse_expr__172(stream, pos, ref_stack, context) do
       with {:ok, pos1, ref1, cap0} <- parse_expr__173(stream, pos, ref_stack, context),
-           {:ok, pos2, ref2, cap1} <- parse_expr__174(stream, pos1, ref1, context) do
+           {:ok, pos2, ref2, cap1} <- parse_expr__179(stream, pos1, ref1, context) do
         {:ok, pos2, ref2, Parser.merge_captures(cap0, cap1)}
       else
         _fail -> :fail
@@ -4528,18 +4592,86 @@ defmodule Dextrin.Text.Grammar.Native do
       Parser.opt(&parse_expr__172/4, stream, pos, ref_stack, context)
     end
 
-    def parse_expr__180(stream, pos, ref_stack, _context) do
+    def parse_expr__190(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRIVIA) do
         {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
       end
     end
 
-    def parse_expr__179(stream, pos, ref_stack, context) do
-      Parser.star(&parse_expr__180/4, stream, pos, ref_stack, context)
+    def parse_expr__189(stream, pos, ref_stack, context) do
+      Parser.star(&parse_expr__190/4, stream, pos, ref_stack, context)
     end
 
-    def parse_expr__181(stream, pos, ref_stack, _context) do
+    def parse_expr__193(stream, pos, ref_stack, context) do
+      case parse_rule__map_entry(stream, pos, ref_stack, context) do
+        {:ok, new_pos, new_ref_stack, sub_captures} ->
+          {:ok, new_pos, new_ref_stack, map_entry: {:rule, :map_entry, sub_captures}}
+
+        _fail ->
+          :fail
+      end
+    end
+
+    def parse_expr__197(stream, pos, ref_stack, _context) do
+      case Parser.match_token(stream, pos, :TRIVIA) do
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
+        :fail -> :fail
+      end
+    end
+
+    def parse_expr__196(stream, pos, ref_stack, context) do
+      Parser.star(&parse_expr__197/4, stream, pos, ref_stack, context)
+    end
+
+    def parse_expr__198(stream, pos, ref_stack, context) do
+      case parse_rule__map_entry(stream, pos, ref_stack, context) do
+        {:ok, new_pos, new_ref_stack, sub_captures} ->
+          {:ok, new_pos, new_ref_stack, map_entry: {:rule, :map_entry, sub_captures}}
+
+        _fail ->
+          :fail
+      end
+    end
+
+    def parse_expr__195(stream, pos, ref_stack, context) do
+      with {:ok, pos1, ref1, cap0} <- parse_expr__196(stream, pos, ref_stack, context),
+           {:ok, pos2, ref2, cap1} <- parse_expr__198(stream, pos1, ref1, context) do
+        {:ok, pos2, ref2, Parser.merge_captures(cap0, cap1)}
+      else
+        _fail -> :fail
+      end
+    end
+
+    def parse_expr__194(stream, pos, ref_stack, context) do
+      Parser.rep(&parse_expr__195/4, 0, :infinity, stream, pos, ref_stack, context)
+    end
+
+    def parse_expr__192(stream, pos, ref_stack, context) do
+      with {:ok, pos1, ref1, cap0} <- parse_expr__193(stream, pos, ref_stack, context),
+           {:ok, pos2, ref2, cap1} <- parse_expr__194(stream, pos1, ref1, context) do
+        {:ok, pos2, ref2, Parser.merge_captures(cap0, cap1)}
+      else
+        _fail -> :fail
+      end
+    end
+
+    def parse_expr__191(stream, pos, ref_stack, context) do
+      Parser.opt(&parse_expr__192/4, stream, pos, ref_stack, context)
+    end
+
+    def parse_expr__200(stream, pos, ref_stack, _context) do
+      case Parser.match_token(stream, pos, :TRIVIA) do
+        {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
+        :fail -> :fail
+      end
+    end
+
+    def parse_expr__199(stream, pos, ref_stack, context) do
+      Parser.star(&parse_expr__200/4, stream, pos, ref_stack, context)
+    end
+
+    def parse_expr__201(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :ANON_3) do
         {:ok, new_pos, _text, _capture} -> {:ok, new_pos, ref_stack, []}
         :fail -> :fail
@@ -4550,14 +4682,22 @@ defmodule Dextrin.Text.Grammar.Native do
       with {:ok, pos1, ref1, cap0} <- parse_expr__168(stream, pos, ref_stack, context),
            {:ok, pos2, ref2, cap1} <- parse_expr__169(stream, pos1, ref1, context),
            {:ok, pos3, ref3, cap2} <- parse_expr__171(stream, pos2, ref2, context),
-           {:ok, pos4, ref4, cap3} <- parse_expr__179(stream, pos3, ref3, context),
-           {:ok, pos5, ref5, cap4} <- parse_expr__181(stream, pos4, ref4, context) do
-        {:ok, pos5, ref5,
+           {:ok, pos4, ref4, cap3} <- parse_expr__189(stream, pos3, ref3, context),
+           {:ok, pos5, ref5, cap4} <- parse_expr__191(stream, pos4, ref4, context),
+           {:ok, pos6, ref6, cap5} <- parse_expr__199(stream, pos5, ref5, context),
+           {:ok, pos7, ref7, cap6} <- parse_expr__201(stream, pos6, ref6, context) do
+        {:ok, pos7, ref7,
          Parser.merge_captures(
            cap0,
            Parser.merge_captures(
              cap1,
-             Parser.merge_captures(cap2, Parser.merge_captures(cap3, cap4))
+             Parser.merge_captures(
+               cap2,
+               Parser.merge_captures(
+                 cap3,
+                 Parser.merge_captures(cap4, Parser.merge_captures(cap5, cap6))
+               )
+             )
            )
          )}
       else
@@ -4635,7 +4775,7 @@ defmodule Dextrin.Text.Grammar.Native do
                  tag_form: MapSet.new([]),
                  map_entry: MapSet.new([]),
                  struct_keyed: MapSet.new([:map_entry]),
-                 struct_positional: MapSet.new([:value])
+                 struct_positional: MapSet.new([:value, :map_entry])
                }
              ) do
         {:ok, value}
@@ -4682,7 +4822,7 @@ defmodule Dextrin.Text.Grammar.Native do
                    tag_form: MapSet.new([]),
                    map_entry: MapSet.new([]),
                    struct_keyed: MapSet.new([:map_entry]),
-                   struct_positional: MapSet.new([:value])
+                   struct_positional: MapSet.new([:value, :map_entry])
                  }) do
               {:ok, value, new_ctx} -> do_run_sequence(stream, new_pos, new_ctx, [value | acc])
               {:error, _} = err -> err

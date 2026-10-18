@@ -271,11 +271,16 @@ defmodule Dextrin.Binary.Encoder do
   # name (DXN.md §2.4, §4.8).
 
   defp encode_item_dispatch(%Struct{fields: {:positional, items}} = struct, opts) do
-    encode_struct(type_name(struct, opts), items, opts)
+    encode_struct(type_name(struct, opts), items, struct.extra, opts)
   end
 
   defp encode_item_dispatch(%Struct{name: name, fields: {:keyed, pairs}} = struct, opts) do
-    encode_struct(type_name(struct, opts), positional_values(name, pairs, opts), opts)
+    encode_struct(
+      type_name(struct, opts),
+      positional_values(name, pairs, opts),
+      struct.extra,
+      opts
+    )
   end
 
   # ---- temporal ---------------------------------------------------------------
@@ -361,7 +366,7 @@ defmodule Dextrin.Binary.Encoder do
         values =
           compiled |> Compiled.field_values(other) |> Enum.map(fn {_name, value} -> value end)
 
-        encode_item(Struct.positional(name, values), opts)
+        encode_item(Struct.positional(name, values, nil, Struct.runtime_extra(other)), opts)
 
       :error ->
         encode_via_tag_encoder(other, module, opts)
@@ -416,11 +421,22 @@ defmodule Dextrin.Binary.Encoder do
     end
   end
 
-  defp encode_struct(name, values, opts) do
+  # A struct as `[type-name, field..., extras?]`: its extra fields, when
+  # it has any, as one trailing tag-215 map in the order they were
+  # written (DXN.md §2.3).
+  defp encode_struct(name, values, extra, opts) do
     with {:ok, name_item} <- encode_item(name, opts),
-         {:ok, value_items} <- encode_all(values, opts) do
-      {:ok, tag(Tags.t_struct(), array_of([name_item | value_items]))}
+         {:ok, value_items} <- encode_all(values, opts),
+         {:ok, extra_items} <- encode_extra(extra, opts) do
+      {:ok, tag(Tags.t_struct(), array_of([name_item | value_items] ++ extra_items))}
     end
+  end
+
+  defp encode_extra([], _opts), do: {:ok, []}
+
+  defp encode_extra(extra, opts) do
+    with {:ok, pairs} <- encode_pairs(extra, opts),
+         do: {:ok, [tag(Tags.t_extra(), map_of(pairs))]}
   end
 
   defp encode_all(values, opts) do

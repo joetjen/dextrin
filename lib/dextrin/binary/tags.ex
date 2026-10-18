@@ -17,7 +17,7 @@ defmodule Dextrin.Binary.Tags do
   def t_shareable, do: 28
   def t_shared_ref, do: 29
 
-  # ---- private tag block, DXN.md §2.3 (200-214) --------------------------
+  # ---- private tag block, DXN.md §2.3 (200-215) --------------------------
   def t_char, do: 200
   def t_symbol, do: 201
   def t_keyword, do: 202
@@ -33,6 +33,8 @@ defmodule Dextrin.Binary.Tags do
   def t_duration, do: 212
   def t_regex, do: 213
   def t_custom, do: 214
+  # A struct's extra fields: only ever its last item (DXN.md §2.3).
+  def t_extra, do: 215
 
   @doc "Duration bitmask field order, low bit first (DXN.md §2.3)."
   @spec duration_bits() :: [atom()]

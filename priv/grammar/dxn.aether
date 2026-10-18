@@ -123,7 +123,10 @@ map_entry := (short_key:MAP_KEY short_val:value) | (arrow_key:value "=>" arrow_v
 ; made only of terminals is captured as its text.
 struct_lit        := "%" name:IDENTIFIER ("(" version:INTEGER ")")? (keyed:struct_keyed | positional:struct_positional)
 struct_keyed      := "{" map_entry* "}"
-struct_positional := "[" value* "]"
+; A positional struct's items come first, then any extra fields as
+; entries (DXN.md §1.2): an item is a value not followed by `=>`, so
+; `3 => :x` is an entry, and an item after an entry is a syntax error.
+struct_positional := "[" (value !"=>")* map_entry* "]"
 
 sigil := DATE_SIGIL | TIME_SIGIL | INSTANT_SIGIL | REGEX_SIGIL
 

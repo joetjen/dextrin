@@ -205,8 +205,14 @@ defmodule Dextrin do
   defp registry_with_trusted(opts) do
     registry = Keyword.get(opts, :registry, Registry.new())
 
-    case Keyword.fetch(opts, :trusted) do
-      {:ok, trusted?} -> Registry.put_trusted(registry, trusted?)
+    registry =
+      case Keyword.fetch(opts, :trusted) do
+        {:ok, trusted?} -> Registry.put_trusted(registry, trusted?)
+        :error -> registry
+      end
+
+    case Keyword.fetch(opts, :strict) do
+      {:ok, strict?} -> Registry.put_strict(registry, strict?)
       :error -> registry
     end
   end
