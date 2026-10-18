@@ -48,11 +48,12 @@ defmodule Dextrin.Schema.ProviderTest do
     assert {:ok, ^good} = Dextrin.decode_binary(bytes, registry: registry)
   end
 
-  test "a provider with no dxn_materialize/1 falls back to the default plain field map" do
+  test "a provider with no dxn_materialize/3 falls back to the generic struct" do
     {:ok, registry} =
       Dextrin.Schema.register_provider(Dextrin.Registry.new(), ProviderPointNoMaterializer)
 
-    assert {:ok, %{"a" => 1}} = Dextrin.decode(~s(%Plain{a: 1}), registry: registry)
+    assert Dextrin.decode(~s(%Plain{a: 1}), registry: registry) ==
+             {:ok, Dextrin.Struct.keyed("Plain", [{"a", 1}], 1)}
   end
 
   test "a provider whose dxn_schema_name/0 doesn't match anything in its own document is a clear error" do
@@ -69,7 +70,8 @@ defmodule Dextrin.Schema.ProviderTest do
 
     {:ok, registry} = Dextrin.Schema.register_provider(base, ProviderPoint.DXN)
 
-    assert {:ok, %{"a" => 1}} = Dextrin.decode(~s(%Plain{a: 1}), registry: registry)
+    assert Dextrin.decode(~s(%Plain{a: 1}), registry: registry) ==
+             {:ok, Dextrin.Struct.keyed("Plain", [{"a", 1}], 1)}
 
     assert {:ok, %ProviderPoint{x: 1, y: 2}} =
              Dextrin.decode(~s(%Point{x: 1, y: 2}), registry: registry)

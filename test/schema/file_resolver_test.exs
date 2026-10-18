@@ -9,6 +9,8 @@ defmodule Dextrin.Schema.FileResolverTest do
 
   use ExUnit.Case, async: true
 
+  alias Dextrin.Test.Support.DecodedFields
+
   @tag :tmp_dir
   test "resolves a namespaced reference to <namespace>.dxns", %{tmp_dir: dir} do
     File.write!(Path.join(dir, "geo.dxns"), """
@@ -19,7 +21,7 @@ defmodule Dextrin.Schema.FileResolverTest do
     registry = Dextrin.Registry.new() |> Dextrin.Registry.put_resolver(resolver)
 
     assert {:ok, %{"x" => 1, "y" => 2}} =
-             Dextrin.decode("%geo/Point{x: 1, y: 2}", registry: registry)
+             DecodedFields.of(Dextrin.decode("%geo/Point{x: 1, y: 2}", registry: registry))
   end
 
   @tag :tmp_dir
@@ -31,7 +33,9 @@ defmodule Dextrin.Schema.FileResolverTest do
     resolver = Dextrin.Schema.FileResolver.for_paths([dir])
     registry = Dextrin.Registry.new() |> Dextrin.Registry.put_resolver(resolver)
 
-    assert {:ok, %{"amount" => amount}} = Dextrin.decode("%Money{amount: 5M}", registry: registry)
+    assert {:ok, %{"amount" => amount}} =
+             DecodedFields.of(Dextrin.decode("%Money{amount: 5M}", registry: registry))
+
     assert Decimal.equal?(amount, Decimal.new("5"))
   end
 
@@ -71,6 +75,7 @@ defmodule Dextrin.Schema.FileResolverTest do
     resolver = Dextrin.Schema.FileResolver.for_paths([first, second])
     registry = Dextrin.Registry.new() |> Dextrin.Registry.put_resolver(resolver)
 
-    assert {:ok, %{"amount" => _}} = Dextrin.decode("%Money{amount: 5M}", registry: registry)
+    assert {:ok, %{"amount" => _}} =
+             DecodedFields.of(Dextrin.decode("%Money{amount: 5M}", registry: registry))
   end
 end

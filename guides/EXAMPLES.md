@@ -111,12 +111,45 @@ schema_source = """
 {:ok, registry} = Dextrin.Schema.compile(doc)
 
 registry =
-  Dextrin.Registry.put_struct_materializer(registry, "Money", fn %{amount: a, currency: c} ->
-    {:ok, %{amount: a, currency: c.name}}
+  Dextrin.Registry.put_struct_materializer(registry, "Money", fn "Money", _version, fields ->
+    {:ok, %{amount: fields["amount"], currency: fields["currency"]}}
   end)
 
 Dextrin.decode(~s(%Money{amount: 19.99M, currency: :usd}), registry: registry)
-#=> {:ok, %{amount: #Decimal<19.99>, currency: "usd"}}
+#=> {:ok, %{amount: Decimal.new("19.99"), currency: :usd}}
+```
+
+What a materializer answers is checked against the latest schema, so
+it has to stay a value of the schema's own shape: answering
+`currency: "usd"` here would be refused (`schema/materializer`),
+because the schema declares `{:enum :usd :eur :gbp}`, not a string.
+
+## Upgrading an older version
+
+One materializer per schema handles every version. A struct written
+with an older version than the latest loaded is read with its own
+version's schema and handed to the materializer, which fills in what
+that version lacked:
+
+```elixir
+registry =
+  Enum.reduce(
+    ["%{User: %schema{name: :string}}", "%{User: %schema(2){name: :string, email: :string}}"],
+    Dextrin.Registry.new(),
+    fn source, registry ->
+      {:ok, doc} = Dextrin.decode(source)
+      {:ok, registry} = Dextrin.Schema.compile(doc, registry)
+      registry
+    end
+  )
+  |> Dextrin.Registry.put_struct_materializer("User", fn
+    "User", 1, %{"name" => name} -> {:ok, %{name: name, email: "#{name}@example.com"}}
+    "User", 2, fields -> {:ok, %{name: fields["name"], email: fields["email"]}}
+  end)
+
+Dextrin.decode(~s|%User(1){name: "ada"}|, registry: registry)
+#=> {:ok, %{name: "ada", email: "ada@example.com"}}
+```
 ```
 
 ## A third-party struct provider, end to end
@@ -168,7 +201,8 @@ if Code.ensure_loaded?(Dextrin.Schema.Provider) do
     def dxn_struct, do: Geo.LatLng
 
     @impl true
-    def dxn_materialize(%{lat: lat, lng: lng}), do: {:ok, %Geo.LatLng{lat: lat, lng: lng}}
+    def dxn_materialize("LatLng", _version, %{"lat" => lat, "lng" => lng}),
+      do: {:ok, %Geo.LatLng{lat: lat, lng: lng}}
   end
 end
 ```

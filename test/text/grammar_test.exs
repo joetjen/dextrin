@@ -42,9 +42,13 @@ defmodule Dextrin.Text.GrammarTest do
 
       # Grammar.run/2 is the raw grammar-level entry point -- unlike
       # Dextrin.decode/2, it doesn't strip the internal
-      # Dextrin.Schema.Validated provenance wrapper materialize/4
+      # Dextrin.Schema.Validated provenance wrapper Dextrin.Schema.Reader
       # produces; that's Dextrin.decode/2's own job.
-      assert {:ok, %Dextrin.Schema.Validated{name: "Point", value: %{"x" => 1}}} =
+      assert {:ok,
+              %Dextrin.Schema.Validated{
+                name: "Point",
+                value: %Dextrin.Struct{name: "Point", fields: {:keyed, [{"x", 1}]}}
+              }} =
                Grammar.run("%Point{x: 1}", registry)
     end
   end

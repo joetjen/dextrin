@@ -9,6 +9,8 @@ defmodule Dextrin.Schema.NamedTypeTest do
 
   use ExUnit.Case, async: true
 
+  alias Dextrin.Test.Support.DecodedFields
+
   @dxns """
   %{
     PositiveInt: {:refine :integer %{min: 1}}
@@ -31,8 +33,10 @@ defmodule Dextrin.Schema.NamedTypeTest do
 
   test "a field using a named type accepts a value satisfying it", %{registry: registry} do
     assert {:ok, %{"amount" => 5, "discount" => 12.5, "tags" => ["a", "b"]}} =
-             Dextrin.decode("%Money{amount: 5, discount: 12.5, tags: [\"a\", \"b\"]}",
-               registry: registry
+             DecodedFields.of(
+               Dextrin.decode("%Money{amount: 5, discount: 12.5, tags: [\"a\", \"b\"]}",
+                 registry: registry
+               )
              )
   end
 
@@ -84,7 +88,9 @@ defmodule Dextrin.Schema.NamedTypeTest do
 
     {:ok, registry} = Dextrin.Schema.compile(doc, base_registry)
 
-    assert {:ok, %{"a" => 2, "b" => 4}} = Dextrin.decode("%Pair{a: 2, b: 4}", registry: registry)
+    assert {:ok, %{"a" => 2, "b" => 4}} =
+             DecodedFields.of(Dextrin.decode("%Pair{a: 2, b: 4}", registry: registry))
+
     assert {:error, _} = Dextrin.decode("%Pair{a: 3, b: 4}", registry: registry)
   end
 
@@ -133,7 +139,9 @@ defmodule Dextrin.Schema.NamedTypeTest do
 
     {:ok, compiled_registry} = Dextrin.Schema.compile(doc, registry)
 
-    assert {:ok, %{"a" => 4}} = Dextrin.decode("%Pair{a: 4}", registry: compiled_registry)
+    assert {:ok, %{"a" => 4}} =
+             DecodedFields.of(Dextrin.decode("%Pair{a: 4}", registry: compiled_registry))
+
     assert {:error, _} = Dextrin.decode("%Pair{a: 3}", registry: compiled_registry)
   end
 end

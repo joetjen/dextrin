@@ -7,6 +7,8 @@ defmodule Dextrin.Schema.StdTest do
 
   use ExUnit.Case, async: true
 
+  alias Dextrin.Test.Support.DecodedFields
+
   setup do
     {:ok, doc} =
       Dextrin.decode("""
@@ -26,8 +28,10 @@ defmodule Dextrin.Schema.StdTest do
 
   test "a value satisfying every standard type decodes cleanly", %{registry: registry} do
     assert {:ok, %{"count" => 3, "name" => "x", "ratio" => 50.0, "tags" => [1]}} =
-             Dextrin.decode(~s(%Widget{count: 3, name: "x", ratio: 50.0, tags: [1]}),
-               registry: registry
+             DecodedFields.of(
+               Dextrin.decode(~s(%Widget{count: 3, name: "x", ratio: 50.0, tags: [1]}),
+                 registry: registry
+               )
              )
   end
 

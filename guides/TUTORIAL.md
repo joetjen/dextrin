@@ -184,8 +184,13 @@ document is itself just DXN data — no new grammar, no new parser:
 {:ok, registry} = Dextrin.Schema.compile(schema_doc)
 
 Dextrin.decode("%Point{x: 1, y: 2}", registry: registry)
-#=> {:ok, %{"x" => 1, "y" => 2}}
+#=> {:ok, %Dextrin.Struct{name: "Point", version: 1, fields: {:keyed, [{"x", 1}, {"y", 2}]}}}
 ```
+
+With no materializer registered (§7), a checked struct comes back as a
+generic `Dextrin.Struct` at its schema's latest version, its fields in
+the schema's order — which encodes back to exactly the text it came
+from.
 
 Field enforcement (required fields, declared types and their
 refinements) happens automatically at decode time, in both `decode/2`
@@ -215,8 +220,12 @@ second-guess data it isn't the origin of).
 
 ## 7. Materializing real Elixir structs
 
-By default a struct materializes to a plain string-keyed map. Register
-a materializer to produce your own struct instead:
+By default a checked struct comes back as a generic `Dextrin.Struct`.
+Register a materializer — one per schema — to produce your own struct
+instead. It is called for every decoded struct of its schema, with the
+schema's name, the version the struct was written with and its fields
+keyed by string, and what it answers is checked against the latest
+schema:
 
 ```elixir
 defmodule MyApp.Point do
@@ -225,7 +234,7 @@ end
 
 registry =
   registry
-  |> Dextrin.Registry.put_struct_materializer("Point", fn %{x: x, y: y} ->
+  |> Dextrin.Registry.put_struct_materializer("Point", fn "Point", _version, %{"x" => x, "y" => y} ->
     {:ok, %MyApp.Point{x: x, y: y}}
   end)
 
@@ -260,7 +269,9 @@ latest does one of three things. A **newer** version is read against
 the latest the reader has, matching fields by name in text and by
 position in `.dxnb`; anything it does not know is dropped. An **older**
 version it has loaded is handed to the schema's materializer to be
-upgraded, and refused (`schema/no-materializer`) when there is none.
+upgraded — the materializer is where `version` matters, filling in
+what an older version lacked — and refused (`schema/no-materializer`)
+when there is none.
 An older version it has *not* loaded is refused
 (`schema/unknown-version`).
 
@@ -320,7 +331,7 @@ if Code.ensure_loaded?(Dextrin.Schema.Provider) do
     def dxn_struct, do: MyLib.Point
 
     @impl true
-    def dxn_materialize(%{x: x, y: y}), do: {:ok, %MyLib.Point{x: x, y: y}}
+    def dxn_materialize("Point", _version, %{"x" => x, "y" => y}), do: {:ok, %MyLib.Point{x: x, y: y}}
   end
 end
 ```
@@ -337,8 +348,8 @@ Dextrin.encode(%MyLib.Point{x: 1, y: 2}, registry: registry)
 #=> {:ok, "%Point(1){x:1,y:2}"}
 ```
 
-`dxn_materialize/1` is optional — without it, decoding falls back to
-the same plain field map any other schema with no materializer
+`dxn_materialize/3` is optional — without it, decoding falls back to
+the same generic `Dextrin.Struct` any other schema with no materializer
 produces. See `Dextrin.Schema.Provider`'s own moduledoc for why this
 is a companion module rather than the struct's own, and for reading
 `dxn_schema/0`'s source from a file at compile time instead of an
@@ -390,7 +401,7 @@ has to separately check for.
 
 ```elixir
 MyApp.ConfigLoader.load("config.dxn")
-#=> {:ok, %{"host" => "localhost", "port" => 4000, "tags" => [%Dextrin.Symbol{name: "dev"}, %Dextrin.Symbol{name: "local"}]}}
+#=> {:ok, %Dextrin.Struct{name: "Server", version: 1, fields: {:keyed, [{"host", "localhost"}, {"port", 4000}, {"tags", [%Dextrin.Symbol{name: "dev"}, %Dextrin.Symbol{name: "local"}]}]}}}
 ```
 
 From here: [Examples](EXAMPLES.md) for more worked scenarios, the

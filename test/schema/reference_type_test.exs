@@ -44,7 +44,17 @@ defmodule Dextrin.Schema.ReferenceTypeTest do
   end
 
   test "the correct struct is still accepted", %{registry: registry} do
-    assert {:ok, %{"home" => %{"street" => "Main St"}, "homes" => []}} =
+    assert {:ok,
+            %Dextrin.Struct{
+              name: "Person",
+              fields:
+                {:keyed,
+                 [
+                   {"home",
+                    %Dextrin.Struct{name: "Address", fields: {:keyed, [{"street", "Main St"}]}}},
+                   {"homes", []}
+                 ]}
+            }} =
              Dextrin.decode(~s(%Person{home: %Address{street: "Main St"}, homes: []}),
                registry: registry
              )
@@ -70,7 +80,19 @@ defmodule Dextrin.Schema.ReferenceTypeTest do
   end
 
   test "a list-of reference with every element correct still succeeds", %{registry: registry} do
-    assert {:ok, %{"homes" => [%{"street" => "A"}, %{"street" => "B"}]}} =
+    assert {:ok,
+            %Dextrin.Struct{
+              fields:
+                {:keyed,
+                 [
+                   {"home", _},
+                   {"homes",
+                    [
+                      %Dextrin.Struct{fields: {:keyed, [{"street", "A"}]}},
+                      %Dextrin.Struct{fields: {:keyed, [{"street", "B"}]}}
+                    ]}
+                 ]}
+            }} =
              Dextrin.decode(
                ~s(%Person{home: %Address{street: "A"}, homes: [%Address{street: "A"}, %Address{street: "B"}]}),
                registry: registry
@@ -101,7 +123,9 @@ defmodule Dextrin.Schema.ReferenceTypeTest do
 
     registry =
       Dextrin.Registry.new()
-      |> Dextrin.Registry.put_struct_materializer("Address", fn %{street: s} ->
+      |> Dextrin.Registry.put_struct_materializer("Address", fn "Address",
+                                                                _version,
+                                                                %{"street" => s} ->
         {:ok, %NamedAddress{street: s}}
       end)
 
@@ -110,7 +134,13 @@ defmodule Dextrin.Schema.ReferenceTypeTest do
     assert {:ok, %NamedAddress{street: "A"}} =
              Dextrin.decode(~s(%Address{street: "A"}), registry: registry)
 
-    assert {:ok, %{"home" => %NamedAddress{street: "A"}, "homes" => [%NamedAddress{street: "B"}]}} =
+    assert {:ok,
+            %Dextrin.Struct{
+              name: "Person",
+              fields:
+                {:keyed,
+                 [{"home", %NamedAddress{street: "A"}}, {"homes", [%NamedAddress{street: "B"}]}]}
+            }} =
              Dextrin.decode(
                ~s(%Person{home: %Address{street: "A"}, homes: [%Address{street: "B"}]}),
                registry: registry
@@ -121,11 +151,15 @@ defmodule Dextrin.Schema.ReferenceTypeTest do
        %{
          registry: registry
        } do
-    assert {:ok, [%{"street" => "A"}, %{"ein" => "1"}]} =
-             Dextrin.decode(~s([%Address{street: "A"}, %Company{ein: "1"}]), registry: registry)
+    assert Dextrin.decode(~s([%Address{street: "A"}, %Company{ein: "1"}]), registry: registry) ==
+             {:ok,
+              [
+                Dextrin.Struct.keyed("Address", [{"street", "A"}], 1),
+                Dextrin.Struct.keyed("Company", [{"ein", "1"}], 1)
+              ]}
 
-    assert {:ok, %{"street" => "A"}} =
-             Dextrin.decode(~s(%Address{street: "A"}), registry: registry)
+    assert Dextrin.decode(~s(%Address{street: "A"}), registry: registry) ==
+             {:ok, Dextrin.Struct.keyed("Address", [{"street", "A"}], 1)}
   end
 
   test "encode-time reference checking now recurses fully into the referenced value's own schema",

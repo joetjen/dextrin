@@ -31,7 +31,7 @@ defmodule Dextrin.Schema.ReadingAcrossVersionsTest do
   describe "the writer's version is the latest loaded" do
     test "is read with exactly that schema" do
       assert Dextrin.decode(~s|%User(3){name: "a"}|, registry: loaded([@v2, @v3])) ==
-               {:ok, %{"name" => "a", "email" => nil, "nick" => nil}}
+               {:ok, Struct.keyed("User", [{"name", "a"}], 3)}
     end
 
     test "and its item count is exact" do
@@ -43,10 +43,15 @@ defmodule Dextrin.Schema.ReadingAcrossVersionsTest do
     test "goes to the materializer, with the fields its own schema names" do
       registry =
         loaded([@v2, @v3])
-        |> Registry.put_struct_materializer("User", fn fields -> {:ok, {:upgraded, fields}} end)
+        |> Registry.put_struct_materializer("User", fn "User", version, fields ->
+          send(self(), {:upgrading, version, fields})
+          {:ok, fields}
+        end)
 
       assert Dextrin.decode(~s|%User(2){name: "a"}|, registry: registry) ==
-               {:ok, {:upgraded, %{name: "a", email: nil}}}
+               {:ok, %{"name" => "a"}}
+
+      assert_received {:upgrading, 2, %{"name" => "a"}}
     end
 
     test "and without one is refused, rather than read as if it were the latest" do
@@ -66,7 +71,9 @@ defmodule Dextrin.Schema.ReadingAcrossVersionsTest do
     test "is refused, even with a materializer, which would have no field names to work with" do
       registry =
         loaded([@v2, @v3])
-        |> Registry.put_struct_materializer("User", fn fields -> {:ok, fields} end)
+        |> Registry.put_struct_materializer("User", fn _name, _version, fields ->
+          {:ok, fields}
+        end)
 
       assert category(Dextrin.decode(~s|%User(1){name: "a"}|, registry: registry)) ==
                "schema/unknown-version"
@@ -81,7 +88,7 @@ defmodule Dextrin.Schema.ReadingAcrossVersionsTest do
   describe "the writer's version is newer than anything loaded" do
     test "is read against the latest loaded, matching text by name" do
       assert Dextrin.decode(~s|%User(3){nick: "n", name: "a"}|, registry: loaded([@v1, @v2])) ==
-               {:ok, %{"name" => "a", "email" => nil}}
+               {:ok, Struct.keyed("User", [{"name", "a"}], 2)}
     end
 
     test "and a field the latest requires must still be there" do
@@ -92,14 +99,14 @@ defmodule Dextrin.Schema.ReadingAcrossVersionsTest do
       bytes = binary(Struct.positional("User", ["a", "e", "n"], 3))
 
       assert Dextrin.decode_binary(bytes, registry: loaded([@v1, @v2])) ==
-               {:ok, %{"name" => "a", "email" => "e"}}
+               {:ok, Struct.keyed("User", [{"name", "a"}, {"email", "e"}], 2)}
     end
 
     test "and fewer items leave the optional fields absent" do
       bytes = binary(Struct.positional("User", ["a"], 3))
 
       assert Dextrin.decode_binary(bytes, registry: loaded([@v1, @v2])) ==
-               {:ok, %{"name" => "a", "email" => nil}}
+               {:ok, Struct.keyed("User", [{"name", "a"}], 2)}
     end
 
     # The documented risk: a newer version that reordered its fields is
@@ -108,7 +115,7 @@ defmodule Dextrin.Schema.ReadingAcrossVersionsTest do
       bytes = binary(Struct.positional("User", ["e", "a"], 3))
 
       assert Dextrin.decode_binary(bytes, registry: loaded([@v1, @v2])) ==
-               {:ok, %{"name" => "e", "email" => "a"}}
+               {:ok, Struct.keyed("User", [{"name", "e"}, {"email", "a"}], 2)}
     end
   end
 end

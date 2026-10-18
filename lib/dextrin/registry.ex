@@ -23,7 +23,15 @@ defmodule Dextrin.Registry do
 
   @type tag_decoder :: (Dextrin.Value.t() -> {:ok, term()} | {:error, term()})
   @type tag_encoder :: (struct() -> {:ok, Dextrin.Value.t()} | {:error, term()})
-  @type struct_materializer :: (%{atom() => term()} -> {:ok, term()} | {:error, term()})
+  @typedoc """
+  A schema's materializer (DXN.md §4.8): called for every decoded struct
+  of its schema, whatever the version, with the schema's name, the
+  version the fields were read with and the fields keyed by string. It
+  answers the application's latest-version value, which is checked
+  against the latest schema, or `{:error, reason}`.
+  """
+  @type struct_materializer ::
+          (String.t(), pos_integer(), %{String.t() => term()} -> {:ok, term()} | {:error, term()})
   @type struct_resolver :: (String.t() -> {:ok, Compiled.t()} | :unknown)
 
   @type t :: %__MODULE__{
@@ -167,7 +175,7 @@ defmodule Dextrin.Registry do
 
   @spec put_struct_materializer(t(), String.t(), struct_materializer()) :: t()
   def put_struct_materializer(%__MODULE__{} = registry, name, materializer)
-      when is_binary(name) and is_function(materializer, 1) do
+      when is_binary(name) and is_function(materializer, 3) do
     %{registry | materializers: Map.put(registry.materializers, name, materializer)}
   end
 

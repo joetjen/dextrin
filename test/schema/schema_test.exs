@@ -12,6 +12,8 @@ defmodule Dextrin.SchemaTest do
 
   use ExUnit.Case, async: true
 
+  alias Dextrin.Test.Support.DecodedFields
+
   @dxns """
   %{
     Point: %schema{
@@ -32,18 +34,23 @@ defmodule Dextrin.SchemaTest do
     %{registry: registry}
   end
 
-  test "a keyed struct matching its schema decodes to a field map", %{registry: registry} do
-    assert {:ok, %{"x" => 1, "y" => 2}} = Dextrin.decode("%Point{x: 1, y: 2}", registry: registry)
+  test "a keyed struct matching its schema decodes to a generic struct at its schema's version",
+       %{registry: registry} do
+    assert Dextrin.decode("%Point{x: 1, y: 2}", registry: registry) ==
+             {:ok,
+              %Dextrin.Struct{name: "Point", version: 1, fields: {:keyed, [{"x", 1}, {"y", 2}]}}}
   end
 
   test "a positional struct matching its schema decodes using field order", %{registry: registry} do
-    assert {:ok, %{"x" => 1, "y" => 2}} = Dextrin.decode("%Point[1, 2]", registry: registry)
+    assert {:ok, %{"x" => 1, "y" => 2}} =
+             DecodedFields.of(Dextrin.decode("%Point[1, 2]", registry: registry))
   end
 
   test "keyed fields may be written in any order — names resolve them, not position", %{
     registry: registry
   } do
-    assert {:ok, %{"x" => 1, "y" => 2}} = Dextrin.decode("%Point{y: 2, x: 1}", registry: registry)
+    assert {:ok, %{"x" => 1, "y" => 2}} =
+             DecodedFields.of(Dextrin.decode("%Point{y: 2, x: 1}", registry: registry))
   end
 
   test "a struct with no compiled schema still falls back to opaque", %{registry: registry} do
@@ -55,16 +62,21 @@ defmodule Dextrin.SchemaTest do
     assert {:error, %Dextrin.Error{}} = Dextrin.decode("%Point{x: 1}", registry: registry)
   end
 
-  test "optional field may be absent", %{registry: registry} do
-    assert {:ok, %{"note" => nil}} =
-             Dextrin.decode(~s(%Money{amount: 19.99M, currency: :usd}), registry: registry)
-             |> then(fn {:ok, m} -> {:ok, Map.take(m, ["note"])} end)
+  test "optional field may be absent, and then stays absent", %{registry: registry} do
+    {:ok, fields} =
+      DecodedFields.of(
+        Dextrin.decode(~s(%Money{amount: 19.99M, currency: :usd}), registry: registry)
+      )
+
+    refute Map.has_key?(fields, "note")
   end
 
   test "optional field may be present", %{registry: registry} do
     assert {:ok, %{"note" => "a gift"}} =
-             Dextrin.decode(~s(%Money{amount: 19.99M, currency: :usd, note: "a gift"}),
-               registry: registry
+             DecodedFields.of(
+               Dextrin.decode(~s(%Money{amount: 19.99M, currency: :usd, note: "a gift"}),
+                 registry: registry
+               )
              )
   end
 
@@ -85,7 +97,9 @@ defmodule Dextrin.SchemaTest do
   test "schema enforcement also applies to .dxnb", %{registry: registry} do
     {:ok, value} = Dextrin.decode("%Point{x: 1, y: 2}", registry: registry)
     assert {:ok, encoded} = Dextrin.encode_binary(value)
-    assert {:ok, %{"x" => 1, "y" => 2}} = Dextrin.decode_binary(encoded, registry: registry)
+
+    assert {:ok, %{"x" => 1, "y" => 2}} =
+             DecodedFields.of(Dextrin.decode_binary(encoded, registry: registry))
   end
 
   test "Dextrin.Schema.validate/3 checks an already-decoded opaque struct", %{registry: registry} do
@@ -122,7 +136,9 @@ defmodule Dextrin.SchemaTest do
          registry: registry
        } do
     registry =
-      Dextrin.Registry.put_struct_materializer(registry, "Point", fn %{x: x, y: y} ->
+      Dextrin.Registry.put_struct_materializer(registry, "Point", fn "Point",
+                                                                     1,
+                                                                     %{"x" => x, "y" => y} ->
         {:ok, %Dextrin.SchemaTest.TestPointStruct{x: x, y: y}}
       end)
 
@@ -143,8 +159,11 @@ defmodule Dextrin.SchemaTest do
       {:ok, doc} = Dextrin.decode(dxns)
       {:ok, registry} = Dextrin.Schema.compile(doc)
 
-      assert {:ok, %{"count" => 0}} = Dextrin.decode("%Widget{}", registry: registry)
-      assert {:ok, %{"count" => 5}} = Dextrin.decode("%Widget{count: 5}", registry: registry)
+      assert {:ok, %{"count" => 0}} =
+               DecodedFields.of(Dextrin.decode("%Widget{}", registry: registry))
+
+      assert {:ok, %{"count" => 5}} =
+               DecodedFields.of(Dextrin.decode("%Widget{count: 5}", registry: registry))
     end
 
     test "%field{} with no explicit type: defaults to :any" do
@@ -155,10 +174,11 @@ defmodule Dextrin.SchemaTest do
       {:ok, doc} = Dextrin.decode(dxns)
       {:ok, registry} = Dextrin.Schema.compile(doc)
 
-      assert {:ok, %{"value" => 1}} = Dextrin.decode("%Widget{value: 1}", registry: registry)
+      assert {:ok, %{"value" => 1}} =
+               DecodedFields.of(Dextrin.decode("%Widget{value: 1}", registry: registry))
 
       assert {:ok, %{"value" => "x"}} =
-               Dextrin.decode(~s(%Widget{value: "x"}), registry: registry)
+               DecodedFields.of(Dextrin.decode(~s(%Widget{value: "x"}), registry: registry))
     end
   end
 

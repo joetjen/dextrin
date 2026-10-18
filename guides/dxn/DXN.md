@@ -656,6 +656,20 @@ struct was written with against the versions it has loaded:
   with a materializer — without the writer's schema there are no field
   names to hand it.
 
+**One materializer per schema.** A reader may register, for each
+schema, one function that builds the application's value from a
+decoded struct. It is called for **every** decoded struct of its
+schema, whatever the version, with the schema's name, the version the
+fields were read with, and the fields keyed by field-name string;
+nested structs are built first. It upgrades older versions,
+materializes, refines and validates, and its result MUST be checked
+against the latest loaded version: a refusal, or a result that version
+rejects, is an error (`schema/materializer`). Without a materializer
+the latest version comes back as the implementation's generic struct
+value, at that version, its fields in the schema's order; an optional
+field that was absent stays absent. Encoding checks the schema's types
+only.
+
 **The risk of reading forward is normative.** If a newer version
 reordered, inserted or removed fields, an older reader of `.dxnb`
 assigns values to the wrong fields, without an error whenever the types

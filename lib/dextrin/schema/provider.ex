@@ -1,8 +1,8 @@
 defmodule Dextrin.Schema.Provider do
   @moduledoc """
   Lets a struct's *own* library ship a DXN schema for it — field
-  names, types, required/optional, refinements, a materializer — without that library ever taking a hard dependency on
-  `dextrin`. This is the `struct` (schema-backed) counterpart to what
+  names, types, required/optional, refinements, a materializer —
+  without that library ever taking a hard dependency on `dextrin`. This is the `struct` (schema-backed) counterpart to what
   `Dextrin.Registry.put_tag_encoder/4` already does for simple
   scalar-wrapping `custom-tag` values: an extension point owned by the
   *consuming* application, not forced onto every struct-defining
@@ -110,7 +110,8 @@ defmodule Dextrin.Schema.Provider do
           def dxn_struct, do: SomeLib.Money
 
           @impl true
-          def dxn_materialize(%{amount: a, currency: c}), do: {:ok, %SomeLib.Money{amount: a, currency: c}}
+          def dxn_materialize("Money", _version, %{"amount" => a, "currency" => c}),
+            do: {:ok, %SomeLib.Money{amount: a, currency: c}}
         end
       end
 
@@ -145,7 +146,7 @@ defmodule Dextrin.Schema.Provider do
   — not only the one entry `dxn_schema_name/0` points at. A library
   exposing several related structs can ship them all from one provider
   module's `dxn_schema/0`, calling `register_provider/2` once per
-  struct that needs its own `dxn_struct/0`/`dxn_materialize/1`
+  struct that needs its own `dxn_struct/0`/`dxn_materialize/3`
   association, while every schema still shares the same compiled
   named-type vocabulary.
 
@@ -172,12 +173,12 @@ defmodule Dextrin.Schema.Provider do
 
   ## The materializer is optional
 
-  `dxn_materialize/1` is the one optional callback. Without it, a
-  value decoded against this schema falls back to the default plain
-  string-keyed field map — the same default any other registered
-  schema gets with no materializer of its own. Provide it only when
-  you actually want decoding to produce your own struct rather than a
-  generic map.
+  `dxn_materialize/3` is the one optional callback. Without it, a
+  value decoded against this schema comes back as a generic
+  `Dextrin.Struct` at the schema's latest version — the same default any
+  other registered schema gets with no materializer of its own — and an
+  older version of it is refused. Provide it when you want decoding to
+  produce your own struct, or to upgrade older versions.
 
   ## This is sugar, not a new capability
 
@@ -209,11 +210,15 @@ defmodule Dextrin.Schema.Provider do
   @callback dxn_struct() :: module()
 
   @doc """
-  Optional. Same shape as `Dextrin.Registry.put_struct_materializer/3`'s
-  callback — turns a schema-validated field map into `dxn_struct/0`'s
-  struct. Omit it to fall back to the default plain field map.
+  Optional. The schema's materializer
+  (`Dextrin.Registry.put_struct_materializer/3`): called with the
+  schema's name, the version the fields were read with and the checked
+  fields keyed by string, for every decoded struct of the schema
+  whatever its version; answers `dxn_struct/0`'s struct at the latest
+  version. Omit it to fall back to the generic `Dextrin.Struct`.
   """
-  @callback dxn_materialize(%{optional(atom()) => term()}) :: {:ok, term()} | {:error, term()}
+  @callback dxn_materialize(String.t(), pos_integer(), %{optional(String.t()) => term()}) ::
+              {:ok, term()} | {:error, term()}
 
-  @optional_callbacks dxn_materialize: 1
+  @optional_callbacks dxn_materialize: 3
 end

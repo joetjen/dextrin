@@ -89,7 +89,9 @@ defmodule Dextrin.Schema.VersionsInDocumentsTest do
   test "an untagged struct is read as the latest version" do
     registry = registry([v1(), "%{Point: %schema(2){x: :integer, y: :integer}}"])
     assert {:error, _} = Dextrin.decode("%Point{x: 1}", registry: registry)
-    assert {:ok, %{"x" => 1, "y" => 2}} = Dextrin.decode("%Point{x: 1, y: 2}", registry: registry)
+
+    assert Dextrin.decode("%Point{x: 1, y: 2}", registry: registry) ==
+             {:ok, Struct.keyed("Point", [{"x", 1}, {"y", 2}], 2)}
   end
 
   test "a struct reference names no version: User(2) in a type expression is a syntax error" do

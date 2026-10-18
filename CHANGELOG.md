@@ -58,6 +58,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to the materializer, and refused as `schema/no-materializer` without
   one; an older version that is not loaded is refused as
   `schema/unknown-version`.
+- **One materializer per schema, for every version** (`DXN.md` §4.8).
+  `Dextrin.Registry.put_struct_materializer/3` takes a function of
+  `(schema_name, version, fields)`, `fields` keyed by string; it is
+  called for every decoded struct of its schema, upgrades older
+  versions, and its result is checked against the latest schema — a
+  refusal or a rejected result is `schema/materializer`.
+  `Dextrin.Schema.Provider`'s optional callback becomes
+  `dxn_materialize/3` accordingly.
+- **Without a materializer, a checked struct decodes to a
+  `Dextrin.Struct`** at its schema's latest version, fields in the
+  schema's order, instead of a plain string-keyed map — so it encodes
+  back to the text it came from. An optional field that was absent stays
+  absent instead of becoming `nil`.
+- `Dextrin.Schema.Validator.materialize/4` is replaced by `resolve/3`;
+  building the value is `Dextrin.Schema.Reader`'s job.
 - **Removed: `closed:`, `forbidden:` and `refine-fn:`**, and with them
   `Dextrin.Schema.compile/3`'s and `Dextrin.Schema.FileResolver.for_paths/2`'s
   `predicates` argument. A struct may carry fields its schema does not

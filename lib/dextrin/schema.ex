@@ -43,22 +43,23 @@ defmodule Dextrin.Schema do
   different schema than the one originally used.
   """
   @spec validate(term(), Registry.t(), String.t()) :: :ok | {:error, term()}
-  def validate(%Dextrin.Struct{name: name, fields: fields}, %Registry{} = registry, schema_name)
+  def validate(
+        %Dextrin.Struct{name: name, version: version, fields: fields},
+        %Registry{} = registry,
+        schema_name
+      )
       when name == schema_name do
-    case Registry.fetch_struct_schema(registry, schema_name) do
-      {:ok, compiled, _registry} ->
-        materializer =
-          case Registry.fetch_materializer(registry, schema_name) do
-            {:ok, fun} -> fun
-            :error -> nil
-          end
-
-        with {:ok, _materialized} <-
-               Validator.materialize(compiled, fields, materializer, registry),
-             do: :ok
+    # Read exactly as a decode would read it, version and materializer
+    # included (Dextrin.Schema.Reader).
+    case Dextrin.Schema.Reader.read(registry, schema_name, version, fields) do
+      {:ok, _value, _registry} ->
+        :ok
 
       {:unknown, _registry} ->
         {:error, "no compiled schema registered for #{inspect(schema_name)}"}
+
+      {:error, _} = error ->
+        error
     end
   end
 
@@ -135,10 +136,10 @@ defmodule Dextrin.Schema do
        what lets `Dextrin.encode/2`/`encode_binary/2` serialize
        `dxn_struct/0`'s struct directly and lets `{:reference, name}`
        checks recognize it.
-    4. If `module` exports `dxn_materialize/1` (the one optional
+    4. If `module` exports `dxn_materialize/3` (the one optional
        callback), registers it via
        `Dextrin.Registry.put_struct_materializer/3`. If not, decoding
-       this schema falls back to the default plain field map, same as
+       this schema falls back to the generic `Dextrin.Struct`, same as
        any other materializer-less schema.
 
   Composes exactly like `compile/3`'s own `base_registry` — calling
@@ -162,8 +163,8 @@ defmodule Dextrin.Schema do
           registry = Registry.put_struct_module(registry, name, module.dxn_struct())
 
           registry =
-            if function_exported?(module, :dxn_materialize, 1) do
-              Registry.put_struct_materializer(registry, name, &module.dxn_materialize/1)
+            if function_exported?(module, :dxn_materialize, 3) do
+              Registry.put_struct_materializer(registry, name, &module.dxn_materialize/3)
             else
               registry
             end

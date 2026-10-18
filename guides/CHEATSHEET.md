@@ -86,10 +86,10 @@ registry
 ## Registry: schemas
 
 ```elixir
-{:ok, registry} = Dextrin.Schema.compile(schema_doc, base_registry \\ Dextrin.Registry.new(), predicates \\ %{})
+{:ok, registry} = Dextrin.Schema.compile(schema_doc, base_registry \\ Dextrin.Registry.new())
 
 registry
-|> Dextrin.Registry.put_struct_materializer(name, fn field_map -> {:ok, term} end)
+|> Dextrin.Registry.put_struct_materializer(name, fn name, version, fields -> {:ok, term} end)   # every version; result checked against the latest
 |> Dextrin.Registry.put_struct_module(name, module)   # for {:reference, name} checks on hand-built structs
 |> Dextrin.Registry.put_resolver(fn name -> {:ok, compiled} | :unknown end)   # lazy/on-demand schema loading
 ```
@@ -110,7 +110,7 @@ support:
 
 `SomeLib.Money.DXN` implements the `Dextrin.Schema.Provider` behaviour
 (`dxn_schema/0`, `dxn_schema_name/0`, `dxn_struct/0`, and optionally
-`dxn_materialize/1`) — a small, separately-compiled companion module,
+`dxn_materialize/3`) — a small, separately-compiled companion module,
 not the struct's own module, so the struct itself is never
 conditionally compiled.
 

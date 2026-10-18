@@ -98,6 +98,6 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
     value = Dextrin.Struct.keyed("Bar", [{"baz", 42}])
     assert {:ok, text} = Dextrin.encode(value, registry: registry)
     assert {:ok, decoded} = Dextrin.decode(text, registry: registry)
-    assert decoded == %{"baz" => 42}
+    assert decoded == Dextrin.Struct.keyed("Bar", [{"baz", 42}], 1)
   end
 end

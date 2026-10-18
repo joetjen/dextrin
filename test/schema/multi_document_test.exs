@@ -16,6 +16,8 @@ defmodule Dextrin.Schema.MultiDocumentTest do
 
   use ExUnit.Case, async: true
 
+  alias Dextrin.Test.Support.DecodedFields
+
   @point_dxns ~s(%{ Point: %schema{ x: :integer, y: :integer } })
   @money_dxns ~s(%{ Money: %schema{ amount: :decimal } })
 
@@ -26,10 +28,11 @@ defmodule Dextrin.Schema.MultiDocumentTest do
     {:ok, registry} = Dextrin.Schema.compile(point_doc)
     {:ok, registry} = Dextrin.Schema.compile(money_doc, registry)
 
-    assert {:ok, %{"x" => 1, "y" => 2}} = Dextrin.decode("%Point{x: 1, y: 2}", registry: registry)
+    assert {:ok, %{"x" => 1, "y" => 2}} =
+             DecodedFields.of(Dextrin.decode("%Point{x: 1, y: 2}", registry: registry))
 
     assert {:ok, %{"amount" => amount}} =
-             Dextrin.decode("%Money{amount: 19.99M}", registry: registry)
+             DecodedFields.of(Dextrin.decode("%Money{amount: 19.99M}", registry: registry))
 
     assert Decimal.equal?(amount, Decimal.new("19.99"))
   end
@@ -45,7 +48,8 @@ defmodule Dextrin.Schema.MultiDocumentTest do
 
     registry = Dextrin.Registry.new() |> Dextrin.Registry.put_resolver(resolver)
 
-    assert {:ok, %{"x" => 1, "y" => 2}} = Dextrin.decode("%Point{x: 1, y: 2}", registry: registry)
+    assert {:ok, %{"x" => 1, "y" => 2}} =
+             DecodedFields.of(Dextrin.decode("%Point{x: 1, y: 2}", registry: registry))
   end
 
   test "an unresolvable schema name falls back to opaque, never crashes" do
@@ -69,7 +73,11 @@ defmodule Dextrin.Schema.MultiDocumentTest do
 
     registry = Dextrin.Registry.new() |> Dextrin.Registry.put_resolver(resolver)
 
-    assert {:ok, [%{"x" => 1, "y" => 1}, %{"x" => 2, "y" => 2}]} =
+    assert {:ok,
+            [
+              %Dextrin.Struct{fields: {:keyed, [{"x", 1}, {"y", 1}]}},
+              %Dextrin.Struct{fields: {:keyed, [{"x", 2}, {"y", 2}]}}
+            ]} =
              Dextrin.decode("[%Point{x: 1, y: 1} %Point{x: 2, y: 2}]", registry: registry)
 
     assert :counters.get(counter, 1) == 1

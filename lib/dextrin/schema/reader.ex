@@ -17,10 +17,22 @@ defmodule Dextrin.Schema.Reader do
       the latest would be a guess.
     * **Older and not loaded:** refused, `schema/unknown-version`, even
       with a materializer, which would receive no field names.
+
+  **What is built from the fields** (B4): the schema's materializer,
+  when one is registered, is called for every struct of its schema,
+  whatever the version, as `materializer.(name, version, fields)` --
+  `version` being the one the fields were read with, `fields` a map
+  keyed by field-name string. It upgrades, builds the application's own
+  value, refines and validates; its result is checked against the latest
+  schema, and a refusal or a result the latest schema rejects is
+  `schema/materializer`. Without a materializer the latest version comes
+  back as a `Dextrin.Struct` at that version, its fields in the schema's
+  order, which is written back exactly as it was read. Nested structs
+  are built first, so a materializer sees its fields' structs finished.
   """
 
-  alias Dextrin.Registry
-  alias Dextrin.Schema.{Compiled, Validator}
+  alias Dextrin.{Registry, Struct}
+  alias Dextrin.Schema.{Compiled, Validated, Validator}
 
   @doc """
   `fields` of the struct `name`, written at `version` (nil when it says
@@ -44,13 +56,13 @@ defmodule Dextrin.Schema.Reader do
 
   defp by_version(registry, %Compiled{version: latest} = compiled, version, fields)
        when version == nil or version == latest,
-       do: materialized(registry, compiled, fields)
+       do: materialized(registry, compiled, compiled, fields)
 
   defp by_version(registry, %Compiled{version: latest} = compiled, version, fields)
        when version > latest,
-       do: materialized(registry, compiled, forward(compiled, fields))
+       do: materialized(registry, compiled, compiled, forward(compiled, fields))
 
-  defp by_version(registry, %Compiled{name: name}, version, fields) do
+  defp by_version(registry, %Compiled{name: name} = latest, version, fields) do
     case {Registry.fetch_struct_schema(registry, name, version), materializer(registry, name)} do
       {{:unknown, _registry}, _materializer} ->
         {:error,
@@ -68,7 +80,7 @@ defmodule Dextrin.Schema.Reader do
          )}
 
       {{:ok, older, _registry}, _materializer} ->
-        materialized(registry, older, fields)
+        materialized(registry, older, latest, fields)
     end
   end
 
@@ -82,11 +94,43 @@ defmodule Dextrin.Schema.Reader do
 
   defp forward(_compiled, {:keyed, _pairs} = fields), do: fields
 
-  defp materialized(registry, %Compiled{name: name} = compiled, fields) do
-    case Validator.materialize(compiled, fields, materializer(registry, name), registry) do
-      {:ok, value} -> {:ok, value, registry}
-      {:error, _} = error -> error
+  # The fields read with `reading`, then built into a value: by the
+  # materializer when there is one, checked against `latest`; as a
+  # generic struct at `latest`'s version when there is none. Wrapped in
+  # `Validated` so an outer schema's reference can tell where it came
+  # from.
+  defp materialized(registry, %Compiled{name: name} = reading, %Compiled{} = latest, fields) do
+    with {:ok, pairs} <- Validator.resolve(reading, fields, registry),
+         {:ok, value} <- built(registry, materializer(registry, name), reading, latest, pairs) do
+      {:ok, %Validated{name: name, value: value}, registry}
     end
+  end
+
+  defp built(_registry, nil, _reading, %Compiled{name: name, version: version}, pairs),
+    do: {:ok, Struct.keyed(name, pairs, version)}
+
+  defp built(registry, materializer, %Compiled{name: name} = reading, latest, pairs) do
+    case materializer.(name, reading.version, Map.new(pairs)) do
+      {:ok, value} ->
+        case Validator.validate_for_encode(latest, value, registry) do
+          :ok ->
+            {:ok, value}
+
+          {:error, reason} ->
+            materializer_error(
+              name,
+              "answered a value version #{latest.version} rejects: #{reason}"
+            )
+        end
+
+      {:error, reason} ->
+        materializer_error(name, "refused: #{inspect(reason)}")
+    end
+  end
+
+  defp materializer_error(name, what) do
+    {:error,
+     Dextrin.Error.action("the materializer for #{inspect(name)} #{what}", "schema/materializer")}
   end
 
   defp materializer(registry, name) do

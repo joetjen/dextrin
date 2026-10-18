@@ -21,7 +21,11 @@ defmodule Dextrin.Schema.TypeExprTest do
     registry
   end
 
-  defp field(registry, value_text), do: Dextrin.decode("%T{v: #{value_text}}", registry: registry)
+  defp field(registry, value_text),
+    do:
+      Dextrin.Test.Support.DecodedFields.of(
+        Dextrin.decode("%T{v: #{value_text}}", registry: registry)
+      )
 
   describe "type_expr forms" do
     test ":any matches anything" do
@@ -113,7 +117,8 @@ defmodule Dextrin.Schema.TypeExprTest do
     end
 
     test "struct (%schema{...} itself, exercised throughout schema_test.exs)" do
-      assert {:ok, %{"x" => 1}} = Dextrin.decode("%Other{x: 1}", registry: registry_for(":any"))
+      assert {:ok, %Dextrin.Struct{name: "Other", fields: {:keyed, [{"x", 1}]}}} =
+               Dextrin.decode("%Other{x: 1}", registry: registry_for(":any"))
     end
   end
 

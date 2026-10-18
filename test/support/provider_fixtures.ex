@@ -24,7 +24,8 @@ defmodule Dextrin.Test.Support.ProviderPoint.DXN do
   def dxn_struct, do: Dextrin.Test.Support.ProviderPoint
 
   @impl true
-  def dxn_materialize(%{x: x, y: y}), do: {:ok, %Dextrin.Test.Support.ProviderPoint{x: x, y: y}}
+  def dxn_materialize("Point", _version, %{"x" => x, "y" => y}),
+    do: {:ok, %Dextrin.Test.Support.ProviderPoint{x: x, y: y}}
 end
 
 defmodule Dextrin.Test.Support.ProviderPointNoMaterializer do

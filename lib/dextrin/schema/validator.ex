@@ -1,8 +1,8 @@
 defmodule Dextrin.Schema.Validator do
   @moduledoc """
   Checks a value's fields against a `Dextrin.Schema.Compiled` schema
-  (required fields and declared types) — shared by decode (`materialize/4`,
-  which also produces a materialized result) and encode-time validation
+  (required fields and declared types) — shared by decode (`resolve/3`,
+  whose result `Dextrin.Schema.Reader` builds a value from) and encode-time validation
   (`validate_for_encode/3`/`validate_tree_for_encode/2`, which never
   transforms `value`). Both directions reuse the exact same
   `resolve_fields/3`/`TypeExpr.matches?/3` field-checking — encode's
@@ -22,26 +22,24 @@ defmodule Dextrin.Schema.Validator do
   @type fields :: {:keyed, [{String.t(), term()}]} | {:positional, [term()]}
 
   @doc """
-  Validates and materializes `fields` against `compiled`, using
-  `materializer` if given. On success, the result is wrapped in a
-  `Validated` (name: `compiled.name`) — internal bookkeeping so an
-  *outer* schema's `{:reference, name}` field can verify this value's
-  origin even after materialization; callers that aren't another
-  schema check (the true top of decoding) must call `Validated.strip/1`
-  on the final result.
+  `fields` checked against `compiled`: every declared field, in the
+  schema's own order, as `{name, value}` pairs keyed by string.
+
+  A required field that is missing is an error, and so is a present
+  field whose value does not match its declared type. An optional field
+  that is missing takes its default, or stays absent when it has none --
+  DXN tells an absent field from one written `nil`. Nested values have
+  already been read, bottom-up; their internal `Validated` markers are
+  stripped here, so nothing past this point sees one.
+
+  Which schema the fields are read with, and what is built from them,
+  is `Dextrin.Schema.Reader`'s business.
   """
-  @spec materialize(
-          Compiled.t(),
-          fields(),
-          Dextrin.Registry.struct_materializer() | nil,
-          Registry.t()
-        ) ::
-          {:ok, Validated.t()} | {:error, String.t()}
-  def materialize(%Compiled{} = compiled, fields, materializer, registry) do
-    with {:ok, given} <- to_name_map(compiled, fields),
-         {:ok, resolved} <- resolve_fields(compiled, given, registry),
-         {:ok, result} <- materialize_result(resolved, materializer) do
-      {:ok, %Validated{name: compiled.name, value: result}}
+  @spec resolve(Compiled.t(), fields(), Registry.t()) ::
+          {:ok, [{String.t(), term()}]} | {:error, String.t()}
+  def resolve(%Compiled{} = compiled, fields, registry) do
+    with {:ok, given} <- to_name_map(compiled, fields) do
+      resolve_fields(compiled, given, registry)
     end
   end
 
@@ -58,12 +56,17 @@ defmodule Dextrin.Schema.Validator do
   end
 
   defp resolve_fields(%Compiled{fields: fields}, given, registry) do
-    Result.reduce_ok(fields, %{}, fn %Field{} = field, acc ->
+    Result.reduce_ok(fields, [], fn %Field{} = field, acc ->
       case resolve_field(field, given, registry) do
-        {:ok, value} -> {:ok, Map.put(acc, String.to_atom(field.name), value)}
+        {:ok, value} -> {:ok, [{field.name, value} | acc]}
+        :absent -> {:ok, acc}
         {:error, _} = err -> err
       end
     end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      {:error, _} = err -> err
+    end
   end
 
   defp resolve_field(
@@ -75,7 +78,7 @@ defmodule Dextrin.Schema.Validator do
       {:ok, value} -> check_type(name, value, type, registry)
       :error when default != :none -> {:ok, default}
       :error when required -> {:error, "missing required field #{inspect(name)}"}
-      :error -> {:ok, nil}
+      :error -> :absent
     end
   end
 
@@ -91,14 +94,9 @@ defmodule Dextrin.Schema.Validator do
     end
   end
 
-  defp materialize_result(resolved, nil),
-    do: {:ok, Map.new(resolved, fn {k, v} -> {Atom.to_string(k), v} end)}
-
-  defp materialize_result(resolved, materializer), do: materializer.(resolved)
-
   # ---- encode-time validation -------------------------------------------------
   #
-  # The mirror image of `materialize/4`, for data on its way *out*:
+  # The mirror image of `resolve/3`, for data on its way *out*:
   # `value` here is ordinary Elixir data you're about to encode — a
   # `Dextrin.Struct` (the one shape that round-trips to `%Name{...}`
   # wire syntax), a plain map (atom or string keys), or a real
