@@ -92,9 +92,14 @@ registry
 |> Dextrin.Registry.put_struct_materializer(name, fn name, version, fields -> {:ok, term} end)   # every version; result checked against the latest
 |> Dextrin.Registry.put_struct_module(name, module)   # for {:reference, name} checks on hand-built structs
 |> Dextrin.Registry.put_resolver(fn name -> {:ok, compiled} | :unknown end)   # lazy/on-demand schema loading
+|> Dextrin.Registry.put_strict(true)   # refuse extra fields (schema/undeclared-field); or decode(..., strict: true)
+
+Dextrin.Registry.fetch_struct_schema(registry, name)            # the latest version
+Dextrin.Registry.fetch_struct_schema(registry, name, version)   # exactly that one
+Dextrin.Registry.replace_struct_schema(registry, name, compiled) # hot swap a loaded version
 ```
 
-`Dextrin.Schema.FileResolver.for_paths(paths, predicates \\ %{})` builds
+`Dextrin.Schema.FileResolver.for_paths(paths)` builds
 a ready-made resolver for `Namespace/Name -> paths/Namespace.dxns`.
 
 ## Registry: third-party structs (`Dextrin.Schema.Provider`)
@@ -151,12 +156,26 @@ min-count / max-count                                      -- list/set/tuple
 ## Struct schema options
 
 ```elixir
-%schema{
-    required_field:  :integer
+%schema(2){                              # version 2; no header = version 1
+    required_field:  :integer            # the body's order is the .dxnb position
     optional_field?: :string             # trailing `?` = optional
     with_default:    %field{type: :integer, default: 0, description: "..."}
   }
 ```
+
+## Versions and extra fields
+
+```elixir
+%Point(2){x: 1, y: 2}            # written with version 2; encoding always writes the latest
+%Point{x: 1, y: 2}               # no version: read as the latest
+%Point[1 2 label: "a"]           # extra fields after a positional struct's items
+%Point{x: 1, y: 2, label: "a"}   # an undeclared name is an extra field
+```
+
+Newer than loaded: read against the latest (text by name, `.dxnb` by
+position). Older and loaded: the materializer upgrades it, else
+`schema/no-materializer`. Older and not loaded: `schema/unknown-version`.
+Reordering fields misreads silently in older `.dxnb` readers: append only.
 
 ## Standard named types (`Dextrin.Schema.Std`)
 

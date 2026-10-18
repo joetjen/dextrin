@@ -258,28 +258,7 @@ Dextrin.encode(%MyApp.Point{x: 1, y: 2}, registry: registry)
 #=> {:ok, "%Point(1){x:1,y:2}"}
 ```
 
-The `(1)` is the schema's version. A schema with no header is version
-1; `%schema(2){...}` is version 2, and a registry can hold several
-versions of `Point` side by side. Encoding always writes the latest
-one loaded, so the reader knows exactly which shape it is looking at;
-a struct written without one, `%Point{...}`, is read as the latest.
-
-A reader that meets a struct written with another version than its
-latest does one of three things. A **newer** version is read against
-the latest the reader has, matching fields by name in text and by
-position in `.dxnb`; anything it does not know is dropped. An **older**
-version it has loaded is handed to the schema's materializer to be
-upgraded — the materializer is where `version` matters, filling in
-what an older version lacked — and refused (`schema/no-materializer`)
-when there is none.
-An older version it has *not* loaded is refused
-(`schema/unknown-version`).
-
-**Reading forward in `.dxnb` trusts the positions.** If a newer version
-reordered, inserted or removed fields, an older reader puts values in
-the wrong fields — with no error at all when the types happen to agree.
-A schema whose older readers must keep working only ever *appends*
-fields. See DXN.md §4.8 for this and for how to deploy a schema change.
+The `(1)` is the schema's version; §8 is about what it is for.
 
 ### Fields a schema does not declare
 
@@ -301,7 +280,116 @@ and a materializer receives the extras with the declared fields. Pass
 (`schema/undeclared-field`): right for a config file written by hand,
 where an unknown field is a typo.
 
-## 8. Named types and the standard library
+## 8. Evolving a schema
+
+A schema changes; data written with the old one does not. Each `.dxns`
+document describes one **version** of each schema in it — no header
+is version 1, `%schema(2){...}` is version 2 — and a registry holds as
+many versions of `Point` side by side as you load:
+
+```elixir
+load = fn sources ->
+  Enum.reduce(sources, Dextrin.Registry.new(), fn source, registry ->
+    {:ok, doc} = Dextrin.decode(source)
+    {:ok, registry} = Dextrin.Schema.compile(doc, registry)
+    registry
+  end)
+end
+
+v1 = "%{Point: %schema{x: :integer, y: :integer}}"
+v2 = "%{Point: %schema(2){x: :integer, y: :integer, label?: :string}}"
+```
+
+**Every struct is written with the latest version loaded**, so a
+reader always knows which shape it is looking at:
+
+```elixir
+{:ok, point} = Dextrin.decode(~s|%Point{x: 1, y: 2, label: "origin"}|, registry: load.([v2]))
+Dextrin.encode(point, registry: load.([v2]))
+#=> {:ok, "%Point(2){x:1,y:2,label:\"origin\"}"}
+```
+
+A struct written without a version, `%Point{...}` — mostly text written
+by hand — is read as the latest.
+
+### A newer writer, an older reader
+
+A reader that has only version 1 reads version 2 against what it has.
+Text matches fields by name, and a field it does not know is kept as an
+extra field (§7), so it travels on:
+
+```elixir
+Dextrin.decode(~s|%Point(2){x: 1, y: 2, label: "origin"}|, registry: load.([v1]))
+#=> {:ok, %Dextrin.Struct{name: "Point", version: 1, fields: {:keyed, [{"x", 1}, {"y", 2}]}, extra: [{"label", "origin"}]}}
+```
+
+`.dxnb` has no names, only positions: the reader takes as many items
+as it has fields and drops the rest, so the same point read from binary
+comes back without its `label`. Every field the reader requires must be
+there, with the right type, either way.
+
+### An older writer, a newer reader
+
+A reader whose latest is version 2 cannot read version 1 as though it
+were version 2 — that would be a guess — so it refuses, unless the
+schema has a materializer to upgrade it:
+
+```elixir
+Dextrin.decode("%Point(1){x: 1, y: 2}", registry: load.([v1, v2]))
+#=> {:error, %Dextrin.Error{category: "schema/no-materializer", ...}}
+
+registry =
+  Dextrin.Registry.put_struct_materializer(load.([v1, v2]), "Point", fn
+    "Point", 1, fields -> {:ok, Dextrin.Struct.keyed("Point", [{"x", fields["x"]}, {"y", fields["y"]}, {"label", "unnamed"}], 2)}
+    "Point", 2, fields -> {:ok, Dextrin.Struct.keyed("Point", Enum.sort(fields), 2)}
+  end)
+
+Dextrin.decode("%Point(1){x: 1, y: 2}", registry: registry)
+#=> {:ok, %Dextrin.Struct{name: "Point", version: 2, fields: {:keyed, [{"x", 1}, {"y", 2}, {"label", "unnamed"}]}}}
+```
+
+The materializer is called for every `Point`, whatever its version, and
+what it answers is checked against the latest. That is why the version
+needs loading: an older version that is not loaded is refused
+(`schema/unknown-version`), because without its schema there are no
+field names to hand the materializer.
+
+### The one thing that goes wrong silently
+
+**Reading forward in `.dxnb` trusts the positions.** Suppose version 3
+only swaps two fields:
+
+```elixir
+v3 = "%{Point: %schema(3){y: :integer, x: :integer, label?: :string}}"
+
+{:ok, point} = Dextrin.decode(~s|%Point{x: 1, y: 2, label: "a"}|, registry: load.([v3]))
+{:ok, bytes} = Dextrin.encode_binary(point, registry: load.([v3]))
+
+Dextrin.decode_binary(bytes, registry: load.([v2]))
+#=> {:ok, %Dextrin.Struct{name: "Point", version: 2, fields: {:keyed, [{"x", 2}, {"y", 1}, {"label", "a"}]}}}
+```
+
+The version 2 reader has `x` and `y` the wrong way round, and nothing
+said so: both are integers. Text, read by name, gets it right. So a
+schema whose older readers must keep working **only ever appends**
+fields; reordering, inserting or removing one is for when every reader
+has the new version — deploy readers first (DXN.md §4.8).
+
+### Checking a change before it ships
+
+`mix dextrin.compat` compares the previous release's schema files with
+the current ones, for CI. It fails when a version's content changed
+without a new version, or when a version went down, and lists what the
+latest version's materializer has to upgrade from each older one:
+
+```sh
+$ mix dextrin.compat schemas-v1.4.0/ schemas/
+Point 1 -> 3: added label
+Point 2 -> 3: no field changes
+OK: no version discipline problems
+```
+
+## 9. Named types and the standard library
 
 Any `.dxns` entry that *isn't* a `%schema{}` defines a reusable named
 type instead — purely data, composing the fixed type_expr vocabulary:
@@ -323,7 +411,7 @@ registry as `compile/3`'s `base_registry` to use them:
 {:ok, registry} = Dextrin.Schema.compile(doc, Dextrin.Schema.Std.registry())
 ```
 
-## 9. Letting a third-party struct provide its own schema
+## 10. Letting a third-party struct provide its own schema
 
 Everything so far assumed you write the `.dxns` schema yourself. If
 `MyApp.Point` instead came from a library that doesn't want to (and
@@ -375,7 +463,7 @@ is a companion module rather than the struct's own, and for reading
 `dxn_schema/0`'s source from a file at compile time instead of an
 inline string.
 
-## 10. Putting it together: a small config loader
+## 11. Putting it together: a small config loader
 
 ```elixir
 defmodule MyApp.ConfigLoader do
