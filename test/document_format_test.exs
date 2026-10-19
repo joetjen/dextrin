@@ -53,8 +53,21 @@ defmodule Dextrin.DocumentFormatTest do
              empty: []
              version: 1.50
            }
-           # the end\
+           # the end
            """
+  end
+
+  # The header is `@dxn` and its version, one space between them,
+  # however they were spaced.
+  test "the header keeps one space between its tag and its version" do
+    assert formatted(~s|@dxn   "1.0"\n[1]|) == ~s|@dxn "1.0"\n[\n  1\n]|
+  end
+
+  # A formatter run on save must not take a file's last newline away;
+  # one the source did not end with, it does not add.
+  test "a document that ends with a newline still does" do
+    assert formatted("%{a: 1}\n") == "%{\n  a: 1\n}\n"
+    assert formatted("%{a: 1}") == "%{\n  a: 1\n}"
   end
 
   test "a comment beside an opening bracket stays on its line" do
