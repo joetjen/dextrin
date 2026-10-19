@@ -71,7 +71,11 @@ defmodule Dextrin.MixProject do
       # generates lib/dextrin/text/grammar/native.ex ahead of time --
       # it's never referenced by any code that ships, hence `only:
       # :dev, runtime: false`.
-      {:ichor_runtime, "~> 0.4"},
+      # Ichor's develop until its next release, for action errors placed
+      # where their rule matched (ichor_runtime 48ea73b); `override`
+      # because the dev-only ichor below asks for the published one.
+      # Back to a version requirement when ichor_runtime is released.
+      {:ichor_runtime, github: "joetjen/ichor_runtime", branch: "develop", override: true},
       {:ichor, "~> 0.5", only: :dev, runtime: false},
 
       # `~> 3.0`, not `~> 2.1` -- 2.4.1 (the version that constraint
