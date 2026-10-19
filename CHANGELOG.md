@@ -38,7 +38,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   files follows -- `Foo.Bar/Baz(N)` in `Foo/Bar/Baz-vN.dxns`,
   `Foo/Bar/Baz/vN.dxns` or `Foo.Bar.Baz-vN.dxns` (`-v1` optional), or the
   entry `Baz` in `Foo.Bar.dxns` -- with a version found twice refused.
-  `Dextrin.Schema.FileResolver` follows it next.
+- **`Dextrin.Schema.FileResolver` follows DXN.md §4.6**: the four
+  layouts, the first search path that has the name deciding, a file's
+  version its schema's, one version found once, and every version found
+  loaded, so an older struct reaches the materializer. The old
+  `Namespace.dxns` convention is one of the layouts and keeps working.
+- A resolver may answer every version it finds (`{:ok, [compiled]}`) or
+  why they cannot be used (`{:error, error}`), which a decode refuses
+  with; looking up an exact version consults it too.
+
 - **`bits`**, as DXN.md 1.1 defines it: a bitstring that is not whole
   bytes -- bare, or in a `Dextrin.Bytes` -- is written `@bits {"oA==" 3}`
   and `T_BITS` (216), and reads back; `Dextrin.Bits` holds the rules.
@@ -49,6 +57,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Encoding a bitstring that is not whole bytes crashed the text and
   binary writers; it is `bits` now.
+- A schema a resolver found under a namespaced name (`geo/Point` in
+  `geo.dxns`) kept the name it had in its file, so reading an older
+  version of it looked for `Point` and missed.
 - `Dextrin.Document.format/2` wrote the header without its space
   (`@dxn"1.0"`); it keeps one space between the tag and the version,
   however they were spaced.

@@ -10,6 +10,9 @@ defmodule Dextrin.MixProject do
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
+      # test/fixtures/ holds data and the scripts that wrote it, which are
+      # run against an old release by hand, never as tests.
+      test_ignore_filters: [&String.starts_with?(&1, "test/fixtures/")],
       deps: deps(),
       description: description(),
       package: package(),

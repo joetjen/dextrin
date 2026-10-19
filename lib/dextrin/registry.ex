@@ -32,7 +32,15 @@ defmodule Dextrin.Registry do
   """
   @type struct_materializer ::
           (String.t(), pos_integer(), %{String.t() => term()} -> {:ok, term()} | {:error, term()})
-  @type struct_resolver :: (String.t() -> {:ok, Compiled.t()} | :unknown)
+  @typedoc """
+  A lazy source of schemas, asked on a miss for a name: every version it
+  finds -- one compiled schema, or a list of them, all loaded -- or
+  `:unknown`, or why the schemas it found cannot be used (two files with
+  one version, a file that is not the version its name says, ...).
+  """
+  @type struct_resolver ::
+          (String.t() ->
+             {:ok, Compiled.t() | [Compiled.t()]} | :unknown | {:error, Dextrin.Error.t()})
 
   @type t :: %__MODULE__{
           tags: %{optional(String.t()) => tag_decoder()},
@@ -231,7 +239,8 @@ defmodule Dextrin.Registry do
   choice — this function is what makes both paths look identical to
   the rest of `Dextrin`, which never needs to know which one is in play.
   """
-  @spec fetch_struct_schema(t(), String.t()) :: {:ok, Compiled.t(), t()} | {:unknown, t()}
+  @spec fetch_struct_schema(t(), String.t()) ::
+          {:ok, Compiled.t(), t()} | {:unknown, t()} | {:error, Dextrin.Error.t(), t()}
   def fetch_struct_schema(%__MODULE__{structs: structs} = registry, name) do
     case Map.fetch(structs, name) do
       {:ok, versions} when map_size(versions) > 0 ->
@@ -255,7 +264,9 @@ defmodule Dextrin.Registry do
   def as_written(%__MODULE__{} = registry, %Dextrin.Struct{name: name} = struct) do
     case fetch_struct_schema(registry, name) do
       {:ok, %Compiled{version: version}, _registry} -> %{struct | version: version}
-      {:unknown, _registry} -> struct
+      # No schema to stand behind a version: the struct keeps its own. A
+      # resolver's refusal surfaces where the struct is read or checked.
+      _no_schema -> struct
     end
   end
 
@@ -268,9 +279,24 @@ defmodule Dextrin.Registry do
   with the schema it was written against.
   """
   @spec fetch_struct_schema(t(), String.t(), pos_integer()) ::
-          {:ok, Compiled.t(), t()} | {:unknown, t()}
+          {:ok, Compiled.t(), t()} | {:unknown, t()} | {:error, Dextrin.Error.t(), t()}
   def fetch_struct_schema(%__MODULE__{structs: structs} = registry, name, version) do
-    case structs |> Map.get(name, %{}) |> Map.fetch(version) do
+    case Map.fetch(structs, name) do
+      {:ok, versions} when map_size(versions) > 0 ->
+        exact(registry, versions, version)
+
+      # A name not loaded at all is asked of the resolver first, which
+      # loads every version it finds.
+      _ ->
+        case resolve(registry, name) do
+          {:ok, _latest, registry} -> exact(registry, Map.fetch!(registry.structs, name), version)
+          other -> other
+        end
+    end
+  end
+
+  defp exact(registry, versions, version) do
+    case Map.fetch(versions, version) do
       {:ok, compiled} -> {:ok, compiled, registry}
       :error -> {:unknown, registry}
     end
@@ -282,8 +308,23 @@ defmodule Dextrin.Registry do
 
   defp resolve(%__MODULE__{resolver: resolver} = registry, name) do
     case resolver.(name) do
-      {:ok, compiled} -> {:ok, compiled, put_struct_schema(registry, name, compiled)}
-      :unknown -> {:unknown, registry}
+      {:ok, %Compiled{} = compiled} ->
+        {:ok, compiled, put_struct_schema(registry, name, compiled)}
+
+      # Every version found is loaded, so an older struct reaches the
+      # materializer (DXN.md §4.6, §4.8); the latest is what a miss asked for.
+      {:ok, [_ | _] = all} ->
+        registry = Enum.reduce(all, registry, &put_struct_schema(&2, name, &1))
+        {:ok, Enum.max_by(all, & &1.version), registry}
+
+      {:ok, []} ->
+        {:unknown, registry}
+
+      :unknown ->
+        {:unknown, registry}
+
+      {:error, %Dextrin.Error{} = error} ->
+        {:error, error, registry}
     end
   end
 

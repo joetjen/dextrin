@@ -624,7 +624,9 @@ schema_files[4]{layout,version_1,version_N}:
 
 A name with no `/` is its own namespace: `Baz` is looked for as
 `Baz.dxns`, `Baz-vN.dxns`, `Baz/vN.dxns`, and the entry `Baz` in
-`Baz.dxns`. The rules:
+`Baz.dxns`. Its dots are directories all the same, and a file holds it
+under its whole name: `Foo.Bar.Baz` is the entry `Foo.Bar.Baz` in
+`Foo/Bar/Baz.dxns` or `Foo.Bar.Baz.dxns`. The rules:
 
 - **The first search path that has the name at all decides**; later ones
   are not consulted for it.
