@@ -112,7 +112,7 @@ defmodule Dextrin.MixProject do
 
   defp package do
     [
-      licenses: ["MIT"],
+      licenses: ["Apache-2.0"],
       links: %{
         "GitHub" => "https://github.com/joetjen/dextrin",
         "Docs (main)" => "https://joetjen.github.io/dextrin",

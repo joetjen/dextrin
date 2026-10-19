@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Licensed under the Apache License 2.0 (`Apache-2.0`); it was MIT.
 - Requires `ichor_runtime ~> 0.4` (was `~> 0.2`); `ichor ~> 0.5` builds
   the DXN parser, now generated with `--lossless` for the comment-keeping
   document to come. Decoding runs the same code as before.
