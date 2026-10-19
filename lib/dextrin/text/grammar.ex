@@ -51,16 +51,6 @@ defmodule Dextrin.Text.Grammar do
   @doc "Tokenizes `input`. See `Native.tokenize/2`'s own doc for `context`."
   defdelegate tokenize(input, context \\ nil), to: Native
 
-  @doc """
-  Whether `text` is an identifier (DXN.md §1.1): one `IDENTIFIER` token
-  and nothing else -- so not a reserved word, a key, or empty. What a
-  symbol's name must be for text to write it.
-  """
-  @spec identifier?(String.t()) :: boolean()
-  def identifier?(text) when is_binary(text) do
-    match?({:ok, [%{name: :IDENTIFIER, text: ^text}]}, tokenize(text))
-  end
-
   @doc "Matches `input` against the grammar's root rule with no `Ichor.Actions` involved — a bare recognizer."
   defdelegate parse(input, context \\ nil), to: Native
 

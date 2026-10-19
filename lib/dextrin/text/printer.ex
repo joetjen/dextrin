@@ -77,7 +77,7 @@ defmodule Dextrin.Text.Printer do
   # no text form, and writing it verbatim would read back as something
   # else, or as nothing.
   def print(%Symbol{name: name}, _opts) do
-    if Dextrin.Text.Grammar.identifier?(name),
+    if bare_identifier?(name),
       do: {:ok, name},
       else:
         {:error,

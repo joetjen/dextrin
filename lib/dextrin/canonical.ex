@@ -65,7 +65,11 @@ defmodule Dextrin.Canonical do
   defp text(%Char{codepoint: cp}), do: "?" <> char_body(cp)
 
   defp text(%Symbol{name: name} = symbol),
-    do: if(Dextrin.Text.Grammar.identifier?(name), do: name, else: throw({:unsupported, symbol}))
+    do:
+      if(Dextrin.Text.Printer.bare_identifier?(name),
+        do: name,
+        else: throw({:unsupported, symbol})
+      )
 
   defp text(%Dextrin.Keyword{name: name}), do: keyword(name)
   defp text(list) when is_list(list), do: "[" <> items(list) <> "]"
