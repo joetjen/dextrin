@@ -168,7 +168,7 @@ companion module:
 ```elixir
 # geo_lib's own mix.exs
 defp deps do
-  [{:dextrin, "~> 0.1", optional: true}]
+  [{:dextrin, "~> 0.2", optional: true}]
 end
 ```
 

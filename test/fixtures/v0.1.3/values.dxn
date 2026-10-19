@@ -1,0 +1,29 @@
+%{
+  int: 42
+  neg: -7
+  big: 123456789012345678901234567890
+  float: 3.25
+  dec: 49.99M
+  str: "héllo\n"
+  sym: abc
+  kw: :ok
+  t: true
+  f: false
+  none: nil
+  char: ?a
+  bytes: @bytes "AAEC"
+  uuid: @uuid "9b74c989-1e2a-4b17-9b1f-2a6a4a2b6f10"
+  uri: @uri "https://example.com/a?b=1"
+  date: ~D[2024-03-15]
+  time: ~T[14:22:07]
+  ratio: 3/4
+  regex: ~r/a+b/i
+  custom: @money {12 :eur}
+  utc: ~U[2024-03-15 14:22:07Z]
+  list: [1 "two" :three]
+  tuple: {1 2}
+  set: @{:a :b}
+  omap: @ordered %{z: 1 a: 2}
+  nested: %{inner: [%{deep: 1}]}
+  point: %Point[1 2]
+}

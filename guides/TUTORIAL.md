@@ -448,7 +448,7 @@ separately-compiled companion module implementing
 the struct's own module is never conditionally compiled:
 
 ```elixir
-# the library's own mix.exs: {:dextrin, "~> 0.1", optional: true}
+# the library's own mix.exs: {:dextrin, "~> 0.2", optional: true}
 
 if Code.ensure_loaded?(Dextrin.Schema.Provider) do
   defmodule MyLib.Point.DXN do

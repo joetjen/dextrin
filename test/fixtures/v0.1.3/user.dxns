@@ -1,0 +1,9 @@
+%{
+  User: %schema{
+    fields: @ordered %{
+      name: :string
+      email?: :string
+      role: %field{type: :keyword default: :member}
+    }
+  }
+}
