@@ -264,19 +264,20 @@ defmodule Dextrin.Binary.Encoder do
          do: {:ok, tag(Tags.t_sorted_set(), array_of(encoded))}
   end
 
-  # ---- struct (opaque only, for now — schema-driven encoding lands with Dextrin.Schema) ----
+  # ---- struct ---------------------------------------------------------------
+  #
+  # Written with the version `Registry.as_written/2` says -- the latest
+  # loaded version of its schema, or its own -- as part of the type
+  # name (DXN.md §2.4, §4.8).
 
-  defp encode_item_dispatch(%Struct{name: name, fields: {:positional, items}}, opts) do
-    encode_struct(name, items, opts)
+  defp encode_item_dispatch(%Struct{fields: {:positional, items}} = struct, opts) do
+    encode_struct(type_name(struct, opts), items, struct.extra, opts)
   end
 
-  defp encode_item_dispatch(%Struct{name: name, fields: {:keyed, pairs}}, opts) do
-    # No schema registered for `name` — falls back to the keyed pairs'
-    # own iteration order. A real, unavoidable limitation: an opaque
-    # struct with no schema can't be encoded to .dxnb losslessly
-    # regardless, since the positional wire form has no field names to
-    # consult in the first place (see `Dextrin.Struct`'s own moduledoc).
-    encode_struct(name, Enum.map(pairs, fn {_k, v} -> v end), opts)
+  defp encode_item_dispatch(%Struct{name: name, fields: {:keyed, pairs}} = struct, opts) do
+    with {:ok, values} <- positional_values(name, pairs, opts) do
+      encode_struct(type_name(struct, opts), values, struct.extra, opts)
+    end
   end
 
   # ---- temporal ---------------------------------------------------------------
@@ -362,7 +363,7 @@ defmodule Dextrin.Binary.Encoder do
         values =
           compiled |> Compiled.field_values(other) |> Enum.map(fn {_name, value} -> value end)
 
-        encode_item(Struct.positional(name, values), opts)
+        encode_item(Struct.positional(name, values, nil, Struct.runtime_extra(other)), opts)
 
       :error ->
         encode_via_tag_encoder(other, module, opts)
@@ -396,11 +397,76 @@ defmodule Dextrin.Binary.Encoder do
     end
   end
 
-  defp encode_struct(name, values, opts) do
-    with {:ok, name_item} <- encode_item(name, opts),
-         {:ok, value_items} <- encode_all(values, opts) do
-      {:ok, tag(Tags.t_struct(), array_of([name_item | value_items]))}
+  defp type_name(%Struct{name: name} = struct, opts) do
+    Struct.type_name(
+      name,
+      Dextrin.Registry.as_written(Keyword.get(opts, :registry), struct).version
+    )
+  end
+
+  # A keyed struct goes on the wire by position, so its values are put in
+  # its schema's field order. With no schema there is no order to consult
+  # -- the positional form carries no names -- and the pairs' own order
+  # is all there is (see `Dextrin.Struct`'s own moduledoc).
+  #
+  # Every position must be filled, and nil is not a stand-in for an absent
+  # field (DXN.md §4.7): a reader refuses nil unless the type is nilable.
+  # So an absent field is written as its default where it has one, and is
+  # otherwise refused (`schema/missing-field`).
+  defp positional_values(name, pairs, opts) do
+    with %Dextrin.Registry{} = registry <- Keyword.get(opts, :registry),
+         {:ok, compiled, _registry} <- Dextrin.Registry.fetch_struct_schema(registry, name) do
+      named = Map.new(pairs)
+
+      Result.reduce_ok(compiled.fields, [], fn field, acc ->
+        case position(name, field, named) do
+          {:ok, value} -> {:ok, [value | acc]}
+          {:error, _} = error -> error
+        end
+      end)
+      |> case do
+        {:ok, values} -> {:ok, Enum.reverse(values)}
+        {:error, _} = error -> error
+      end
+    else
+      _ -> {:ok, Enum.map(pairs, fn {_k, v} -> v end)}
     end
+  end
+
+  defp position(name, %Dextrin.Schema.Field{name: field, default: default}, named) do
+    case Map.fetch(named, field) do
+      {:ok, value} ->
+        {:ok, value}
+
+      :error when default != :none ->
+        {:ok, default}
+
+      :error ->
+        {:error,
+         Dextrin.Error.action(
+           "struct #{inspect(name)} has no #{inspect(field)}, and .dxnb fills every position: " <>
+             "give it a value or a default, or declare it nilable",
+           "schema/missing-field"
+         )}
+    end
+  end
+
+  # A struct as `[type-name, field..., extras?]`: its extra fields, when
+  # it has any, as one trailing tag-215 map in the order they were
+  # written (DXN.md §2.3).
+  defp encode_struct(name, values, extra, opts) do
+    with {:ok, name_item} <- encode_item(name, opts),
+         {:ok, value_items} <- encode_all(values, opts),
+         {:ok, extra_items} <- encode_extra(extra, opts) do
+      {:ok, tag(Tags.t_struct(), array_of([name_item | value_items] ++ extra_items))}
+    end
+  end
+
+  defp encode_extra([], _opts), do: {:ok, []}
+
+  defp encode_extra(extra, opts) do
+    with {:ok, pairs} <- encode_pairs(extra, opts),
+         do: {:ok, [tag(Tags.t_extra(), map_of(pairs))]}
   end
 
   defp encode_all(values, opts) do
@@ -416,7 +482,12 @@ defmodule Dextrin.Binary.Encoder do
     end
   end
 
+  # DXN.md §1.6: a map's keys are checked before anything is written.
   defp encode_pairs(pairs, opts) do
+    with :ok <- Dextrin.MapKey.check_pairs(pairs), do: encode_checked_pairs(pairs, opts)
+  end
+
+  defp encode_checked_pairs(pairs, opts) do
     Result.reduce_ok(pairs, [], fn {k, v}, acc ->
       with {:ok, key_item} <- encode_item(k, opts),
            {:ok, val_item} <- encode_item(v, opts) do

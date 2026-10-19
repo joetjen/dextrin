@@ -9,6 +9,8 @@ defmodule Dextrin.Schema.NamedTypeTest do
 
   use ExUnit.Case, async: true
 
+  alias Dextrin.Test.Support.DecodedFields
+
   @dxns """
   %{
     PositiveInt: {:refine :integer %{min: 1}}
@@ -16,12 +18,10 @@ defmodule Dextrin.Schema.NamedTypeTest do
     Tag:         {:refine :string %{min-length: 1, max-length: 20}}
 
     Money: %schema{
-      fields: @ordered %{
         amount:   PositiveInt
         discount: Percentage
         tags:     {:list-of Tag}
       }
-    }
   }
   """
 
@@ -33,8 +33,10 @@ defmodule Dextrin.Schema.NamedTypeTest do
 
   test "a field using a named type accepts a value satisfying it", %{registry: registry} do
     assert {:ok, %{"amount" => 5, "discount" => 12.5, "tags" => ["a", "b"]}} =
-             Dextrin.decode("%Money{amount: 5, discount: 12.5, tags: [\"a\", \"b\"]}",
-               registry: registry
+             DecodedFields.of(
+               Dextrin.decode("%Money{amount: 5, discount: 12.5, tags: [\"a\", \"b\"]}",
+                 registry: registry
+               )
              )
   end
 
@@ -78,23 +80,26 @@ defmodule Dextrin.Schema.NamedTypeTest do
       Dextrin.decode("""
       %{
         Pair: %schema{
-          fields: @ordered %{
             a: Even
             b: Even
           }
-        }
       }
       """)
 
     {:ok, registry} = Dextrin.Schema.compile(doc, base_registry)
 
-    assert {:ok, %{"a" => 2, "b" => 4}} = Dextrin.decode("%Pair{a: 2, b: 4}", registry: registry)
+    assert {:ok, %{"a" => 2, "b" => 4}} =
+             DecodedFields.of(Dextrin.decode("%Pair{a: 2, b: 4}", registry: registry))
+
     assert {:error, _} = Dextrin.decode("%Pair{a: 3, b: 4}", registry: registry)
   end
 
   test "a malformed named-type entry (neither a valid schema nor a valid type_expr) is a clear compile error" do
     {:ok, doc} = Dextrin.decode(~s(%{ Broken: {:not-a-real-form 1 2} }))
-    assert {:error, reason} = Dextrin.Schema.compile(doc)
+
+    assert {:error, %Dextrin.Error{category: "schema/compile", message: reason}} =
+             Dextrin.Schema.compile(doc)
+
     assert reason =~ "Broken"
   end
 
@@ -128,15 +133,15 @@ defmodule Dextrin.Schema.NamedTypeTest do
     {:ok, doc} =
       Dextrin.decode("""
       %{
-        Pair: %schema{
-          fields: @ordered %{ a: Even }
-        }
+        Pair: %schema{ a: Even }
       }
       """)
 
     {:ok, compiled_registry} = Dextrin.Schema.compile(doc, registry)
 
-    assert {:ok, %{"a" => 4}} = Dextrin.decode("%Pair{a: 4}", registry: compiled_registry)
+    assert {:ok, %{"a" => 4}} =
+             DecodedFields.of(Dextrin.decode("%Pair{a: 4}", registry: compiled_registry))
+
     assert {:error, _} = Dextrin.decode("%Pair{a: 3}", registry: compiled_registry)
   end
 end

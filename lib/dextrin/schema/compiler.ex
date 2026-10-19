@@ -6,6 +6,13 @@ defmodule Dextrin.Schema.Compiler do
   map from name to type expression) into `Dextrin.Schema.Compiled`
   entries.
 
+  A struct schema is written `%schema(N){field: type, ...}` (DXN.md
+  §4.4): the body lists the fields directly, and the order they are
+  written in is the positional order `.dxnb` encodes them in. The header
+  holds only the version; without one the schema is version 1. Each
+  `.dxns` document describes one version of each schema it holds, and the
+  registry keeps every version it is given (`Dextrin.Registry`).
+
   `%schema{}`/`%field{}` are recognized here directly, as
   `Dextrin.Struct{name: "schema" | "field"}` opaque shapes straight out
   of `Dextrin.decode/1` — they're never looked up in a registry, the
@@ -35,10 +42,13 @@ defmodule Dextrin.Schema.Compiler do
 
   @doc """
   Compiles every entry of a decoded `.dxns` document into
-  `base_registry` — a struct schema for each `%schema{}` entry, a
-  named type_expr for every other entry. `predicates` resolves
-  `refine-fn:` names — a plain map, not the struct registry itself,
-  since a refine-fn is a validity check, not a decoder.
+  `base_registry` — a struct schema for each `%schema(N){}` entry, a
+  named type_expr for every other entry.
+
+  A schema version already in `base_registry` is an error
+  (`schema/duplicate-version`); any other problem with the document is a
+  `schema/compile` error. Replacing a loaded version on purpose is
+  `Dextrin.Registry.replace_struct_schema/3`.
 
   Named types defined in *this* document may reference any type
   already known to `base_registry` (from an earlier `compile/3` call),
@@ -48,9 +58,9 @@ defmodule Dextrin.Schema.Compiler do
   machinery a same-document case would need. A schema's *fields*,
   compiled afterwards, can freely use any named type from either source.
   """
-  @spec compile(term(), Dextrin.Registry.t(), %{optional(String.t()) => Compiled.refine_fn()}) ::
-          {:ok, Dextrin.Registry.t()} | {:error, term()}
-  def compile(schema_doc, base_registry, predicates \\ %{}) when is_map(schema_doc) do
+  @spec compile(term(), Dextrin.Registry.t()) ::
+          {:ok, Dextrin.Registry.t()} | {:error, Dextrin.Error.t()}
+  def compile(schema_doc, base_registry) when is_map(schema_doc) do
     schema_doc = atomize_back(schema_doc)
     named_entries = Enum.map(schema_doc, fn {k, v} -> {entry_name(k), v} end)
 
@@ -59,16 +69,21 @@ defmodule Dextrin.Schema.Compiler do
 
     with {:ok, registry} <- compile_aliases(alias_entries, base_registry) do
       Result.reduce_ok(schema_entries, registry, fn {name, entry}, registry ->
-        case compile_entry(entry, predicates, registry.type_aliases) do
+        case compile_entry(entry, registry.type_aliases) do
           {:ok, %Compiled{} = compiled} ->
-            {:ok, Registry.put_struct_schema(registry, name, %{compiled | name: name})}
+            Registry.add_struct_schema(registry, name, %{compiled | name: name})
 
-          {:error, _} = err ->
-            err
+          {:error, reason} ->
+            {:error, compile_error("schema #{inspect(name)}: #{reason}")}
         end
       end)
     end
   end
+
+  def compile(other, _base_registry),
+    do: {:error, compile_error("a .dxns document is a map, got #{inspect(other)}")}
+
+  defp compile_error(message), do: Dextrin.Error.action(message, "schema/compile")
 
   defp compile_aliases(alias_entries, registry) do
     # `base_aliases` is a frozen snapshot, not the accumulating
@@ -83,7 +98,7 @@ defmodule Dextrin.Schema.Compiler do
     Result.reduce_ok(alias_entries, registry, fn {name, raw_value}, registry ->
       case compile_type_expr(raw_value, base_aliases) do
         {:ok, type_expr} -> {:ok, Registry.put_type_alias(registry, name, type_expr)}
-        {:error, reason} -> {:error, "named type #{inspect(name)}: #{reason}"}
+        {:error, reason} -> {:error, compile_error("named type #{inspect(name)}: #{reason}")}
       end
     end)
   end
@@ -146,27 +161,27 @@ defmodule Dextrin.Schema.Compiler do
 
   defp atomize_back(other), do: other
 
-  defp compile_entry(%Struct{name: "schema", fields: {:keyed, pairs}}, predicates, aliases) do
-    fields_value = get(pairs, "fields")
-    closed = get(pairs, "closed", false)
-    forbidden = get(pairs, "forbidden", []) |> Enum.map(&literal_name/1)
-    refine_fn_name = get(pairs, "refine-fn")
-
-    with {:ok, fields} <- compile_fields(fields_value, aliases),
-         {:ok, refine_fn} <- resolve_refine_fn(refine_fn_name, predicates) do
-      {:ok, %Compiled{fields: fields, closed: closed, forbidden: forbidden, refine_fn: refine_fn}}
+  # `%schema(N){field: type, ...}`: the body is the fields, in the order
+  # they are written; the header is the version, 1 when there is none.
+  defp compile_entry(%Struct{name: "schema", version: version, fields: {:keyed, pairs}}, aliases) do
+    with {:ok, fields} <- compile_fields(pairs, aliases),
+         :ok <- distinct_names(fields) do
+      {:ok, %Compiled{version: version || 1, fields: fields}}
     end
   end
 
-  defp compile_entry(other, _predicates, _aliases) do
-    {:error, "expected a %schema{} entry, got #{inspect(other)}"}
+  defp compile_entry(%Struct{name: "schema", fields: {:positional, _}}, _aliases),
+    do: {:error, "a schema lists its fields by name: %schema(N){field: type, ...}"}
+
+  defp compile_entry(other, _aliases) do
+    {:error, "expected a %schema(N){...} entry, got #{inspect(other)}"}
   end
 
-  defp compile_fields(%OrderedMap{pairs: pairs}, aliases) do
+  defp compile_fields(pairs, aliases) do
     Result.reduce_ok(pairs, [], fn {key, value}, acc ->
-      case compile_field(key, value, aliases) do
+      case compile_field(literal_name(key), value, aliases) do
         {:ok, field} -> {:ok, [field | acc]}
-        {:error, _} = err -> err
+        {:error, reason} -> {:error, "field #{inspect(literal_name(key))}: #{reason}"}
       end
     end)
     |> case do
@@ -175,12 +190,17 @@ defmodule Dextrin.Schema.Compiler do
     end
   end
 
-  defp compile_fields(other, _aliases) do
-    {:error,
-     "expected fields: to be an @ordered %{...} (field order is load-bearing for .dxnb's positional encoding), got #{inspect(other)}"}
+  defp distinct_names(fields) do
+    case fields
+         |> Enum.map(& &1.name)
+         |> Enum.frequencies()
+         |> Enum.find(fn {_, n} -> n > 1 end) do
+      nil -> :ok
+      {name, _} -> {:error, "field #{inspect(name)} is named twice"}
+    end
   end
 
-  defp compile_field(%Keyword{name: raw_name}, value, aliases) do
+  defp compile_field(raw_name, value, aliases) when is_binary(raw_name) do
     {name, required} =
       if String.ends_with?(raw_name, "?"),
         do: {String.trim_trailing(raw_name, "?"), false},
@@ -301,18 +321,4 @@ defmodule Dextrin.Schema.Compiler do
   defp literal_name(%Keyword{name: name}), do: name
   defp literal_name(%Symbol{name: name}), do: name
   defp literal_name(name) when is_binary(name), do: name
-
-  defp resolve_refine_fn(nil, _predicates), do: {:ok, nil}
-
-  defp resolve_refine_fn(name_value, predicates) do
-    name = literal_name(name_value)
-
-    case Map.fetch(predicates, name) do
-      {:ok, fun} ->
-        {:ok, fun}
-
-      :error ->
-        {:error, "refine-fn #{inspect(name)} not found in the predicates given to compile/3"}
-    end
-  end
 end

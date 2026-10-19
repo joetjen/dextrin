@@ -8,15 +8,10 @@ defmodule Dextrin.Text.Formatter do
   at all: it's exactly what `Dextrin.encode/2`/`Dextrin.Text.Printer`
   already produce with `pretty: false` (the default).
 
-  Comments cannot be preserved here, or by any formatter built on this
-  library's decode-then-reprint approach: `Dextrin.Text.Grammar`'s
-  lexer folds `#`-comments into the same auto-spliced trivia as
-  whitespace and discards them before the parser (and therefore any
-  value) ever exists. There is no comment text left to put back by the
-  time a value reaches this module. A genuine comment-preserving
-  formatter would need a second, independent re-lexing pipeline that
-  never goes through the value-producing parse at all — real,
-  separate work, not a flag on this one.
+  A value has no comments, so this formatter has none to keep. To lay
+  out a document and keep its comments, parse it as a
+  `Dextrin.Document` and use `Dextrin.Document.format/2`, which lays a
+  comment-free document out exactly as this module lays out its value.
   """
 
   alias Dextrin.{Array, OrderedMap, SortedSet, Struct}
@@ -72,16 +67,19 @@ defmodule Dextrin.Text.Formatter do
   defp render(%OrderedMap{pairs: []}, _depth, _opts), do: {:ok, "@ordered %{}"}
 
   defp render(%OrderedMap{pairs: pairs}, depth, opts) do
-    with {:ok, body} <- render_entries("%{", pairs, "}", depth, opts) do
+    with :ok <- Dextrin.MapKey.check_pairs(pairs),
+         {:ok, body} <- render_entries("%{", pairs, "}", depth, opts) do
       {:ok, "@ordered " <> body}
     end
   end
 
   defp render(%{} = map, depth, opts) when not is_struct(map) and map_size(map) > 0 do
-    render_entries("%{", Map.to_list(map), "}", depth, opts)
+    with :ok <- Dextrin.MapKey.check_pairs(Map.to_list(map)),
+         do: render_entries("%{", Map.to_list(map), "}", depth, opts)
   end
 
-  defp render(%Struct{name: name, fields: {:keyed, pairs}}, depth, opts) when pairs != [] do
+  defp render(%Struct{name: name, fields: {:keyed, pairs}} = struct, depth, opts)
+       when pairs != [] do
     # Wrapped as Dextrin.Keyword before reaching render_entries/5, same
     # as Dextrin.Text.Printer.print/2's own struct clause — struct
     # field names are always keyword-shaped per DXN.md §1.2's map_entry
@@ -90,15 +88,21 @@ defmodule Dextrin.Text.Formatter do
     # alone whether it's a field name or a genuine string-typed map key
     # (see render_entry/4's own doc for why that guess used to be wrong).
     keyed = Enum.map(pairs, fn {k, v} -> {Dextrin.Keyword.new(k), v} end)
+    entries = keyed ++ Printer.extra_entries(struct)
 
-    with {:ok, body} <- render_entries("{", keyed, "}", depth, opts) do
-      {:ok, "%" <> name <> body}
+    with {:ok, body} <- render_entries("{", entries, "}", depth, opts) do
+      {:ok, Struct.head(name, Dextrin.Text.Printer.written_version(struct, opts)) <> body}
     end
   end
 
-  defp render(%Struct{name: name, fields: {:positional, items}}, depth, opts) when items != [] do
-    with {:ok, body} <- bracketed("[", items, "]", depth, opts, &render/3) do
-      {:ok, "%" <> name <> body}
+  # A positional struct's items, then its extra fields as entries, one
+  # per line like the items (DXN.md §1.2).
+  defp render(%Struct{name: name, fields: {:positional, items}} = struct, depth, opts)
+       when items != [] do
+    lines = items ++ Enum.map(Printer.extra_entries(struct), &{:"$dextrin_entry", &1})
+
+    with {:ok, body} <- bracketed("[", lines, "]", depth, opts, &render_item_or_entry/3) do
+      {:ok, Struct.head(name, Dextrin.Text.Printer.written_version(struct, opts)) <> body}
     end
   end
 
@@ -123,7 +127,12 @@ defmodule Dextrin.Text.Formatter do
         {:ok, compiled, _registry} = Dextrin.Registry.fetch_struct_schema(registry, name)
 
         render(
-          Struct.keyed(name, Dextrin.Schema.Compiled.field_values(compiled, value)),
+          Struct.keyed(
+            name,
+            Dextrin.Schema.Compiled.field_values(compiled, value),
+            nil,
+            Struct.runtime_extra(value)
+          ),
           depth,
           opts
         )
@@ -151,6 +160,11 @@ defmodule Dextrin.Text.Formatter do
       {:ok, open <> "\n" <> body <> "\n" <> outer_indent <> close}
     end
   end
+
+  defp render_item_or_entry({:"$dextrin_entry", {key, value}}, depth, opts),
+    do: render_entry(key, value, depth, opts)
+
+  defp render_item_or_entry(item, depth, opts), do: render(item, depth, opts)
 
   defp render_all(items, depth, opts, render_item) do
     Enum.reduce_while(items, {:ok, []}, fn item, {:ok, acc} ->

@@ -52,12 +52,15 @@ defmodule Dextrin.Text.ActionsErrorTest do
     assert error_message("@ordered [1, 2, 3]") =~ "@ordered requires a map literal argument"
   end
 
-  test "a struct field key that's neither an identifier nor a string is a clear error" do
+  test "a struct entry whose key is not a name is an extra field, not a field" do
     # struct_keyed reuses the same map_entry rule as a plain map, which
-    # also allows the arrow form -- %Point{1 => 2} is syntactically
-    # valid, but 1 isn't a usable field name.
-    assert error_message("%Point{1 => 2}") =~
-             "struct field name must be an identifier or string"
+    # also allows the arrow form -- %Point{1 => 2} is a struct carrying
+    # one extra field keyed 1 (DXN.md §4.7), and a key that is not a map
+    # key at all is refused like any map's.
+    assert {:ok, %Dextrin.Struct{fields: {:keyed, []}, extra: [{1, 2}]}} =
+             Dextrin.decode("%Point{1 => 2}")
+
+    assert error_message("%Point{1.5 => 2}") =~ "cannot be a map key"
   end
 
   test "a bare symbol is also an accepted struct field name, via the arrow form" do

@@ -73,7 +73,20 @@ defmodule Dextrin.Text.Printer do
 
   def print(%Char{codepoint: cp}, _opts), do: {:ok, "?" <> print_char_body(cp)}
 
-  def print(%Symbol{name: name}, _opts), do: {:ok, name}
+  # A symbol is an identifier (DXN.md §1.1); a name that is not one has
+  # no text form, and writing it verbatim would read back as something
+  # else, or as nothing.
+  def print(%Symbol{name: name}, _opts) do
+    if bare_identifier?(name),
+      do: {:ok, name},
+      else:
+        {:error,
+         Dextrin.Error.action(
+           "a symbol named #{inspect(name)} has no text form: its name is not an identifier",
+           "encode/unsupported"
+         )}
+  end
+
   def print(%Dextrin.Keyword{name: name}, _opts), do: {:ok, ":" <> keyword_name(name)}
 
   def print(list, opts) when is_list(list) do
@@ -104,25 +117,32 @@ defmodule Dextrin.Text.Printer do
   end
 
   def print(%OrderedMap{pairs: pairs}, opts) do
-    with {:ok, entries} <- print_entries(pairs, opts),
+    with :ok <- Dextrin.MapKey.check_pairs(pairs),
+         {:ok, entries} <- print_entries(pairs, opts),
          do: {:ok, tag_form("ordered", "%{" <> entries <> "}")}
   end
 
   def print(%{} = map, opts) when not is_struct(map) do
-    with {:ok, entries} <- print_entries(Map.to_list(map), opts),
+    with :ok <- Dextrin.MapKey.check_pairs(Map.to_list(map)),
+         {:ok, entries} <- print_entries(Map.to_list(map), opts),
          do: {:ok, "%{" <> entries <> "}"}
   end
 
-  def print(%Struct{name: name, fields: {:keyed, pairs}}, opts) do
+  def print(%Struct{name: name, fields: {:keyed, pairs}} = struct, opts) do
     keyed = Enum.map(pairs, fn {k, v} -> {Dextrin.Keyword.new(k), v} end)
 
-    with {:ok, entries} <- print_entries(keyed, opts),
-         do: {:ok, "%" <> name <> "{" <> entries <> "}"}
+    with {:ok, entries} <- print_entries(keyed ++ extra_entries(struct), opts),
+         do: {:ok, Struct.head(name, written_version(struct, opts)) <> "{" <> entries <> "}"}
   end
 
-  def print(%Struct{name: name, fields: {:positional, items}}, opts) do
+  # A positional struct's items, then its extra fields as entries
+  # (DXN.md §1.2).
+  def print(%Struct{name: name, fields: {:positional, items}} = struct, opts) do
     with {:ok, printed} <- print_all(items, opts),
-         do: {:ok, "%" <> name <> "[" <> Enum.join(printed, ",") <> "]"}
+         {:ok, extra} <- print_entries(extra_entries(struct), opts) do
+      body = Enum.reject([Enum.join(printed, ","), extra], &(&1 == "")) |> Enum.join(",")
+      {:ok, Struct.head(name, written_version(struct, opts)) <> "[" <> body <> "]"}
+    end
   end
 
   def print(%Date{} = date, _opts), do: {:ok, "~D[" <> Date.to_iso8601(date) <> "]"}
@@ -170,7 +190,16 @@ defmodule Dextrin.Text.Printer do
     case Registry.fetch_schema_name_for_module(registry, module) do
       {:ok, name} ->
         {:ok, compiled, _registry} = Registry.fetch_struct_schema(registry, name)
-        print(Struct.keyed(name, Compiled.field_values(compiled, other)), opts)
+
+        print(
+          Struct.keyed(
+            name,
+            Compiled.field_values(compiled, other),
+            nil,
+            Struct.runtime_extra(other)
+          ),
+          opts
+        )
 
       :error ->
         print_via_tag_encoder(other, module, opts)
@@ -186,7 +215,10 @@ defmodule Dextrin.Text.Printer do
   # the lack of a matching clause crash with `FunctionClauseError`.
   def print(other, _opts) do
     {:error,
-     Dextrin.Error.action("cannot encode value with no DXN representation: #{inspect(other)}")}
+     Dextrin.Error.action(
+       "cannot encode value with no DXN representation: #{inspect(other)}",
+       "encode/unsupported"
+     )}
   end
 
   defp print_via_tag_encoder(other, module, opts) do
@@ -198,12 +230,18 @@ defmodule Dextrin.Text.Printer do
       else
         {:error, reason} ->
           {:error,
-           Dextrin.Error.action("tag encoder for #{inspect(module)} failed: #{inspect(reason)}")}
+           Dextrin.Error.action(
+             "tag encoder for #{inspect(module)} failed: #{inspect(reason)}",
+             "encode/unsupported"
+           )}
       end
     else
       _ ->
         {:error,
-         Dextrin.Error.action("cannot encode value with no DXN representation: #{inspect(other)}")}
+         Dextrin.Error.action(
+           "cannot encode value with no DXN representation: #{inspect(other)}",
+           "encode/unsupported"
+         )}
     end
   end
 
@@ -353,6 +391,24 @@ defmodule Dextrin.Text.Printer do
 
       {:microseconds, micro}, acc ->
         %{acc | second: div(micro, 1_000_000), microsecond: {rem(micro, 1_000_000), 6}}
+    end)
+  end
+
+  # The version a struct is written with: the latest loaded version of
+  # its schema, or its own when there is no schema (DXN.md §4.8).
+  @doc false
+  @spec written_version(Struct.t(), keyword()) :: pos_integer() | nil
+  def written_version(struct, opts),
+    do: Registry.as_written(Keyword.get(opts, :registry), struct).version
+
+  # A struct's extra fields as entries: a name is written like a field
+  # name, any other map key as itself (DXN.md §1.2).
+  @doc false
+  @spec extra_entries(Struct.t()) :: [{term(), term()}]
+  def extra_entries(%Struct{extra: extra}) do
+    Enum.map(extra, fn
+      {key, value} when is_binary(key) -> {Dextrin.Keyword.new(key), value}
+      pair -> pair
     end)
   end
 end

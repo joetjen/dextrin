@@ -26,25 +26,23 @@ defmodule Dextrin.Schema.FileResolver do
 
   @doc """
   Builds a `struct_resolver` searching `search_paths` in order,
-  returning the first match. `predicates` is forwarded to
-  `Dextrin.Schema.compile/3` for any `refine-fn:` the loaded files use.
+  returning the first match.
   """
-  @spec for_paths([Path.t()], %{optional(String.t()) => Dextrin.Schema.Compiled.refine_fn()}) ::
-          Dextrin.Registry.struct_resolver()
-  def for_paths(search_paths, predicates \\ %{}) when is_list(search_paths) do
+  @spec for_paths([Path.t()]) :: Dextrin.Registry.struct_resolver()
+  def for_paths(search_paths) when is_list(search_paths) do
     fn name ->
       {file_stem, entry_name} = split_name(name)
-      Enum.find_value(search_paths, :unknown, &resolve_in(&1, file_stem, entry_name, predicates))
+      Enum.find_value(search_paths, :unknown, &resolve_in(&1, file_stem, entry_name))
     end
   end
 
-  defp resolve_in(dir, file_stem, entry_name, predicates) do
+  defp resolve_in(dir, file_stem, entry_name) do
     path = Path.join(dir, "#{file_stem}.dxns")
 
     with true <- File.regular?(path),
          {:ok, source} <- File.read(path),
          {:ok, doc} <- Dextrin.decode(source),
-         {:ok, registry} <- Dextrin.Schema.compile(doc, Dextrin.Registry.new(), predicates),
+         {:ok, registry} <- Dextrin.Schema.compile(doc, Dextrin.Registry.new()),
          {:ok, compiled, _registry} <- Dextrin.Registry.fetch_struct_schema(registry, entry_name) do
       {:ok, compiled}
     else

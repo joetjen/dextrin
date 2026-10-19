@@ -65,8 +65,10 @@ defmodule Dextrin.Schema.TypeExpr do
   application struct's `__struct__` be checked against whatever module
   was registered for `name` (`Dextrin.Registry.put_struct_module/3`) —
   needed only for a struct that turned out to have no schema of its
-  own to be wrapped by. A plain map (no name, no `__struct__`) or an
-  unregistered name has nothing to check and is trusted, either way.
+  own to be wrapped by. **Nothing else matches a reference** (DXN.md
+  §4.7): a plain map, however much it looks like the struct, and an
+  application struct registered for no schema or for another are type
+  errors -- a value matches only its declared type.
   """
   @spec matches?(t(), term(), Dextrin.Registry.t() | nil) :: boolean()
   def matches?(type, value, registry \\ nil)
@@ -79,15 +81,20 @@ defmodule Dextrin.Schema.TypeExpr do
   def matches?({:reference, name}, %Validated{name: validated_name}, _registry),
     do: validated_name == name
 
-  def matches?({:reference, name}, value, registry)
-      when not is_nil(registry) and is_struct(value) do
+  # A struct is matched only by a struct (DXN.md §4.7): past a struct or
+  # checked value of the right name, only the application struct
+  # registered for `name` is one. A plain map, or any other value, is not
+  # a struct, however much it looks like one -- nothing is converted to
+  # make it match.
+  def matches?({:reference, name}, value, %Dextrin.Registry{} = registry)
+      when is_struct(value) do
     case Dextrin.Registry.fetch_struct_module(registry, name) do
       {:ok, module} -> value.__struct__ == module
-      :error -> true
+      :error -> false
     end
   end
 
-  def matches?({:reference, _name}, _value, _registry), do: true
+  def matches?({:reference, _name}, _value, _registry), do: false
 
   def matches?(type, %Validated{value: inner}, registry), do: matches?(type, inner, registry)
 

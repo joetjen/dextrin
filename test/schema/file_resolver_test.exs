@@ -9,29 +9,33 @@ defmodule Dextrin.Schema.FileResolverTest do
 
   use ExUnit.Case, async: true
 
+  alias Dextrin.Test.Support.DecodedFields
+
   @tag :tmp_dir
   test "resolves a namespaced reference to <namespace>.dxns", %{tmp_dir: dir} do
     File.write!(Path.join(dir, "geo.dxns"), """
-    %{ Point: %schema{ fields: @ordered %{ x: :integer, y: :integer } } }
+    %{ Point: %schema{ x: :integer, y: :integer } }
     """)
 
     resolver = Dextrin.Schema.FileResolver.for_paths([dir])
     registry = Dextrin.Registry.new() |> Dextrin.Registry.put_resolver(resolver)
 
     assert {:ok, %{"x" => 1, "y" => 2}} =
-             Dextrin.decode("%geo/Point{x: 1, y: 2}", registry: registry)
+             DecodedFields.of(Dextrin.decode("%geo/Point{x: 1, y: 2}", registry: registry))
   end
 
   @tag :tmp_dir
   test "resolves a bare (non-namespaced) reference to <name>.dxns", %{tmp_dir: dir} do
     File.write!(Path.join(dir, "Money.dxns"), """
-    %{ Money: %schema{ fields: @ordered %{ amount: :decimal } } }
+    %{ Money: %schema{ amount: :decimal } }
     """)
 
     resolver = Dextrin.Schema.FileResolver.for_paths([dir])
     registry = Dextrin.Registry.new() |> Dextrin.Registry.put_resolver(resolver)
 
-    assert {:ok, %{"amount" => amount}} = Dextrin.decode("%Money{amount: 5M}", registry: registry)
+    assert {:ok, %{"amount" => amount}} =
+             DecodedFields.of(Dextrin.decode("%Money{amount: 5M}", registry: registry))
+
     assert Decimal.equal?(amount, Decimal.new("5"))
   end
 
@@ -47,7 +51,7 @@ defmodule Dextrin.Schema.FileResolverTest do
   @tag :tmp_dir
   test "a file that exists but lacks the requested entry falls back to opaque", %{tmp_dir: dir} do
     File.write!(Path.join(dir, "geo.dxns"), """
-    %{ Point: %schema{ fields: @ordered %{ x: :integer, y: :integer } } }
+    %{ Point: %schema{ x: :integer, y: :integer } }
     """)
 
     resolver = Dextrin.Schema.FileResolver.for_paths([dir])
@@ -65,12 +69,13 @@ defmodule Dextrin.Schema.FileResolverTest do
     File.mkdir_p!(second)
 
     File.write!(Path.join(second, "Money.dxns"), """
-    %{ Money: %schema{ fields: @ordered %{ amount: :decimal } } }
+    %{ Money: %schema{ amount: :decimal } }
     """)
 
     resolver = Dextrin.Schema.FileResolver.for_paths([first, second])
     registry = Dextrin.Registry.new() |> Dextrin.Registry.put_resolver(resolver)
 
-    assert {:ok, %{"amount" => _}} = Dextrin.decode("%Money{amount: 5M}", registry: registry)
+    assert {:ok, %{"amount" => _}} =
+             DecodedFields.of(Dextrin.decode("%Money{amount: 5M}", registry: registry))
   end
 end

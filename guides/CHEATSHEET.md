@@ -48,7 +48,20 @@ round-trip through, no line-wrapping or indentation at all. `pretty:`
 only changes rendering, never what the value decodes back to.
 
 ```sh
-mix dextrin.format data.dxn --mode pretty|condense [--in-place]
+mix dextrin.format data.dxn --mode pretty|condense [--in-place]   # pretty keeps comments
+```
+
+## Documents: keeping comments
+
+```elixir
+{:ok, doc} = Dextrin.Document.parse(source, opts)     # decode/2's opts and errors
+Dextrin.Document.to_value(doc)                       # what decode/2 gives
+Dextrin.Document.render(doc)                         # the source, byte for byte
+Dextrin.Document.format(doc)                         # laid out, comments kept
+{:ok, doc} = Dextrin.Document.replace(doc, [:version], "2.0.0")
+{:ok, doc} = Dextrin.Document.delete(doc, [:deps, 0])          # with its own comments
+{:ok, doc} = Dextrin.Document.insert(doc, [:deps], -1, "new")  # index, or a map's new key
+{:ok, doc, changes} = Dextrin.Document.update(doc, new_value, on_ambiguity: :safe)
 ```
 
 ## Value-type cheatsheet
@@ -86,15 +99,20 @@ registry
 ## Registry: schemas
 
 ```elixir
-{:ok, registry} = Dextrin.Schema.compile(schema_doc, base_registry \\ Dextrin.Registry.new(), predicates \\ %{})
+{:ok, registry} = Dextrin.Schema.compile(schema_doc, base_registry \\ Dextrin.Registry.new())
 
 registry
-|> Dextrin.Registry.put_struct_materializer(name, fn field_map -> {:ok, term} end)
+|> Dextrin.Registry.put_struct_materializer(name, fn name, version, fields -> {:ok, term} end)   # every version; result checked against the latest
 |> Dextrin.Registry.put_struct_module(name, module)   # for {:reference, name} checks on hand-built structs
 |> Dextrin.Registry.put_resolver(fn name -> {:ok, compiled} | :unknown end)   # lazy/on-demand schema loading
+|> Dextrin.Registry.put_strict(true)   # refuse extra fields (schema/undeclared-field); or decode(..., strict: true)
+
+Dextrin.Registry.fetch_struct_schema(registry, name)            # the latest version
+Dextrin.Registry.fetch_struct_schema(registry, name, version)   # exactly that one
+Dextrin.Registry.replace_struct_schema(registry, name, compiled) # hot swap a loaded version
 ```
 
-`Dextrin.Schema.FileResolver.for_paths(paths, predicates \\ %{})` builds
+`Dextrin.Schema.FileResolver.for_paths(paths)` builds
 a ready-made resolver for `Namespace/Name -> paths/Namespace.dxns`.
 
 ## Registry: third-party structs (`Dextrin.Schema.Provider`)
@@ -110,7 +128,7 @@ support:
 
 `SomeLib.Money.DXN` implements the `Dextrin.Schema.Provider` behaviour
 (`dxn_schema/0`, `dxn_schema_name/0`, `dxn_struct/0`, and optionally
-`dxn_materialize/1`) — a small, separately-compiled companion module,
+`dxn_materialize/3`) — a small, separately-compiled companion module,
 not the struct's own module, so the struct itself is never
 conditionally compiled.
 
@@ -137,7 +155,7 @@ Address                        bare symbol — a struct name or a named type
 {:all-of A B}                  intersection — matches all
 {:nilable T}                   sugar for {:one-of :nil T}
 {:refine T %{constraints}}     base type + refine constraints (below)
-%schema{fields: @ordered %{}}  struct/record shape
+%schema{}  struct/record shape
 ```
 
 ## `refine` constraints
@@ -151,17 +169,26 @@ min-count / max-count                                      -- list/set/tuple
 ## Struct schema options
 
 ```elixir
-%schema{
-  closed:    true              # no field outside `fields` may be present at all
-  forbidden: [legacy_field]    # explicit deny-list, reported by name
-  refine-fn: ns/predicate-name # cross-field/whole-value check, resolved from `predicates`
-  fields: @ordered %{
-    required_field:  :integer
+%schema(2){                              # version 2; no header = version 1
+    required_field:  :integer            # the body's order is the .dxnb position
     optional_field?: :string             # trailing `?` = optional
     with_default:    %field{type: :integer, default: 0, description: "..."}
   }
-}
 ```
+
+## Versions and extra fields
+
+```elixir
+%Point(2){x: 1, y: 2}            # written with version 2; encoding always writes the latest
+%Point{x: 1, y: 2}               # no version: read as the latest
+%Point[1 2 label: "a"]           # extra fields after a positional struct's items
+%Point{x: 1, y: 2, label: "a"}   # an undeclared name is an extra field
+```
+
+Newer than loaded: read against the latest (text by name, `.dxnb` by
+position). Older and loaded: the materializer upgrades it, else
+`schema/no-materializer`. Older and not loaded: `schema/unknown-version`.
+Reordering fields misreads silently in older `.dxnb` readers: append only.
 
 ## Standard named types (`Dextrin.Schema.Std`)
 
@@ -183,6 +210,7 @@ mix dextrin.validate data.dxn [--format text|binary] [--schema s.dxns --as Name]
 mix dextrin.encode data.dxn [--out data.dxnb] [--share]
 mix dextrin.decode data.dxnb [--out data.dxn]
 mix dextrin.format data.dxn [--mode pretty|condense] [--in-place]
+mix dextrin.compat old-schemas/ schemas/
 mix dextrin.gen.schema MyApp.SomeStruct [--out schema.dxns] [--name Name]
 mix dextrin.gen.unicode [--file PATH] [--force]
 ```

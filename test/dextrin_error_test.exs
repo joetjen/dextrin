@@ -19,6 +19,7 @@ defmodule Dextrin.ErrorTest do
       assert Dextrin.Error.binary("bad bytes") == %Dextrin.Error{
                message: "bad bytes",
                stage: :binary,
+               category: "binary",
                byte_offset: nil
              }
     end
@@ -27,6 +28,7 @@ defmodule Dextrin.ErrorTest do
       assert Dextrin.Error.binary("bad bytes", 42) == %Dextrin.Error{
                message: "bad bytes",
                stage: :binary,
+               category: "binary",
                byte_offset: 42
              }
     end
@@ -36,6 +38,38 @@ defmodule Dextrin.ErrorTest do
                message: "schema violation",
                stage: :action
              }
+    end
+  end
+
+  describe "categories (DXN.md §5)" do
+    test "an error from the text grammar is a syntax error" do
+      error = Dextrin.Error.from_ichor(Ichor.Error.new(message: "boom", stage: :parser))
+      assert error.category == "syntax"
+    end
+
+    test "a binary error is a binary error" do
+      assert Dextrin.Error.binary("bad bytes").category == "binary"
+    end
+
+    test "action/2 takes its category explicitly" do
+      assert Dextrin.Error.action("no DXN meaning", "encode/unsupported").category ==
+               "encode/unsupported"
+    end
+
+    test "action/1 leaves it unassigned, which no conformance case ever expects" do
+      assert Dextrin.Error.action("schema violation").category == nil
+    end
+
+    test "decoding text that does not parse answers a syntax error" do
+      assert {:error, %Dextrin.Error{category: "syntax"}} = Dextrin.decode("[1 2")
+    end
+
+    test "decoding bytes without the magic answers a binary error" do
+      assert {:error, %Dextrin.Error{category: "binary"}} = Dextrin.decode_binary(<<0x18, 0x2A>>)
+    end
+
+    test "encoding a value with no DXN meaning answers an encode error" do
+      assert {:error, %Dextrin.Error{category: "encode/unsupported"}} = Dextrin.encode(self())
     end
   end
 

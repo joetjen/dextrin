@@ -117,9 +117,16 @@ map_entry := (short_key:MAP_KEY short_val:value) | (arrow_key:value "=>" arrow_v
 ; at the rule level: putting map_lit first in value_body's choice is
 ; enough, since PEG ordered choice only needs map_lit to fail fast on
 ; seeing an identifier instead of "{", which it does immediately.
-struct_lit        := "%" name:IDENTIFIER (keyed:struct_keyed | positional:struct_positional)
+; `%Name(3){...}`: the schema version the struct was written with
+; (DXN.md §4.8). "(" begins nothing else in DXN, so this needs no new
+; token and no lookahead. Inline rather than a rule of its own: a rule
+; made only of terminals is captured as its text.
+struct_lit        := "%" name:IDENTIFIER ("(" version:INTEGER ")")? (keyed:struct_keyed | positional:struct_positional)
 struct_keyed      := "{" map_entry* "}"
-struct_positional := "[" value* "]"
+; A positional struct's items come first, then any extra fields as
+; entries (DXN.md §1.2): an item is a value not followed by `=>`, so
+; `3 => :x` is an entry, and an item after an entry is a syntax error.
+struct_positional := "[" (value !"=>")* map_entry* "]"
 
 sigil := DATE_SIGIL | TIME_SIGIL | INSTANT_SIGIL | REGEX_SIGIL
 

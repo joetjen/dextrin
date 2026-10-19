@@ -150,6 +150,9 @@ defmodule Dextrin.Binary.Decoder do
             err
         end
 
+      tag_number == Tags.t_struct() ->
+        decode_struct(rest, opts)
+
       tag_number == Tags.t_shareable() ->
         decode_shareable(rest, opts)
 
@@ -360,9 +363,6 @@ defmodule Dextrin.Binary.Decoder do
       tag == Tags.t_sorted_set() ->
         build_sorted_set(value)
 
-      tag == Tags.t_struct() ->
-        build_struct(value, opts)
-
       tag == Tags.t_date() ->
         build_date(value)
 
@@ -481,45 +481,106 @@ defmodule Dextrin.Binary.Decoder do
   defp build_sorted_set(_),
     do: {:error, Dextrin.Error.binary("malformed sorted-set (tag 207) payload")}
 
-  defp build_struct([name | fields], opts) when is_binary(name) do
-    case Keyword.get(opts, :registry) do
-      %Registry{} = registry ->
-        case Registry.fetch_struct_schema(registry, name) do
-          {:ok, compiled, _registry} ->
-            materializer =
-              case Registry.fetch_materializer(registry, name) do
-                {:ok, fun} -> fun
-                :error -> nil
-              end
+  # The type name carries the version the struct was written with,
+  # `"User(3)"` (DXN.md §2.4, §4.8).
+  # A struct's payload is an array, `[type-name, field..., extras?]`, read
+  # item by item so the last item may be its extra fields: a tag-215 map
+  # (DXN.md §2.3), legal nowhere else -- anywhere else it is an
+  # unrecognized tag. Read in order, so the extras keep the order they
+  # were written in.
+  defp decode_struct(rest, opts) do
+    case read_head(rest) do
+      {:ok, 4, count, rest2} when count >= 1 ->
+        with {:ok, items, rest3} <- decode_n_items(rest2, count - 1, opts),
+             {:ok, last, rest4} <- decode_last_struct_item(rest3, count, opts) do
+          {fields, extra} = split_extra(items ++ last)
 
-            # Same fail-fast, decode-time enforcement as the text
-            # pipeline — .dxnb structs are always positional (`DXN.md`
-            # §2.1), so this is the only shape possible here.
-            case Dextrin.Schema.Validator.materialize(
-                   compiled,
-                   {:positional, fields},
-                   materializer,
-                   registry
-                 ) do
-              {:ok, materialized} ->
-                {:ok, materialized}
-
-              {:error, reason} ->
-                {:error,
-                 Dextrin.Error.binary("struct #{inspect(name)} violates its schema: #{reason}")}
-            end
-
-          {:unknown, _registry} ->
-            {:ok, Struct.positional(name, fields)}
+          case build_struct(fields, extra, opts) do
+            {:ok, value} -> {:ok, value, rest4}
+            {:error, _} = err -> err
+          end
         end
 
-      _ ->
-        {:ok, Struct.positional(name, fields)}
+      {:ok, _major, _arg, _rest} ->
+        {:error, Dextrin.Error.binary("malformed struct (tag #{Tags.t_struct()}) payload")}
+
+      {:error, _} = err ->
+        err
     end
   end
 
-  defp build_struct(_, _opts),
+  # The last item of a one-item array is the type name itself; past the
+  # type name, the last item is either an ordinary field or the extras.
+  defp decode_last_struct_item(bin, 1, opts) do
+    with {:ok, item, rest} <- decode_item(bin, opts), do: {:ok, [item], rest}
+  end
+
+  defp decode_last_struct_item(bin, _count, opts) do
+    case read_head(bin) do
+      {:ok, 6, 215, rest} ->
+        case read_head(rest) do
+          {:ok, 5, pair_count, rest2} ->
+            with {:ok, pairs, rest3} <- decode_map_pairs(pair_count, rest2, opts) do
+              {:ok,
+               [{:"$dextrin_extra", Enum.map(pairs, fn {k, v} -> {Struct.extra_key(k), v} end)}],
+               rest3}
+            end
+
+          _ ->
+            {:error,
+             Dextrin.Error.binary("extra fields (tag #{Tags.t_extra()}) require a map payload")}
+        end
+
+      _ ->
+        with {:ok, item, rest} <- decode_item(bin, opts), do: {:ok, [item], rest}
+    end
+  end
+
+  defp split_extra(items) do
+    case List.last(items) do
+      {:"$dextrin_extra", extra} -> {Enum.drop(items, -1), extra}
+      _ -> {items, []}
+    end
+  end
+
+  defp build_struct([type_name | fields], extra, opts) when is_binary(type_name) do
+    case Struct.parse_type_name(type_name) do
+      {:ok, name, version} ->
+        build_named_struct(name, version, fields, extra, opts)
+
+      :error ->
+        {:error,
+         Dextrin.Error.binary(
+           "struct type name #{inspect(type_name)} has a version that is not a positive integer"
+         )}
+    end
+  end
+
+  defp build_struct(_, _extra, _opts),
     do: {:error, Dextrin.Error.binary("malformed struct (tag #{Tags.t_struct()}) payload")}
+
+  defp build_named_struct(name, version, fields, extra, opts) do
+    case Keyword.get(opts, :registry) do
+      %Registry{} = registry ->
+        # Same fail-fast, decode-time enforcement as the text pipeline,
+        # through the same Dextrin.Schema.Reader — .dxnb structs are
+        # always positional (`DXN.md` §2.1), so this is the only shape
+        # possible here.
+        case Dextrin.Schema.Reader.read(registry, name, version, {:positional, fields}, extra) do
+          {:ok, materialized, _registry} ->
+            {:ok, materialized}
+
+          {:unknown, _registry} ->
+            {:ok, Struct.positional(name, fields, version, extra)}
+
+          {:error, %Dextrin.Error{}} = error ->
+            error
+        end
+
+      _ ->
+        {:ok, Struct.positional(name, fields, version, extra)}
+    end
+  end
 
   defp build_time(total_micro) when is_integer(total_micro) and total_micro >= 0 do
     {microsecond, rem1} = {rem(total_micro, 1_000_000), div(total_micro, 1_000_000)}
@@ -639,9 +700,26 @@ defmodule Dextrin.Binary.Decoder do
 
   # ---- shared helpers ---------------------------------------------------------
 
-  defp decode_map_pairs(pair_count, bin, opts) do
-    with {:ok, items, rest} <- decode_n_items(bin, pair_count * 2, opts) do
-      {:ok, pairs_from_flat(items), rest}
+  # DXN.md §1.6: every key must be one of the eight allowed types. A key
+  # whose first byte is major type 7 -- a float, `nil`, `true`, `false` --
+  # is refused before it is decoded, because a NaN or an infinity decodes
+  # to the same atom a keyword does and its value could not say which it
+  # was; every other key is judged by its value.
+  defp decode_map_pairs(pair_count, bin, opts), do: decode_map_pairs(pair_count, bin, opts, [])
+
+  defp decode_map_pairs(0, bin, _opts, acc), do: {:ok, Enum.reverse(acc), bin}
+
+  defp decode_map_pairs(_n, <<7::3, _::5, _::binary>> = bin, opts, _acc) do
+    with {:ok, key, _rest} <- decode_item(bin, opts) do
+      {:error, Dextrin.MapKey.refusal(key)}
+    end
+  end
+
+  defp decode_map_pairs(n, bin, opts, acc) do
+    with {:ok, key, rest} <- decode_item(bin, opts),
+         :ok <- Dextrin.MapKey.check(key),
+         {:ok, value, rest2} <- decode_item(rest, opts) do
+      decode_map_pairs(n - 1, rest2, opts, [{key, value} | acc])
     end
   end
 
@@ -653,12 +731,6 @@ defmodule Dextrin.Binary.Decoder do
     with {:ok, value, rest} <- decode_item(bin, opts) do
       decode_n_items(rest, n - 1, opts, [value | acc])
     end
-  end
-
-  defp pairs_from_flat(items) do
-    items
-    |> Enum.chunk_every(2)
-    |> Enum.map(fn [k, v] -> {k, v} end)
   end
 
   defp decode_float(bits) do

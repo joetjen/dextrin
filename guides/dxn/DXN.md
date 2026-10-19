@@ -78,11 +78,12 @@ set_lit      = "@{" , { value } , "}" ;
 
 map_lit      = "%{" , { map_entry } , "}" ;
 map_entry    = ( identifier , ":" , value )          (* shorthand — plain-atom keys only *)
-             | ( value , "=>" , value ) ;             (* arrow — any key type *)
+             | ( value , "=>" , value ) ;             (* arrow — a key type of §1.6 *)
 
-struct_lit   = "%" , identifier ,
+struct_lit   = "%" , identifier , [ "(" , integer , ")" ] ,   (* version, §4.8 *)
                  ( ( "{" , { map_entry } , "}" )      (* keyed *)
-                 | ( "[" , { value } , "]" ) ) ;       (* positional *)
+                 | ( "[" , { item } , { map_entry } , "]" ) ) ;   (* positional, then extra fields *)
+item         = value ;                                (* a value not followed by "=>" (§4.7) *)
 
 sigil        = date_sigil | time_sigil | instant_sigil | regex_sigil ;
 date_sigil   = "~D[" , iso_date , "]" ;
@@ -154,6 +155,115 @@ types[30]{type,category,dxn_syntax,notes}:
   with weeks/days/hours/minutes/seconds, are tracked as independent
   fields (see §2.3 for the exact field set, shared with `.dxnb`).
 
+### 1.5 Canonical form
+
+Every value has exactly one **canonical form**: a `.dxn` rendering
+fixed down to the byte, so that two implementations' values can be
+compared as text, and so that map-key identity (§1.6) has one
+definition. A conforming implementation MUST be able to produce it.
+Parsing a value's canonical form yields an equal value.
+
+General rules:
+
+- No header, no comments, no `@_`.
+- Exactly one space between consecutive items or entries; nothing after
+  an opening or before a closing bracket; no commas, no newlines.
+- **Canonical order** compares the canonical forms of two values by
+  Unicode code point, first difference wins, a proper prefix sorts
+  first. (UTF-8 byte order is the same order; UTF-16 code-unit order is
+  not.)
+
+Per type:
+
+```toon
+canonical[30]{type,form}:
+  nil,"nil"
+  boolean,"true | false"
+  integer,"optional -, then decimal digits without leading zeros"
+  float,"see the float rules below"
+  decimal,"as given: the coefficient with exactly scale fractional digits and its sign, negative zero included, then M; a positive exponent, which text cannot write, is written out with zeros"
+  rational,"numerator/denominator as held, not reduced; the sign on the numerator, the denominator positive"
+  string,"see the string rules below"
+  char,"? then the character; ?s for space; \\ escape forms for \\, whitespace and control characters"
+  symbol,"the identifier"
+  keyword,":name when name is an identifier and not reserved, else :""..."" with string escaping"
+  list,"[ items ]"
+  tuple,"{ items }"
+  array,"@array[ items ]"
+  map,"%{ entries } in canonical order of their keys"
+  ordered-map,"@ordered %{ entries } in held order"
+  set,"@{ items } in canonical order"
+  sorted-set,"@sorted-set @{ items } in canonical order"
+  struct,"%Name(N){ entries } keyed, or %Name(N)[ items ] positional, as held; (N) when the version is known; keyed entries in held order, since in a %schema body the order is the field order"
+  map entry,"name: value when the key is a keyword whose name is an identifier and not reserved, else key => value"
+  date,"~D[YYYY-MM-DD]"
+  time,"~T[HH:MM:SS] then .fraction with trailing zeros removed, omitted when zero"
+  timestamp,"~U[YYYY-MM-DD HH:MM:SS] then the fraction as for time, then Z"
+  datetime,"@datetime ""YYYY-MM-DDTHH:MM:SS"" with the fraction as for time, then ±HH:MM"
+  duration,"@duration ""P..."" with fields in the order of §2.3, zero fields omitted, PT0S when all are zero"
+  uuid,"@uuid ""8-4-4-4-12"" in lowercase hex"
+  uri,"@uri ""..."" as held, with string escaping"
+  bytes,"@bytes ""..."" in standard base64 with padding"
+  regex,"~r/pattern/flags with the flags in canonical order"
+  custom-tag,"@name value"
+  extra fields,"in a keyed struct, entries after the declared fields in held order; in a positional struct, entries after the items, in canonical order of their keys (§4.7)"
+```
+
+**Nothing is normalised.** A value is written as it was given: `1.50M`
+stays `1.50M` (and `[-2, 150]` in `.dxnb`), `2/4` stays `2/4`. A
+language whose own numbers normalise holds such a value in a type that
+does not.
+
+**Floats.** Take the shortest decimal digit string *d₁…dₖ* that reads
+back as exactly the same IEEE 754 double, and its exponent *n* such
+that the value is 0.*d₁…dₖ* × 10ⁿ. Then:
+
+- if *k* ≤ *n* ≤ 21: the digits, *n* − *k* zeros, then `.0`
+  (`100.0`, `123456789012345680000.0`);
+- if 0 < *n* < *k*: the digits with a `.` after the *n*th
+  (`1.5`, `123.456`);
+- if −6 < *n* ≤ 0: `0.`, −*n* zeros, then the digits (`0.1`, `0.000001`);
+- otherwise: *d₁*, `.`, then *d₂…dₖ* or `0` when *k* = 1, then `e`, then
+  *n* − 1, with a `-` only when negative (`1.0e21`, `1.5e-7`,
+  `2.5e300`);
+- a negative value gets a leading `-`, **including negative zero**
+  (`-0.0`);
+- `NaN`, `Infinity`, `-Infinity` as written.
+
+These are ECMAScript's `Number.prototype.toString` thresholds, with
+`.0` added to whole numbers and no `+` in exponents.
+
+**Strings.** `"`, then each code point: `"` as `\"`, `\` as `\\`,
+U+000A as `\n`, U+0009 as `\t`, U+000D as `\r`, every other code point
+below U+0020 and U+007F as `\x{…}` in lowercase hex without leading
+zeros, everything else literally; then `"`.
+
+### 1.6 Map keys
+
+A map key, and the key of a struct's extra field (§4.7), MUST be one of
+`string`, `keyword`, `integer`, `uuid`, `date`, `bytes`, `symbol`,
+`char`. Any other key is an error (`key/not-allowed`, §5), in text, in
+binary and when encoding.
+
+Two keys are the same key exactly when their canonical forms (§1.5) are
+equal: same type, same value, no normalization. So `1` and `"1"` are
+different keys, as are `:x` and `"x"`. A key that occurs twice in one
+map keeps its last value.
+
+The allowed types are those whose identity is exact and obvious in
+every language. Excluded, and why:
+
+- `float`, `decimal`, `rational`: `1` and `1.0`, `0.0` and `-0.0`,
+  `NaN`, `1.0M` and `1.00M`, `2/4` and `1/2` are distinct DXN values
+  that some languages hold as one, and the BEAM has no `NaN` or
+  infinities.
+- `time`, `timestamp`, `datetime`, `duration`, `uri`: precision,
+  offsets, `P1D` against `PT24H`, URI normalization.
+- `nil` and `boolean`: they collide with other keys in some languages
+  (in PHP, `nil` with `""` and `true` with `1` as array keys), and they
+  are rare as keys anyway.
+- `regex`, custom tags, and every collection.
+
 ---
 
 ## 2. `.dxnb` — binary format
@@ -201,8 +311,8 @@ cbor_map[29]{type,cbor_major_or_tag,payload,integrity_note}:
   map,"major5 (untagged)","pairs","default/untagged case"
   ordered-map,"tag T_ORDERED","major5 pairs","order preserved by tag presence, not byte sequence"
   set,"tag T_SET","major4 items",""
-  sorted-set,"tag T_SORTED_SET","major4 items, sorted order",""
-  struct,"tag T_STRUCT","[type-name-or-ref, field...]","positional only, §2.1"
+  sorted-set,"tag T_SORTED_SET","major4 items, in canonical order (§1.5)",""
+  struct,"tag T_STRUCT","[type-name-or-ref, field..., extras?]","positional only, §2.1; the type name carries the version, `User(3)` (§4.8); extra fields, when there are any, as one trailing `T_EXTRA` map (§4.7)"
   array,"tag T_ARRAY","major4 items",""
   date,"tag T_DATE","integer days since 1970-01-01","Unix epoch, day granularity"
   time,"tag T_TIME","integer microseconds since midnight",""
@@ -236,10 +346,11 @@ private_tags[15]{name,number,wraps}:
   T_DURATION,212,"bitmask byte + fields"
   T_REGEX,213,"array: [pattern, flags-byte]"
   T_CUSTOM,214,"array: [tag-ref, value]"
+  T_EXTRA,215,"map: {key: value, ...} — a struct's extra fields, only ever its last item (§4.7)"
 ```
 
 Allocated from CBOR's one-extra-byte tag range (24–255), placed at
-200–214 specifically to stay clear of the actively-managed low range
+200–215 specifically to stay clear of the actively-managed low range
 (0–40 has multiple assignments and gaps IANA could fill later). Not
 IANA-registered — collision-free only within `dextrin`-produced documents;
 register formally before any non-`dextrin` interop is expected.
@@ -368,7 +479,7 @@ type_expr[13]{form,dxn_shape,meaning}:
   all-of,"{:all-of a b}","intersection — value must match every variant"
   nilable,"{:nilable t}","sugar for {:one-of :nil t}"
   refine,"{:refine t %{constraints}}","base type plus constraints, §4.2"
-  struct,"%schema{fields: @ordered %{...}}","struct/record shape, §4.4"
+  struct,"%schema{...}","struct/record shape, §4.4"
 ```
 
 A bare `type_expr` (no wrapping tuple/struct) is always a `primitive`
@@ -401,16 +512,20 @@ No separate flag: a field key ending in `?` is optional; any other key
 is required. `?` is already a legal `ident_char` (§1.1) — no grammar
 addition. The `?` itself is not part of the field's name.
 
-### 4.4 Struct schemas (`%schema{}`/`%field{}`)
+**Optional means the field may be absent, not that it may be `nil`.**
+An optional field that is present must match its type like any other,
+so `nil` is refused unless the type admits it (`{:nilable t}`). Text
+leaves an absent field out. A positional form must fill every position
+— `.dxnb` always — so an encoder writes an absent field's default where
+it has one, and otherwise refuses (`schema/missing-field`) rather than
+writing `nil` the reader would refuse.
+
+### 4.4 Struct schemas (`%schema(N){}`/`%field{}`)
 
 ```ebnf
 schema_entry = identifier , ":" , schema_form ;
-schema_form  = "%schema{" ,
-                 [ "closed:" , boolean ] ,
-                 [ "forbidden:" , "[" , { identifier } , "]" ] ,
-                 [ "refine-fn:" , identifier ] ,
-                 "fields:" , "@ordered" , "%{" , { field_entry } , "}" ,
-               "}" ;
+schema_form  = "%schema" , [ "(" , version , ")" ] , "{" , { field_entry } , "}" ;
+version      = positive integer ;
 field_entry  = ( identifier , [ "?" ] , ":" , type_expr )
              | ( identifier , [ "?" ] , ":" , field_form ) ;
 field_form   = "%field{" , "type:" , type_expr ,
@@ -418,26 +533,23 @@ field_form   = "%field{" , "type:" , type_expr ,
                "}" ;
 ```
 
-```toon
-schema_keys[3]{key,default,meaning}:
-  closed,false,"if true, no field outside fields: may be present at all"
-  forbidden,[],"explicit deny-list of field names, checked even on an open schema"
-  refine-fn,none,"names a cross-field/whole-value predicate, resolved outside this document (implementation-defined mechanism)"
+```text
+User: %schema(3){
+  name: :string,
+  email: %field{type: :string, description: "where mail goes"},
+  id?: :uuid
+}
 ```
 
-`fields:` MUST be `@ordered %{...}`, not a plain `map` — field order
-is the canonical position ↔ name mapping a struct's positional wire
-form (§2.1) needs; a plain `map`'s "no ordering guarantee" (§1.4) would
-leave that mapping undefined. A keyed `%Name{...}` text literal may
-still list its own fields in any order — names alone resolve those —
-this requirement is on the *schema's* `fields:` only.
+**The body lists the fields directly, and the order they are written in
+is the order of the fields**: the canonical position ↔ name mapping a
+struct's positional wire form (§2.1) needs. A field named twice is an
+error. A keyed `%Name{...}` *data* literal may still list its fields in
+any order — names alone resolve those; the order requirement is on the
+schema's body only.
 
-`closed` and `forbidden` are independent: `closed` alone rejects any
-field not listed in `fields:`, reported generically ("unknown field");
-`forbidden` rejects specific named fields even when the schema is
-otherwise open, reported by name specifically — the distinction matters
-because a deprecated/renamed field deserves a more specific error than
-"never heard of this field."
+**The header holds only the version** (§4.8). A schema written without
+one, `%schema{...}`, is version 1.
 
 `%field{type:, default:, description:}` is reached only when a field
 needs metadata beyond a bare `type_expr` — a default value (used when
@@ -485,16 +597,181 @@ struct:
 
 - every required field (§4.3) is present;
 - every present field's value matches its declared `type_expr`
-  (§4.1/§4.2);
-- if `closed: true`, no field outside `fields:` is present at all;
-- no field named in `forbidden:` is present, regardless of `closed`.
+  (§4.1/§4.2).
 
-A violation of any of these MUST be reported as an error, distinctly
-from a value that simply fails to parse at all — but *how* it's
-reported (exception, error tuple, a validation-result value, ...) is
-implementation-defined. Whether `refine-fn:` predicates run at all,
-and how a predicate name is resolved to actual executable logic, is
-also implementation-defined — `.dxns` documents themselves are
-normatively cross-implementation because a schema *shape* is plain
-data; a `refine-fn:` name is deliberately an escape hatch to logic that
-isn't.
+**A value matches only its declared type, and nothing is converted to
+make it match.** An integer is not a string, however easy the
+conversion; a map is not a struct. A field typed `User` accepts only a
+`User` struct: a struct named `User` (checked against `User`'s schema,
+or opaque when there is none, §1.4), or the application value a reader
+has registered as `User`'s. Everything else is a type error, plain maps
+included; whoever needs a struct writes it as one.
+
+**Representation is not conversion.** A language without integers may
+hold a DXN integer as a string; that is its representation. A language
+that has integers and turns one into a string because a field says
+`:string` converts. The test is normative: **a host value always means
+the same DXN type, with or without a schema. A schema can accept or
+reject a value, but never changes what it means.**
+
+**A struct guarantees its declared fields and may carry more.** Code
+relying on a struct is guaranteed only the declared fields; the rest are
+its **extra fields**, which a reader keeps rather than drops:
+
+- **In text** they are ordinary entries. A keyed struct's entries that
+  its schema does not declare are extras, and so is any entry whose key
+  is not a name (a keyword, symbol or string). A positional struct
+  carries them as entries after its items,
+  `%User(3)["a" "a@x" nickname: "b", 3 => :x]`: all items come first,
+  an item is a value not followed by `=>`, and an item after an entry is
+  a syntax error.
+- **In `.dxnb`** they travel as one trailing item, a map from key to
+  value under tag `T_EXTRA` (215): `["User(3)", "a", "a@x",
+  215({"nickname": "b"})]`. Tag 215 appears nowhere else.
+- **An extra field never shadows a declared one.** A name given both as
+  a declared field and as an extra — `%User(3){name: "a", "name" =>
+  "b"}`, or a positional field and a tag-215 entry of the same name — is
+  an error (`schema/shadowed-field`).
+- **An extra field's key follows the map-key rule** (§1.6).
+- **A strict decode** — an option a reader MUST offer — refuses any
+  extra field on a struct whose schema is known
+  (`schema/undeclared-field`). A config loader reads strictly, to catch
+  a typo in a hand-written file; a message consumer does not, so a
+  newer producer's fields pass through it.
+
+A struct with no schema keeps a keyed struct's named entries as its
+fields, and its other entries — those keyed by something other than a
+name, and a positional struct's trailing entries — as extras.
+
+A violation MUST be reported as an error, distinctly from a value that
+simply fails to parse at all — but *how* it's reported (exception,
+error tuple, a validation-result value, ...) is implementation-defined;
+its category (§5) is not.
+
+### 4.8 Schema versions
+
+**Each `.dxns` document describes one version of each schema it
+holds**, written in the schema's header: `%schema(3){...}`, version 1
+when there is no header. Versions are positive integers. A reader loads
+any number of documents and keeps every schema by its name *and* its
+version, so `User` versions 1, 2 and 3 can be loaded side by side, from
+three documents.
+
+- **Loading a version already loaded is an error**
+  (`schema/duplicate-version`, §5): two documents that both claim to be
+  `User` v3 are a mistake, not an update.
+- **Replacing a loaded version is a separate, explicit operation** — the
+  hot swap of a running system. It only ever replaces: naming a version
+  that is not loaded is an error (`schema/not-loaded`), so a typo never
+  quietly adds one.
+- **A struct literal may carry the version it was written with**:
+  `%User(3){...}`, `%User(3)[...]`. In `.dxnb` the version is part of
+  the struct's type name, `"User(3)"` (§2.2), shared after its first
+  occurrence like any type name (§2.4). A version that is not a
+  positive integer is an error (`syntax`, or `binary` in `.dxnb`).
+
+**Every struct an encoder writes against a schema carries the latest
+loaded version of that schema** — `%User(3){...}`, and `%User(1){...}`
+when version 1 is the only one, so a reader never has to guess. There
+is no way to write an older version: whatever version a value says
+itself, it is checked against the latest and written as the latest. A
+struct whose name has no schema keeps the version it has, or none.
+
+**A struct without a version** — `%User{...}`, which mostly means text
+written by hand — **is read as the latest loaded version.** There is no
+way to read it as another; a document written for an older version
+says so with its tag, `%Config(2){...}`.
+
+**A struct reference names no version.** A field typed `User` accepts
+any version of `User`; the nested struct's own tag decides how it is
+read. `User(2)` is not a type expression.
+
+**Reading a struct by its version.** A reader compares the version a
+struct was written with against the versions it has loaded:
+
+- **No version, or the latest loaded:** the struct is read with the
+  latest schema, exactly — in `.dxnb` its item count must match.
+- **Newer than anything loaded:** the struct is read against the latest
+  loaded version. Every field that version requires must be present with
+  a matching type; optional fields that are missing are absent and take
+  their defaults. Text matches fields by name. `.dxnb` **assumes
+  positions are unchanged**: items beyond the reader's own fields are
+  silently dropped, and fields beyond the items are missing.
+- **Older than the latest, and loaded:** the struct is read with its
+  own version's schema and handed to the schema's materializer, which
+  upgrades it. Without a materializer it is an error
+  (`schema/no-materializer`): reading old data as though it were the
+  latest would be a guess.
+- **Older, and not loaded:** an error (`schema/unknown-version`), even
+  with a materializer — without the writer's schema there are no field
+  names to hand it.
+
+**One materializer per schema.** A reader may register, for each
+schema, one function that builds the application's value from a
+decoded struct. It is called for **every** decoded struct of its
+schema, whatever the version, with the schema's name, the version the
+fields were read with, and the fields keyed by field-name string;
+nested structs are built first. It upgrades older versions,
+materializes, refines and validates, and its result MUST be checked
+against the latest loaded version: a refusal, or a result that version
+rejects, is an error (`schema/materializer`). Without a materializer
+the latest version comes back as the implementation's generic struct
+value, at that version, its fields in the schema's order; an optional
+field that was absent stays absent. Encoding checks the schema's types
+only.
+
+**The risk of reading forward is normative.** If a newer version
+reordered, inserted or removed fields, an older reader of `.dxnb`
+assigns values to the wrong fields, without an error whenever the types
+agree. This is accepted as unavoidable: a schema whose older readers
+must keep working only ever appends fields.
+
+**Version discipline.** Implementations provide a check, for CI, that
+compares a previous release's schemas with the current ones: a version
+present in both whose content changed — a field added, removed or
+moved, or one whose type, requiredness or default changed — is an
+error, because two documents claiming to be `User` v3 must mean the
+same thing; and a schema's latest version never goes down. It also
+lists, for each schema, the older versions still loaded beside the
+latest and which fields were added, removed and changed since: the
+checklist for the materializer. There are no compatibility modes and
+no append-only rule.
+
+**Deploying a change.** A *compatible* change — fields appended at the
+end, and nothing else — deploys in either order: a newer producer is
+read by an older reader, which matches what it knows and ignores the
+rest, and an older producer is read by a newer reader through the
+materializer. A *breaking* change deploys **readers first**, then
+producers. A schema that services both read and write is changed only
+compatibly, or replaced by a new name (`UserV2`) beside the old one,
+migrating one service at a time.
+
+---
+
+## 5. Errors
+
+Implementations report errors in their own way (§4.7), but every error
+a conforming reader, writer or schema compiler raises belongs to
+exactly one **category**, and an implementation MUST expose it on the
+error value. Categories are compared exactly; messages are not
+normative.
+
+```toon
+categories[16]{category,raised_when}:
+  syntax,"text does not parse"
+  binary,"a .dxnb document is malformed: magic, version, a tag's payload"
+  key/not-allowed,"a map or extra-field key has a type §1.6 does not allow"
+  encode/unsupported,"a host value has no DXN meaning, or no form in the text being written -- a symbol whose name is not an identifier"
+  schema/compile,"a .dxns document is not a valid schema"
+  schema/duplicate-version,"a (name, version) is loaded twice"
+  schema/not-loaded,"a replace names a (name, version) that is not loaded"
+  schema/unknown-version,"a struct's version is older than the latest loaded and not loaded itself"
+  schema/no-materializer,"an older version arrives and no materializer is registered"
+  schema/field-count,"a positional struct's item count differs from its own version's field count"
+  schema/missing-field,"a required field is absent, or a positional form has no value for an optional field without a default (§4.3)"
+  schema/type-mismatch,"a field's value does not match its declared type"
+  schema/undeclared-field,"a strict decode meets a field the schema does not declare"
+  schema/shadowed-field,"an extra field has the name of a declared field"
+  schema/materializer,"a materializer answers an error, or a value the latest schema rejects"
+  schema/version-discipline,"the compatibility check: changed content under the same version, or a version going down"
+```

@@ -1,0 +1,97 @@
+defmodule Dextrin.DocumentFormatTest do
+  @moduledoc """
+  Phase C, the formatter rebuilt on the document
+  (`design/implementation-plan.md`): `Dextrin.Document.format/2` lays a
+  document out the way the pretty printer does -- one entry per line,
+  indented -- and keeps every comment with the entry it belongs to.
+  It changes layout only: every token is written as it was, so `1.50`
+  stays `1.50` and an escape stays an escape.
+  """
+
+  use ExUnit.Case, async: true
+  use ExUnitProperties
+
+  alias Dextrin.Document
+
+  import Dextrin.Generators, only: [dxn_value: 0]
+
+  defp formatted(text, opts \\ []) do
+    {:ok, doc} = Document.parse(text, opts)
+    Document.format(doc)
+  end
+
+  test "lays out a document and keeps its comments where they belong" do
+    text = """
+    # The project.
+
+    %{name:   "acme",  # the name
+      deps: [ "left-pad" # temporary
+    # still about left-pad
+         "right-pad",
+
+    # pinned below
+      "zero"
+    # nothing follows this
+      ], empty: [], version: 1.50}
+    # the end
+    """
+
+    assert formatted(text) == """
+           # The project.
+
+           %{
+             name: "acme"  # the name
+             deps: [
+               "left-pad"  # temporary
+                           # still about left-pad
+               "right-pad"
+
+               # pinned below
+               "zero"
+               # nothing follows this
+             ]
+             empty: []
+             version: 1.50
+           }
+           # the end\
+           """
+  end
+
+  test "a comment beside an opening bracket stays on its line" do
+    assert formatted("[ # the list\n1 2]") == "[  # the list\n  1\n  2\n]"
+  end
+
+  test "a comment between a key and its value stays between them" do
+    assert formatted("%{version: # pinned\n \"1.0\"}") ==
+             "%{\n  version:  # pinned\n    \"1.0\"\n}"
+  end
+
+  property "a document with no comments comes out as the pretty printer writes its value" do
+    check all(value <- dxn_value()) do
+      {:ok, pretty} = Dextrin.encode(value, pretty: true)
+      assert formatted(pretty, trusted: false) == pretty
+    end
+  end
+
+  property "a commented one keeps its value and every comment, and formatting it again changes nothing" do
+    check all(value <- dxn_value()) do
+      {:ok, pretty} = Dextrin.encode(value, pretty: true)
+
+      text =
+        pretty
+        |> String.split("\n")
+        |> Enum.with_index()
+        |> Enum.map_join("\n", fn {line, i} -> line <> " # c#{i}" end)
+
+      {:ok, doc} = Document.parse(text, trusted: false)
+      once = Document.format(doc)
+      {:ok, again} = Document.parse(once, trusted: false)
+
+      assert Document.to_value(again) == Document.to_value(doc)
+      assert comments(once) == comments(text)
+      assert Document.format(again) == once
+    end
+  end
+
+  defp comments(text), do: Regex.scan(~r/# c\d+/, text) |> List.flatten() |> Enum.sort()
+end

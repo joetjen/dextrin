@@ -22,17 +22,13 @@ defmodule Dextrin.Schema.EncodeValidationTest do
 
   @dxns """
   %{
-    Address: %schema{ fields: @ordered %{ street: :string } }
+    Address: %schema{ street: :string }
     Money: %schema{
-      closed:    true
-      forbidden: [legacy_amount_cents]
-      fields: @ordered %{
         amount:   :decimal
         currency: {:enum :usd :eur :gbp}
         note?:    :string
       }
-    }
-    Person: %schema{ fields: @ordered %{ home: Address } }
+    Person: %schema{ home: Address }
   }
   """
 
@@ -51,7 +47,7 @@ defmodule Dextrin.Schema.EncodeValidationTest do
         {"currency", Dextrin.Keyword.new("usd")}
       ])
 
-    assert {:ok, "%Money{amount:19.99M,currency::usd}"} =
+    assert {:ok, "%Money(1){amount:19.99M,currency::usd}"} =
              Dextrin.encode(money, registry: registry, schema: "Money")
   end
 
@@ -74,28 +70,6 @@ defmodule Dextrin.Schema.EncodeValidationTest do
     assert {:error, %Dextrin.Error{}} = Dextrin.encode(money, registry: registry, schema: "Money")
   end
 
-  test "a forbidden field is rejected even though nothing else is wrong", %{registry: registry} do
-    money =
-      Dextrin.Struct.keyed("Money", [
-        {"amount", Decimal.new("1")},
-        {"currency", Dextrin.Keyword.new("usd")},
-        {"legacy_amount_cents", 100}
-      ])
-
-    assert {:error, %Dextrin.Error{}} = Dextrin.encode(money, registry: registry, schema: "Money")
-  end
-
-  test "a closed schema rejects an undeclared field", %{registry: registry} do
-    money =
-      Dextrin.Struct.keyed("Money", [
-        {"amount", Decimal.new("1")},
-        {"currency", Dextrin.Keyword.new("usd")},
-        {"extra", 1}
-      ])
-
-    assert {:error, %Dextrin.Error{}} = Dextrin.encode(money, registry: registry, schema: "Money")
-  end
-
   test "a plain string-keyed map is also accepted (no struct-literal wire form, but validated)",
        %{registry: registry} do
     assert {:ok, encoded} =
@@ -112,7 +86,10 @@ defmodule Dextrin.Schema.EncodeValidationTest do
     money =
       Dextrin.Struct.keyed("Money", [
         {"amount", Decimal.new("1")},
-        {"currency", Dextrin.Keyword.new("usd")}
+        {"currency", Dextrin.Keyword.new("usd")},
+        # .dxnb fills every position, and an absent optional field is
+        # refused there rather than written as nil.
+        {"note", "n"}
       ])
 
     assert {:ok, _bin} = Dextrin.encode_binary(money, registry: registry, schema: "Money")
@@ -153,12 +130,14 @@ defmodule Dextrin.Schema.EncodeValidationTest do
       assert :ok = Dextrin.Schema.validate_encode(right, registry, "Person")
     end
 
-    test "without put_struct_module registered, a reference field can't be checked and is trusted",
+    test "without put_struct_module registered, an application struct is not the referenced one",
          %{
            registry: registry
          } do
+      # A value matches only its declared type (DXN.md §4.7): with no
+      # module registered for "Address", nothing says this struct is one.
       wrong = %{"home" => struct(TestCompany, ein: "1")}
-      assert :ok = Dextrin.Schema.validate_encode(wrong, registry, "Person")
+      assert {:error, _} = Dextrin.Schema.validate_encode(wrong, registry, "Person")
     end
 
     test "a Dextrin.Struct checks its own name directly, with no put_struct_module needed", %{

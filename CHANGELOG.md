@@ -5,6 +5,183 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `Dextrin.Document` -- a `.dxn` document with everything it holds, its
+  comments, blank lines and commas as well as its value: `parse/2` (with
+  `Dextrin.decode/2`'s options and errors), `to_value/1` (what `decode/2`
+  gives) and `render/1` (the source, byte for byte, when nothing was
+  edited). Built on Ichor's lossless parse of the same grammar.
+- `Dextrin.Document.replace/3`, `delete/2` and `insert/4` -- explicit
+  edits by path (a map's key, a struct's field name, an index). Every byte
+  an edit does not touch renders as it was; a replaced value keeps the
+  comments around it; a deleted entry takes the comment blocks above it
+  and its trailing block, and nobody else's; an inserted entry goes above
+  the comments of the entry it lands before, laid out like its
+  neighbours.
+- `Dextrin.Document.format/2` -- a document laid out the way the pretty
+  printer lays out its value, with every comment kept beside the entry
+  it belongs to. Layout only: every token is written as it was, and a
+  comment-free document comes out exactly as `Dextrin.encode(value,
+  pretty: true)` writes its value.
+- **`mix dextrin.format` keeps comments** (`--mode pretty`, the default):
+  it formats through `Dextrin.Document.format/2`, where it reprinted the
+  value and lost every comment. `--mode condense` still drops them: a
+  comment ends its line, and condensed output is one line.
+- `Dextrin.Document.update/3` -- the document holding a new value, by the
+  fewest explicit edits, answered as a changeset. Equal values are left
+  as written; lists compare with Myers' diff. A deleted item followed by
+  an inserted one is ambiguous, and `on_ambiguity:` decides: `:safe`
+  (the default) refuses only where the deleted item owns a comment,
+  `:guess` reads it as a replace, `:error` refuses every one.
+- `Dextrin.Registry.from_options/1` and `Dextrin.Error.from_parse/1`, what
+  `decode/2` and `Dextrin.Document.parse/2` share.
+- `Dextrin.Canonical.print/1` -- the canonical form of a value
+  (`DXN.md` §1.5): one `.dxn` rendering fixed down to the byte, with
+  maps and sets in canonical order, floats by one exact algorithm and
+  one fixed set of string escapes, so values from different
+  implementations compare as text.
+- `Dextrin.Error`'s `category` -- the error's kind as `DXN.md` §5 names
+  it (`"syntax"`, `"binary"`, `"encode/unsupported"`, ...), so errors
+  compare across implementations without comparing messages.
+  `Dextrin.Error.action/2` takes it; schema errors have none yet.
+- `mix dextrin.conformance REQUEST ANSWER` and `Dextrin.Conformance` --
+  this implementation's adapter for the Dextrin Conformance Suite,
+  answering a JSON batch of cases with canonical forms, base64 bytes or
+  error categories.
+  It also answers `format` and `edit` cases, a `Dextrin.Document` laid
+  out or edited, as `text`.
+- The tutorial's §8, "Evolving a schema": a worked example of versions,
+  reading across them, the materializer, the positional risk and
+  `mix dextrin.compat`. The cheatsheet gains versions and extra fields.
+- `Dextrin.Schema.Compat.check/2` and `mix dextrin.compat OLD NEW` --
+  the version discipline check (`DXN.md` §4.8), for CI against the
+  previous release's schema files: a version whose content changed
+  without a new version, or a version that went down, fails; what the
+  latest version's materializer has to upgrade is listed either way.
+
+### Changed
+
+- Requires `ichor_runtime ~> 0.4` (was `~> 0.2`); `ichor ~> 0.5` builds
+  the DXN parser, now generated with `--lossless` for the comment-keeping
+  document to come. Decoding runs the same code as before.
+- An error of Dextrin's own found while parsing text -- a map key that is
+  not allowed, a schema violation -- travels through Ichor in
+  `Ichor.Error`'s `data` and comes back as itself, now with Ichor's
+  line and column; `Dextrin.Error.format/1` shows them.
+- **An absent optional field is never written as `nil`** (`DXN.md`
+  §4.3): `.dxnb` fills every position, so `encode_binary` writes an
+  absent field's default where it has one and otherwise refuses
+  (`schema/missing-field`). It wrote `nil`, which the same schema then
+  refused to read back. `nil` in an optional field stays an error unless
+  the type is `{:nilable t}`.
+- **Every schema violation carries its `DXN.md` §5 category**:
+  `schema/field-count`, `schema/missing-field`, `schema/type-mismatch`
+  and `schema/shadowed-field`, decoding text or binary and encoding
+  alike. They came back as `syntax` from text, `binary` from binary,
+  and with no category from an encode. `Dextrin.Schema.validate/3`,
+  `validate_encode/3` and `validate_encode_tree/2` answer a
+  `Dextrin.Error` instead of a string.
+
+- `DXN.md` gains §1.5 (canonical form), §1.6 (map keys: only `string`,
+  `keyword`, `integer`, `uuid`, `date`, `bytes`, `symbol` and `char`)
+  and §5 (error categories).
+- **Schemas are versioned** (`DXN.md` §4.8). A schema is written
+  `%schema(N){field: type, ...}`: the body lists the fields directly, in
+  the order `.dxnb` encodes them, and the header holds only the version
+  (version 1 without one). `fields:` and `@ordered` are gone. Each
+  `.dxns` document describes one version; the registry keeps schemas by
+  name *and* version (`Dextrin.Registry.fetch_struct_schema/3`, with `/2`
+  answering the latest). Loading a version already loaded is a
+  `schema/duplicate-version` error; `Dextrin.Registry.replace_struct_schema/3`
+  hot-swaps a loaded version and refuses one that is not
+  (`schema/not-loaded`).
+- **A struct literal may carry its version**: `%User(3){...}`,
+  `%User(3)[...]`, kept in `Dextrin.Struct`'s new `version` field and
+  written back by the printer, the formatter and the canonical form.
+- **Every struct written against a schema carries the latest loaded
+  version of it**, in text (`%User(3){...}`, and `%User(1){...}` when
+  version 1 is the only one) and in `.dxnb`, where the type name becomes
+  `"User(3)"`. A struct with no schema keeps its own version, or none.
+  `Dextrin.Registry.as_written/2` decides; `Dextrin.Struct.type_name/2`
+  and `parse_type_name/1` spell it. A `.dxnb` type name whose version is
+  not a positive integer is a `binary` error. `DXN.md` §4.8 documents
+  how to deploy a schema change.
+- **A struct is read according to the version it was written with**
+  (`DXN.md` §4.8, `Dextrin.Schema.Reader`), in text and binary alike. The
+  latest version, or none, is read exactly. A newer version is read
+  against the latest: text by name, binary by position, dropping items
+  beyond the reader's fields and leaving missing optional fields absent.
+  An older version that is loaded is read with its own schema and handed
+  to the materializer, and refused as `schema/no-materializer` without
+  one; an older version that is not loaded is refused as
+  `schema/unknown-version`.
+- **One materializer per schema, for every version** (`DXN.md` §4.8).
+  `Dextrin.Registry.put_struct_materializer/3` takes a function of
+  `(schema_name, version, fields)`, `fields` keyed by string; it is
+  called for every decoded struct of its schema, upgrades older
+  versions, and its result is checked against the latest schema — a
+  refusal or a rejected result is `schema/materializer`.
+  `Dextrin.Schema.Provider`'s optional callback becomes
+  `dxn_materialize/3` accordingly.
+- **Without a materializer, a checked struct decodes to a
+  `Dextrin.Struct`** at its schema's latest version, fields in the
+  schema's order, instead of a plain string-keyed map — so it encodes
+  back to the text it came from. An optional field that was absent stays
+  absent instead of becoming `nil`.
+- `Dextrin.Schema.Validator.materialize/4` is replaced by `resolve/3`;
+  building the value is `Dextrin.Schema.Reader`'s job.
+- **A struct may carry extra fields** (`DXN.md` §4.7), kept in
+  `Dextrin.Struct`'s new `extra` list and written back with it: in text
+  as entries — after a positional struct's items,
+  `%User(3)["a" "a@x" nick: "b"]` (the grammar's positional rule gains
+  trailing entries) — and in `.dxnb` as one trailing map under the new
+  private tag 215. A keyed struct's undeclared names, and any entry keyed
+  by something other than a name, are extras. An extra never shadows a
+  declared field (`schema/shadowed-field`); the materializer receives
+  extras with the declared fields; `strict: true` refuses them
+  (`schema/undeclared-field`, `Dextrin.Registry.put_strict/2`). A
+  registered application struct's runtime keys beyond its `defstruct`
+  are written as its extras (`Dextrin.Struct.runtime_extra/1`).
+- A keyed struct entry whose key is not a name — `%Point{1 => 2}` — is an
+  extra field instead of an error.
+- **A struct is matched only by a struct** (`DXN.md` §4.7). A field
+  typed `User` accepts a struct named `User`, or the application struct
+  registered for `User`; a plain map, any other value, and an application
+  struct registered for no schema or another are type errors. Until now
+  every non-struct value, and every unregistered application struct, was
+  accepted. `DXN.md` §4.7 states the rule and its test: a host value
+  always means the same DXN type, schema or not.
+- **Removed: `closed:`, `forbidden:` and `refine-fn:`**, and with them
+  `Dextrin.Schema.compile/3`'s and `Dextrin.Schema.FileResolver.for_paths/2`'s
+  `predicates` argument. A struct may carry fields its schema does not
+  declare. A strict decode option and a per-schema materializer take
+  their places in later changes.
+- Schema compile errors are `Dextrin.Error`s with the `schema/compile`
+  category, not bare strings.
+- **A map key must be one of the eight types of `DXN.md` §1.6**
+  (`string`, `keyword`, `integer`, `uuid`, `date`, `bytes`, `symbol`,
+  `char`). Any other key -- a float, `nil`, a boolean, a time, a
+  collection, ... -- is refused as `key/not-allowed` when decoding text
+  or binary and when encoding, in maps and ordered maps alike.
+  `Dextrin.MapKey` holds the rule.
+- `DXN.md` §1.5 states that nothing is normalised: a value is written
+  as it was given, so `1.50M` keeps its scale and `-0.0M` its sign, in
+  the canonical form as in every encoder.
+
+### Fixed
+
+- A symbol whose name is not an identifier is refused by the text
+  writers (`encode/unsupported`): `encode/2`, the pretty printer and the
+  canonical form wrote its name verbatim, which read back as something
+  else, or as nothing (`""`). `.dxnb` keeps any name.
+
+- A keyed struct written to `.dxnb` went on the wire in the order of
+  its keys rather than its schema's field order, so `%Point{y: 2, x: 1}`
+  came back with its fields swapped.
+
 ## [0.1.3] - 2026-08-18
 
 ### Fixed

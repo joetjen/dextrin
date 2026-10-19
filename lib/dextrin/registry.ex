@@ -23,18 +23,27 @@ defmodule Dextrin.Registry do
 
   @type tag_decoder :: (Dextrin.Value.t() -> {:ok, term()} | {:error, term()})
   @type tag_encoder :: (struct() -> {:ok, Dextrin.Value.t()} | {:error, term()})
-  @type struct_materializer :: (%{atom() => term()} -> {:ok, term()} | {:error, term()})
+  @typedoc """
+  A schema's materializer (DXN.md §4.8): called for every decoded struct
+  of its schema, whatever the version, with the schema's name, the
+  version the fields were read with and the fields keyed by string. It
+  answers the application's latest-version value, which is checked
+  against the latest schema, or `{:error, reason}`.
+  """
+  @type struct_materializer ::
+          (String.t(), pos_integer(), %{String.t() => term()} -> {:ok, term()} | {:error, term()})
   @type struct_resolver :: (String.t() -> {:ok, Compiled.t()} | :unknown)
 
   @type t :: %__MODULE__{
           tags: %{optional(String.t()) => tag_decoder()},
           tag_encoders: %{optional(module()) => {String.t(), tag_encoder()}},
-          structs: %{optional(String.t()) => Compiled.t()},
+          structs: %{optional(String.t()) => %{optional(pos_integer()) => Compiled.t()}},
           materializers: %{optional(String.t()) => struct_materializer()},
           resolver: struct_resolver() | nil,
           type_aliases: %{optional(String.t()) => TypeExpr.t()},
           struct_modules: %{optional(String.t()) => module()},
-          trusted: boolean()
+          trusted: boolean(),
+          strict: boolean()
         }
 
   defstruct tags: %{},
@@ -44,7 +53,8 @@ defmodule Dextrin.Registry do
             resolver: nil,
             type_aliases: %{},
             struct_modules: %{},
-            trusted: true
+            trusted: true,
+            strict: false
 
   @spec new() :: t()
   def new, do: %__MODULE__{}
@@ -69,6 +79,42 @@ defmodule Dextrin.Registry do
   @spec put_trusted(t(), boolean()) :: t()
   def put_trusted(%__MODULE__{} = registry, trusted?) when is_boolean(trusted?) do
     %{registry | trusted: trusted?}
+  end
+
+  @doc """
+  The registry a decode's `opts` describe: `:registry` (a new one when
+  absent), with `:trusted` and `:strict` applied over it when given --
+  what `Dextrin.decode/2`, `Dextrin.decode_binary/2` and
+  `Dextrin.Document.parse/2` all read.
+  """
+  @spec from_options(keyword()) :: t()
+  def from_options(opts) do
+    registry = Keyword.get(opts, :registry, new())
+
+    registry =
+      case Keyword.fetch(opts, :trusted) do
+        {:ok, trusted?} -> put_trusted(registry, trusted?)
+        :error -> registry
+      end
+
+    case Keyword.fetch(opts, :strict) do
+      {:ok, strict?} -> put_strict(registry, strict?)
+      :error -> registry
+    end
+  end
+
+  @doc """
+  Marks this registry as decoding *strictly*: a schema-backed struct
+  that carries a field its schema does not declare is refused
+  (`schema/undeclared-field`, DXN.md §4.7) instead of keeping it as an
+  extra field. A config loader decodes strictly, to catch a typo in a
+  hand-written file; a message consumer does not, so a newer producer's
+  fields pass through. `Dextrin.decode/2`/`decode_binary/2` take it as
+  `strict: true`.
+  """
+  @spec put_strict(t(), boolean()) :: t()
+  def put_strict(%__MODULE__{} = registry, strict?) when is_boolean(strict?) do
+    %{registry | strict: strict?}
   end
 
   @spec put_tag(t(), String.t(), tag_decoder()) :: t()
@@ -98,15 +144,76 @@ defmodule Dextrin.Registry do
   def fetch_tag_encoder(%__MODULE__{tag_encoders: tag_encoders}, module),
     do: Map.fetch(tag_encoders, module)
 
+  @doc """
+  Sets `compiled` as version `compiled.version` of the schema `name`,
+  whether or not that version was there already.
+
+  **Not how schemas are loaded.** `Dextrin.Schema.compile/2` uses
+  `add_struct_schema/3`, which refuses a version already loaded, and a
+  deliberate swap is `replace_struct_schema/3`. This is the unchecked
+  setter underneath both, also used to cache what a resolver answers.
+  """
   @spec put_struct_schema(t(), String.t(), Compiled.t()) :: t()
-  def put_struct_schema(%__MODULE__{} = registry, name, %Compiled{} = compiled)
+  def put_struct_schema(%__MODULE__{} = registry, name, %Compiled{version: version} = compiled)
       when is_binary(name) do
-    %{registry | structs: Map.put(registry.structs, name, compiled)}
+    versions = registry.structs |> Map.get(name, %{}) |> Map.put(version, compiled)
+    %{registry | structs: Map.put(registry.structs, name, versions)}
   end
+
+  @doc """
+  Loads `compiled` as a new version of the schema `name`.
+
+  Loading a version that is already loaded is a `schema/duplicate-version`
+  error (DXN.md §4.8): two documents both claiming to be `User` v3 is a
+  mistake, not an update. Replacing a version on purpose -- a hot swap in
+  a running system -- is `replace_struct_schema/3`.
+  """
+  @spec add_struct_schema(t(), String.t(), Compiled.t()) ::
+          {:ok, t()} | {:error, Dextrin.Error.t()}
+  def add_struct_schema(%__MODULE__{} = registry, name, %Compiled{version: version} = compiled) do
+    if loaded?(registry, name, version) do
+      {:error,
+       Dextrin.Error.action(
+         "schema #{inspect(name)} version #{version} is already loaded",
+         "schema/duplicate-version"
+       )}
+    else
+      {:ok, put_struct_schema(registry, name, compiled)}
+    end
+  end
+
+  @doc """
+  Replaces version `compiled.version` of the schema `name` -- the hot swap
+  of a running system.
+
+  **Replace only replaces.** Naming a version that is not loaded is a
+  `schema/not-loaded` error, so a typo in a hot swap never quietly adds a
+  version instead.
+  """
+  @spec replace_struct_schema(t(), String.t(), Compiled.t()) ::
+          {:ok, t()} | {:error, Dextrin.Error.t()}
+  def replace_struct_schema(
+        %__MODULE__{} = registry,
+        name,
+        %Compiled{version: version} = compiled
+      ) do
+    if loaded?(registry, name, version) do
+      {:ok, put_struct_schema(registry, name, %{compiled | name: name})}
+    else
+      {:error,
+       Dextrin.Error.action(
+         "schema #{inspect(name)} version #{version} is not loaded, so there is nothing to replace",
+         "schema/not-loaded"
+       )}
+    end
+  end
+
+  defp loaded?(registry, name, version),
+    do: registry.structs |> Map.get(name, %{}) |> Map.has_key?(version)
 
   @spec put_struct_materializer(t(), String.t(), struct_materializer()) :: t()
   def put_struct_materializer(%__MODULE__{} = registry, name, materializer)
-      when is_binary(name) and is_function(materializer, 1) do
+      when is_binary(name) and is_function(materializer, 3) do
     %{registry | materializers: Map.put(registry.materializers, name, materializer)}
   end
 
@@ -127,20 +234,56 @@ defmodule Dextrin.Registry do
   @spec fetch_struct_schema(t(), String.t()) :: {:ok, Compiled.t(), t()} | {:unknown, t()}
   def fetch_struct_schema(%__MODULE__{structs: structs} = registry, name) do
     case Map.fetch(structs, name) do
-      {:ok, compiled} ->
-        {:ok, compiled, registry}
+      {:ok, versions} when map_size(versions) > 0 ->
+        {:ok, versions |> Map.keys() |> Enum.max() |> then(&Map.fetch!(versions, &1)), registry}
 
-      :error ->
-        case registry.resolver do
-          nil ->
-            {:unknown, registry}
+      _ ->
+        resolve(registry, name)
+    end
+  end
 
-          resolver ->
-            case resolver.(name) do
-              {:ok, compiled} -> {:ok, compiled, put_struct_schema(registry, name, compiled)}
-              :unknown -> {:unknown, registry}
-            end
-        end
+  @doc """
+  `struct` as it is written here: carrying the latest loaded version of
+  its schema (DXN.md §4.8), whatever version it says itself. A struct
+  whose name has no schema keeps its own version, or none.
+
+  Every writer goes through this -- text, the formatter and binary -- so
+  encoding never writes a version other than the latest, and never
+  writes one no schema stands behind.
+  """
+  @spec as_written(t() | nil, Dextrin.Struct.t()) :: Dextrin.Struct.t()
+  def as_written(%__MODULE__{} = registry, %Dextrin.Struct{name: name} = struct) do
+    case fetch_struct_schema(registry, name) do
+      {:ok, %Compiled{version: version}, _registry} -> %{struct | version: version}
+      {:unknown, _registry} -> struct
+    end
+  end
+
+  def as_written(_no_registry, %Dextrin.Struct{} = struct), do: struct
+
+  @doc """
+  Looks up version `version` of the schema `name` -- the one a struct
+  written `%Name(3){...}` is read with. Unlike `fetch_struct_schema/2`, a
+  miss does not fall back to another version: a struct is only ever read
+  with the schema it was written against.
+  """
+  @spec fetch_struct_schema(t(), String.t(), pos_integer()) ::
+          {:ok, Compiled.t(), t()} | {:unknown, t()}
+  def fetch_struct_schema(%__MODULE__{structs: structs} = registry, name, version) do
+    case structs |> Map.get(name, %{}) |> Map.fetch(version) do
+      {:ok, compiled} -> {:ok, compiled, registry}
+      :error -> {:unknown, registry}
+    end
+  end
+
+  # A miss consults the lazy resolver, if there is one, and caches what it
+  # answers.
+  defp resolve(%__MODULE__{resolver: nil} = registry, _name), do: {:unknown, registry}
+
+  defp resolve(%__MODULE__{resolver: resolver} = registry, name) do
+    case resolver.(name) do
+      {:ok, compiled} -> {:ok, compiled, put_struct_schema(registry, name, compiled)}
+      :unknown -> {:unknown, registry}
     end
   end
 
