@@ -33,6 +33,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Requires `ichor_runtime ~> 0.4` (was `~> 0.2`); `ichor ~> 0.5` builds
+  the DXN parser, now generated with `--lossless` for the comment-keeping
+  document to come. Decoding runs the same code as before.
+- An error of Dextrin's own found while parsing text -- a map key that is
+  not allowed, a schema violation -- travels through Ichor in
+  `Ichor.Error`'s `data` and comes back as itself, now with Ichor's
+  line and column; `Dextrin.Error.format/1` shows them.
 - **An absent optional field is never written as `nil`** (`DXN.md`
   §4.3): `.dxnb` fills every position, so `encode_binary` writes an
   absent field's default where it has one and otherwise refuses

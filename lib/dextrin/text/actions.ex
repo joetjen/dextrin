@@ -352,8 +352,8 @@ defmodule Dextrin.Text.Actions do
           {:unknown, registry} ->
             {:ok, opaque_struct(name, fields, version, extra), registry}
 
-          {:error, %Dextrin.Error{}} = error ->
-            error
+          {:error, %Dextrin.Error{} = error} ->
+            {:error, carried(error)}
         end
 
       _ ->
@@ -615,9 +615,12 @@ defmodule Dextrin.Text.Actions do
   # it was written as -- the one thing the value cannot say.
   defp allowed_key(key, key_cap) do
     if key in [:nan, :positive_infinity, :negative_infinity] and float_token?(key_cap.node) do
-      {:error, Dextrin.MapKey.refusal(key)}
+      {:error, carried(Dextrin.MapKey.refusal(key))}
     else
-      Dextrin.MapKey.check(key)
+      case Dextrin.MapKey.check(key) do
+        :ok -> :ok
+        {:error, error} -> {:error, carried(error)}
+      end
     end
   end
 
@@ -630,4 +633,11 @@ defmodule Dextrin.Text.Actions do
   defp captured_float?(_other), do: false
 
   defp action_error(message), do: Ichor.Error.new(message: message, stage: :action)
+
+  # An error of Dextrin's own -- one with a DXN.md §5 category the parser
+  # cannot know, such as `key/not-allowed` or a schema violation --
+  # handed through Ichor in its `data`, which `Dextrin.Error.from_ichor/1`
+  # takes back out, now with the position Ichor adds.
+  defp carried(%Dextrin.Error{message: message} = error),
+    do: Ichor.Error.new(message: message, stage: :action, data: error)
 end

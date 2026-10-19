@@ -36,7 +36,16 @@ defmodule Dextrin.Error do
 
   defstruct [:message, :stage, :category, :byte_offset, :ichor_error]
 
+  @doc """
+  An Ichor error, as a `Dextrin.Error`. One that carries a
+  `Dextrin.Error` in its `data` -- an action's own refusal, with its own
+  category -- is that error, with the Ichor error kept for its position;
+  any other is a `syntax` error.
+  """
   @spec from_ichor(Ichor.Error.t()) :: t()
+  def from_ichor(%Ichor.Error{data: %__MODULE__{} = carried} = err),
+    do: %{carried | ichor_error: err}
+
   def from_ichor(%Ichor.Error{message: message, stage: stage} = err) do
     %__MODULE__{message: message, stage: stage, category: "syntax", ichor_error: err}
   end
