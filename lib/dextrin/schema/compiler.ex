@@ -38,7 +38,7 @@ defmodule Dextrin.Schema.Compiler do
 
   @primitives ~w(nil boolean integer float decimal rational string char symbol keyword
                  list tuple map ordered-map set sorted-set array
-                 date time timestamp datetime duration uuid uri bytes regex)
+                 date time timestamp datetime duration uuid uri bytes bits regex)
 
   @doc """
   Compiles every entry of a decoded `.dxns` document into
@@ -164,7 +164,8 @@ defmodule Dextrin.Schema.Compiler do
   # `%schema(N){field: type, ...}`: the body is the fields, in the order
   # they are written; the header is the version, 1 when there is none.
   defp compile_entry(%Struct{name: "schema", version: version, fields: {:keyed, pairs}}, aliases) do
-    with {:ok, fields} <- compile_fields(pairs, aliases),
+    with :ok <- not_format_1_0(pairs),
+         {:ok, fields} <- compile_fields(pairs, aliases),
          :ok <- distinct_names(fields) do
       {:ok, %Compiled{version: version || 1, fields: fields}}
     end
@@ -175,6 +176,28 @@ defmodule Dextrin.Schema.Compiler do
 
   defp compile_entry(other, _aliases) do
     {:error, "expected a %schema(N){...} entry, got #{inspect(other)}"}
+  end
+
+  # A schema written in DXN 1.0's syntax -- `fields: @ordered %{...}`,
+  # `closed: true`, `forbidden: [...]` -- says so, and what 1.1 writes
+  # instead (DXN.md §4.4), rather than that a field has no known type.
+  # Only those shapes: in 1.1 `fields`, `closed` and `forbidden` are
+  # ordinary field names, whose values are type expressions.
+  defp not_format_1_0(pairs) do
+    old? =
+      Enum.any?(pairs, fn
+        {key, %Dextrin.OrderedMap{}} -> literal_name(key) == "fields"
+        {key, flag} when is_boolean(flag) -> literal_name(key) == "closed"
+        {key, list} when is_list(list) -> literal_name(key) == "forbidden"
+        _ -> false
+      end)
+
+    if old?,
+      do:
+        {:error,
+         "this is DXN 1.0's schema syntax (fields:, closed:, forbidden:); DXN 1.1 lists the fields " <>
+           "directly, %schema(N){field: type, ...}, and refuses undeclared fields with strict: true (DXN.md §4.4)"},
+      else: :ok
   end
 
   defp compile_fields(pairs, aliases) do

@@ -41,11 +41,12 @@ duration     @duration "P..."                         ISO 8601 duration
 uuid         @uuid "..."                              RFC 4122
 uri          @uri "..."                               RFC 3986
 bytes        @bytes "..."                             base64 in text
+bits         @bits {"..." n}                          base64 and a bit count; whole bytes are bytes
 regex        ~r/pattern/flags                          flags: i m s u x f r
 custom-tag   @tag value                                open extension point
 ```
 
-Plus one meta form: `@dxn "1.0"` — an optional header, first thing in
+Plus one meta form: `@dxn "1.1"` — an optional header, first thing in
 the document only.
 
 ## Struct forms

@@ -208,7 +208,21 @@ defmodule Dextrin.Binary.Encoder do
   end
 
   defp encode_item_dispatch(s, _opts) when is_binary(s), do: {:ok, text(s)}
-  defp encode_item_dispatch(%Bytes{data: data}, _opts), do: {:ok, bytes(data)}
+
+  defp encode_item_dispatch(%Bytes{data: data}, _opts) when is_binary(data),
+    do: {:ok, bytes(data)}
+
+  # Bits that are not whole bytes (DXN.md §2.3): T_BITS around
+  # [bytes, count]. A bitstring that is not a binary can be no string.
+  defp encode_item_dispatch(%Bytes{data: bits}, opts) do
+    {data, count} = Dextrin.Bits.parts(bits)
+
+    with {:ok, n} <- encode_item(count, opts),
+         do: {:ok, tag(Tags.t_bits(), array_of([bytes(data), n]))}
+  end
+
+  defp encode_item_dispatch(bits, opts) when is_bitstring(bits),
+    do: encode_item_dispatch(Bytes.new(bits), opts)
 
   defp encode_item_dispatch(%Dextrin.Char{codepoint: cp}, opts) do
     with {:ok, item} <- encode_item(cp, opts), do: {:ok, tag(Tags.t_char(), item)}

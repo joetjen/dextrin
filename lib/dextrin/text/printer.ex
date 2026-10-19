@@ -68,8 +68,13 @@ defmodule Dextrin.Text.Printer do
 
   def print(s, _opts) when is_binary(s), do: {:ok, quote_string(s)}
 
-  def print(%Bytes{data: data}, _opts),
+  # A bitstring that is not a binary can be no string: it is bits.
+  def print(bits, opts) when is_bitstring(bits), do: print(Bytes.new(bits), opts)
+
+  def print(%Bytes{data: data}, _opts) when is_binary(data),
     do: {:ok, tag_form("bytes", quote_string(Base.encode64(data)))}
+
+  def print(%Bytes{data: bits}, _opts), do: {:ok, bits_form(bits)}
 
   def print(%Char{codepoint: cp}, _opts), do: {:ok, "?" <> print_char_body(cp)}
 
@@ -410,5 +415,18 @@ defmodule Dextrin.Text.Printer do
       {key, value} when is_binary(key) -> {Dextrin.Keyword.new(key), value}
       pair -> pair
     end)
+  end
+
+  @doc false
+  # `@bits {"..." n}` (DXN.md §1.5): the bytes in base64, the unused bits
+  # zero, and the count. Shared with the canonical form.
+  @spec bits_form(bitstring()) :: String.t()
+  def bits_form(bits) do
+    {data, count} = Dextrin.Bits.parts(bits)
+
+    tag_form(
+      "bits",
+      "{" <> quote_string(Base.encode64(data)) <> " " <> Integer.to_string(count) <> "}"
+    )
   end
 end

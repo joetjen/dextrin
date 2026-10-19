@@ -8,7 +8,7 @@ for the Elixir-API-level equivalents of several of these.
 ## Application configuration
 
 ```
-@dxn "1.0"
+@dxn "1.1"
 %{
   env:   :production
   debug: false

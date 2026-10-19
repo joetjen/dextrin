@@ -190,7 +190,12 @@ defmodule Dextrin.Schema.TypeExpr do
   defp primitive_matches?("duration", value), do: match?(%Duration{}, value)
   defp primitive_matches?("uuid", value), do: match?(%Uuid{}, value)
   defp primitive_matches?("uri", value), do: match?(%Uri{}, value)
-  defp primitive_matches?("bytes", value), do: match?(%Bytes{}, value)
+
+  defp primitive_matches?("bytes", value),
+    do: match?(%Bytes{data: data} when is_binary(data), value)
+
+  # Bits and bytes are one value space (DXN.md §4.1): `:bits` takes both.
+  defp primitive_matches?("bits", value), do: match?(%Bytes{}, value)
   defp primitive_matches?("regex", value), do: match?(%Regex{}, value)
   defp primitive_matches?(_name, _value), do: false
 
