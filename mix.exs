@@ -116,7 +116,7 @@ defmodule Dextrin.MixProject do
       links: %{
         "GitHub" => "https://github.com/joetjen/dextrin",
         "Docs (main)" => "https://joetjen.github.io/dextrin",
-        "node-dextrin (npm)" => "https://www.npmjs.com/package/dextrin",
+        "node-dextrin (npm)" => "https://www.npmjs.com/package/@joetjen/dextrin",
         "php-dextrin (Packagist)" => "https://packagist.org/packages/joetjen/dextrin"
       },
       files:

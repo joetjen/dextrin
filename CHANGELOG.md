@@ -109,6 +109,8 @@ to be rewritten, and decoding a checked struct answers a
 ### Changed
 
 - Licensed under the Apache License 2.0 (`Apache-2.0`); it was MIT.
+- The Node.js port is published as `@joetjen/dextrin`; the links to it
+  say so. The unscoped npm `dextrin` is deprecated.
 - Requires `ichor_runtime ~> 0.4` (was `~> 0.2`); `ichor ~> 0.5` builds
   the DXN parser, now generated with `--lossless` for the comment-keeping
   document to come. Decoding runs the same code as before.
