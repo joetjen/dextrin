@@ -92,6 +92,9 @@ defmodule Dextrin.Schema do
       {:unknown, _registry} ->
         {:error,
          Dextrin.Error.action("no compiled schema registered for #{inspect(schema_name)}")}
+
+      {:error, error, _registry} ->
+        {:error, error}
     end
   end
 
@@ -176,6 +179,9 @@ defmodule Dextrin.Schema do
             end
 
           {:ok, registry}
+
+        {:error, %Dextrin.Error{message: message}, _registry} ->
+          {:error, message}
 
         {:unknown, _registry} ->
           {:error,

@@ -256,7 +256,7 @@ defmodule Dextrin.Schema.Validator do
   defp schema_name_for(%Struct{name: name}, registry) do
     case Registry.fetch_struct_schema(registry, name) do
       {:ok, compiled, _registry} -> {:ok, name, compiled}
-      {:unknown, _registry} -> :unknown
+      _no_schema -> :unknown
     end
   end
 
