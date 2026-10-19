@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Decoding is untrusted by default** (Jan, 2026-10-19, ASCO's
+  proposal): `decode/2`, `decode_binary/2` and `Dextrin.Document` decode
+  a keyword as `Dextrin.Keyword.t()`, so no input can exhaust the atom
+  table; `trusted: true` (or `Dextrin.Registry.put_trusted/2`) is the
+  opt-in for a source you control, as Jason's `keys: :atoms`. Breaking
+  for callers that relied on atoms from the default. A `Dextrin.Document`
+  path's atom names a keyword key either way, and `update/3` compares the
+  caller's atoms with the document's keywords by name, answering edits in
+  the caller's atoms where they exist (`String.to_existing_atom/1` --
+  never a new atom).
 - **A field typed with a namespaced reference takes a struct of that
   name** (DXN.md §4.7): a field typed `geo/Address` accepts
   `%geo/Address{...}`, and refuses `%Address{...}`. It was the other way

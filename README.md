@@ -18,7 +18,7 @@ This is the reference implementation. [`node-dextrin`](https://github.com/joetje
 below.
 
 ```elixir
-{:ok, value} = Dextrin.decode(~s(%{x: 1, y: 2}))
+{:ok, value} = Dextrin.decode(~s(%{x: 1, y: 2}), trusted: true)
 value
 #=> %{x: 1, y: 2}
 
@@ -26,27 +26,26 @@ Dextrin.encode(value)
 #=> {:ok, "%{x:1,y:2}"}
 
 {:ok, bytes} = Dextrin.encode_binary(value)
-Dextrin.decode_binary(bytes)
+Dextrin.decode_binary(bytes, trusted: true)
 #=> {:ok, %{x: 1, y: 2}}
 ```
 
-A plain map's shorthand keys (`x:`) are themselves DXN `keyword`s — `%{x: 1}`
-and `%{:x => 1}` are the exact same value, and `keyword`'s own Elixir type,
-per `DXN.md` §1.3, is a real atom, which is what both `decode/2` and
-`decode_binary/2` produce by default (`trusted: true`). Encoding accepts a
-bare atom the same way, anywhere a `keyword` is expected — `%{x: 1}` or
-`Dextrin.encode(:ok)` both work with no conversion needed first.
-
-That default assumes a source you control — your own config, your own
-application's data — not arbitrary untrusted/network input, where an
-unbounded `String.to_atom/1` could exhaust the atom table. Pass
-`trusted: false` for that case; `keyword` then decodes as `Dextrin.Keyword.t()`
-instead:
+**Decoding is safe by default.** A plain map's shorthand keys (`x:`) are
+themselves DXN `keyword`s — `%{x: 1}` and `%{:x => 1}` are the exact same
+value — and a keyword decodes as `Dextrin.Keyword.t()`, never an atom, so
+no input can exhaust the atom table:
 
 ```elixir
-Dextrin.decode(~s(%{x: 1, y: 2}), trusted: false)
+Dextrin.decode(~s(%{x: 1, y: 2}))
 #=> {:ok, %{%Dextrin.Keyword{name: "x"} => 1, %Dextrin.Keyword{name: "y"} => 2}}
 ```
+
+**Pass `trusted: true` for a source you control** — your own config, your
+own application's data — and a keyword decodes as a real atom, its own
+Elixir type per `DXN.md` §1.3, as in the first example. Like Jason's
+`keys: :atoms`, it is opt-in; never pass it for network input. Encoding
+takes a bare atom anywhere a `keyword` is expected either way —
+`%{x: 1}` or `Dextrin.encode(:ok)` need no conversion first.
 
 A schema-backed `struct`'s fields are the one place names *do* come back
 as plain strings regardless of `trusted:` — see the
@@ -193,8 +192,8 @@ implementation is held to that by the
   `Dextrin.Uuid`, `Dextrin.Uri`, `Dextrin.Bytes`, `Dextrin.Char`,
   `Dextrin.CustomTag`) — small wrapper structs for the DXN types
   Elixir has nothing native for without losing information. `keyword`
-  is the one exception with two faces: a real atom by default
-  (`trusted: true`), `Dextrin.Keyword` when decoded untrusted. Every
+  is the one exception with two faces: `Dextrin.Keyword` by default,
+  a real atom when the input is trusted (`trusted: true`). Every
   other scalar/collection (integers, floats, strings, lists, plain
   maps, sets, dates, regexes, ...) decodes to the obvious native
   Elixir value.

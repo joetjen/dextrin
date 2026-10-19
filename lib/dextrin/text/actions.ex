@@ -319,7 +319,7 @@ defmodule Dextrin.Text.Actions do
 
   # A struct field's shorthand key (`x:`) goes through the same
   # `keyword_value/2` `Registry.t()`-driven choice as any other
-  # keyword-shaped key — trusted (default) decodes it as a real atom.
+  # keyword-shaped key — trusted decodes it as a real atom.
   # `Dextrin.Struct.keyed/2` always wants the plain string name either
   # way, regardless of which the caller's `trusted:` setting produced.
   defp field_name(name) when is_atom(name) and name not in [nil, true, false],
@@ -546,8 +546,8 @@ defmodule Dextrin.Text.Actions do
   defp zero_to_nil(n), do: n
 
   # `Dextrin.Registry.put_trusted/2`'s own doc has the full reasoning:
-  # trusted (default) decodes a real atom, `DXN.md` §1.3's own natural
-  # mapping; untrusted wraps in `Dextrin.Keyword` instead. `symbol`
+  # trusted decodes a real atom, `DXN.md` §1.3's own natural mapping;
+  # untrusted (the default) wraps in `Dextrin.Keyword` instead. `symbol`
   # deliberately has no equivalent — see that doc.
   defp keyword_value(name, %Registry{trusted: true}), do: String.to_atom(name)
   defp keyword_value(name, _ctx), do: Keyword.new(name)

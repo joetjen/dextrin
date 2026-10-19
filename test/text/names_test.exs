@@ -22,8 +22,14 @@ defmodule Dextrin.Text.NamesTest do
 
   test "and so may a symbol, a keyword and a map key" do
     assert Dextrin.decode("a.b.c") == {:ok, Symbol.new("a.b.c")}
-    assert Dextrin.decode(":acme.billing/invoice") == {:ok, :"acme.billing/invoice"}
-    assert {:ok, %{"a.b": 1}} = Dextrin.decode("%{a.b: 1}")
+
+    assert Dextrin.decode(":acme.billing/invoice") ==
+             {:ok, Dextrin.Keyword.new("acme.billing/invoice")}
+
+    assert Dextrin.decode(":acme.billing/invoice", trusted: true) ==
+             {:ok, :"acme.billing/invoice"}
+
+    assert {:ok, %{%Dextrin.Keyword{name: "a.b"} => 1}} = Dextrin.decode("%{a.b: 1}")
   end
 
   test "each is written back as it was" do

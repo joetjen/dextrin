@@ -80,11 +80,10 @@ defmodule Dextrin.DocumentUpdateTest do
     assert changes == [delete: [:name], insert: {[], :license, "Apache-2.0"}]
     refute Document.render(doc) =~ "the name"
 
-    assert Document.to_value(doc) == %{
-             version: "1.0.0",
-             deps: ["left-pad", "right-pad"],
-             license: "Apache-2.0"
-           }
+    {:ok, expected} =
+      Dextrin.decode(~s|%{version: "1.0.0" deps: ["left-pad" "right-pad"] license: "Apache-2.0"}|)
+
+    assert Document.to_value(doc) == expected
   end
 
   describe "a deleted item followed by an inserted one" do

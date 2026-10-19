@@ -29,12 +29,17 @@ defmodule Dextrin.Schema.ExtraFieldsTest do
 
   describe "a struct with no schema" do
     test "keeps the entries after a positional struct's items as extra fields" do
-      assert {:ok, %Struct{fields: {:positional, [1, 2]}, extra: [{"nick", "b"}, {3, :x}]}} =
+      assert {:ok,
+              %Struct{
+                fields: {:positional, [1, 2]},
+                extra: [{"nick", "b"}, {3, %Dextrin.Keyword{name: "x"}}]
+              }} =
                Dextrin.decode(~s|%P[1 2 nick: "b" 3 => :x]|)
     end
 
     test "keeps a keyed entry whose key is not a name as an extra field" do
-      assert {:ok, %Struct{fields: {:keyed, [{"x", 1}]}, extra: [{3, :x}]}} =
+      assert {:ok,
+              %Struct{fields: {:keyed, [{"x", 1}]}, extra: [{3, %Dextrin.Keyword{name: "x"}}]}} =
                Dextrin.decode("%P{x: 1, 3 => :x}")
     end
 

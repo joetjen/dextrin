@@ -42,7 +42,11 @@ defmodule Dextrin.Binary.V013Test do
              {:ok,
               Struct.keyed(
                 "User",
-                [{"name", "Ann"}, {"email", "ann@example.com"}, {"role", :admin}],
+                [
+                  {"name", "Ann"},
+                  {"email", "ann@example.com"},
+                  {"role", Dextrin.Keyword.new("admin")}
+                ],
                 1
               )}
   end

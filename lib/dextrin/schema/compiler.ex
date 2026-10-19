@@ -111,8 +111,7 @@ defmodule Dextrin.Schema.Compiler do
   # every `compile_type_expr/2` clause matching a literal
   # `%Keyword{name: "list-of"}`/etc.) is written against
   # `Dextrin.Keyword` specifically — the shape `Dextrin.decode/2`
-  # always produced before `trusted:` existed. `trusted: true` (now
-  # the default) decodes the same `.dxns` text's keyword literals as
+  # always produced before `trusted:` existed. `trusted: true` decodes the same `.dxns` text's keyword literals as
   # real atoms instead, which none of those patterns would match.
   # Rather than teaching every one of those clauses to also accept an
   # atom, `compile/3` normalizes the whole decoded document back to
