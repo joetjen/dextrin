@@ -45,6 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Dextrin.Schema.compile_all/2`: several `.dxns` documents compiled into
+  one registry, in order, over a base registry; the first that does not
+  compile is the refusal, naming which (ASCO's proposal, part 3).
 - **Dotted names** (DXN.md §1.1, Jan 2026-10-19): a name is segments
   joined by `.`, with at most one `/` between a namespace and a name --
   `%Foo.Bar/Baz{...}`, `acme.billing/invoice`, `:a.b`, `a.b: 1` -- for
@@ -71,6 +74,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `Dextrin.Schema.compile/2` crashed (`Protocol.UndefinedError`) on a
+  document whose top level is a struct or a tuple -- maps to `is_map/1`
+  -- instead of refusing it; it refuses every document that is not a
+  plain map (`schema/compile`). Found by ASCO.
 - Encoding a bitstring that is not whole bytes crashed the text and
   binary writers; it is `bits` now.
 - A schema a resolver found under a namespaced name (`geo/Point` in

@@ -60,7 +60,9 @@ defmodule Dextrin.Schema.Compiler do
   """
   @spec compile(term(), Dextrin.Registry.t()) ::
           {:ok, Dextrin.Registry.t()} | {:error, Dextrin.Error.t()}
-  def compile(schema_doc, base_registry) when is_map(schema_doc) do
+  # A plain map only: a struct (`%P{...}`, `@ordered %{...}`) and a tuple
+  # are maps to `is_map/1` too, and crashed what follows (ASCO's report).
+  def compile(schema_doc, base_registry) when is_map(schema_doc) and not is_struct(schema_doc) do
     schema_doc = atomize_back(schema_doc)
     named_entries = Enum.map(schema_doc, fn {k, v} -> {entry_name(k), v} end)
 
