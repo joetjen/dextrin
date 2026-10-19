@@ -512,6 +512,14 @@ No separate flag: a field key ending in `?` is optional; any other key
 is required. `?` is already a legal `ident_char` (§1.1) — no grammar
 addition. The `?` itself is not part of the field's name.
 
+**Optional means the field may be absent, not that it may be `nil`.**
+An optional field that is present must match its type like any other,
+so `nil` is refused unless the type admits it (`{:nilable t}`). Text
+leaves an absent field out. A positional form must fill every position
+— `.dxnb` always — so an encoder writes an absent field's default where
+it has one, and otherwise refuses (`schema/missing-field`) rather than
+writing `nil` the reader would refuse.
+
 ### 4.4 Struct schemas (`%schema(N){}`/`%field{}`)
 
 ```ebnf
@@ -760,7 +768,7 @@ categories[16]{category,raised_when}:
   schema/unknown-version,"a struct's version is older than the latest loaded and not loaded itself"
   schema/no-materializer,"an older version arrives and no materializer is registered"
   schema/field-count,"a positional struct's item count differs from its own version's field count"
-  schema/missing-field,"a required field is absent"
+  schema/missing-field,"a required field is absent, or a positional form has no value for an optional field without a default (§4.3)"
   schema/type-mismatch,"a field's value does not match its declared type"
   schema/undeclared-field,"a strict decode meets a field the schema does not declare"
   schema/shadowed-field,"an extra field has the name of a declared field"

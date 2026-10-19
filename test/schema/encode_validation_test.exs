@@ -86,7 +86,10 @@ defmodule Dextrin.Schema.EncodeValidationTest do
     money =
       Dextrin.Struct.keyed("Money", [
         {"amount", Decimal.new("1")},
-        {"currency", Dextrin.Keyword.new("usd")}
+        {"currency", Dextrin.Keyword.new("usd")},
+        # .dxnb fills every position, and an absent optional field is
+        # refused there rather than written as nil.
+        {"note", "n"}
       ])
 
     assert {:ok, _bin} = Dextrin.encode_binary(money, registry: registry, schema: "Money")

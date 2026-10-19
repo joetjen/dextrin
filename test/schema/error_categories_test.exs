@@ -93,6 +93,43 @@ defmodule Dextrin.Schema.ErrorCategoriesTest do
     end
   end
 
+  describe "encoding binary, which fills every position" do
+    # nil in an optional field stays strict (Jan, 2026-10-19): a reader
+    # refuses it unless the type is nilable, so a writer never puts one
+    # where a field is merely absent.
+    test "an absent optional field with no default is schema/missing-field" do
+      {:ok, user} = Dextrin.decode(~s|%User{name: "a"}|, registry: loaded())
+      assert category(Dextrin.encode_binary(user, registry: loaded())) == "schema/missing-field"
+    end
+
+    test "text leaves it out, so text has nothing to refuse" do
+      {:ok, user} = Dextrin.decode(~s|%User{name: "a"}|, registry: loaded())
+      assert {:ok, ~s|%User(2){name:"a"}|} = Dextrin.encode(user, registry: loaded())
+    end
+
+    test "an absent field with a default is written as its default" do
+      registry =
+        loaded([
+          "%{User: %schema{name: :string, role?: %field{type: :string, default: \"guest\"}}}"
+        ])
+
+      user = Struct.keyed("User", [{"name", "a"}], 1)
+      {:ok, bytes} = Dextrin.encode_binary(user, registry: registry)
+
+      assert {:ok, %Struct{fields: {:keyed, [{"name", "a"}, {"role", "guest"}]}}} =
+               Dextrin.decode_binary(bytes, registry: registry)
+    end
+
+    test "a nilable field written as nil reads back" do
+      registry = loaded(["%{User: %schema{name: :string, email?: {:nilable :string}}}"])
+      user = Struct.keyed("User", [{"name", "a"}, {"email", nil}], 1)
+      {:ok, bytes} = Dextrin.encode_binary(user, registry: registry)
+
+      assert {:ok, %Struct{fields: {:keyed, [{"name", "a"}, {"email", nil}]}}} =
+               Dextrin.decode_binary(bytes, registry: registry)
+    end
+  end
+
   test "a materializer's rejected value is schema/materializer, whatever was wrong with it" do
     registry =
       Registry.put_struct_materializer(loaded(), "User", fn _name, _version, _fields ->

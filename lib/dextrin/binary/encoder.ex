@@ -275,12 +275,9 @@ defmodule Dextrin.Binary.Encoder do
   end
 
   defp encode_item_dispatch(%Struct{name: name, fields: {:keyed, pairs}} = struct, opts) do
-    encode_struct(
-      type_name(struct, opts),
-      positional_values(name, pairs, opts),
-      struct.extra,
-      opts
-    )
+    with {:ok, values} <- positional_values(name, pairs, opts) do
+      encode_struct(type_name(struct, opts), values, struct.extra, opts)
+    end
   end
 
   # ---- temporal ---------------------------------------------------------------
@@ -411,13 +408,46 @@ defmodule Dextrin.Binary.Encoder do
   # its schema's field order. With no schema there is no order to consult
   # -- the positional form carries no names -- and the pairs' own order
   # is all there is (see `Dextrin.Struct`'s own moduledoc).
+  #
+  # Every position must be filled, and nil is not a stand-in for an absent
+  # field (DXN.md §4.7): a reader refuses nil unless the type is nilable.
+  # So an absent field is written as its default where it has one, and is
+  # otherwise refused (`schema/missing-field`).
   defp positional_values(name, pairs, opts) do
     with %Dextrin.Registry{} = registry <- Keyword.get(opts, :registry),
          {:ok, compiled, _registry} <- Dextrin.Registry.fetch_struct_schema(registry, name) do
       named = Map.new(pairs)
-      Enum.map(Compiled.field_names(compiled), &Map.get(named, &1))
+
+      Result.reduce_ok(compiled.fields, [], fn field, acc ->
+        case position(name, field, named) do
+          {:ok, value} -> {:ok, [value | acc]}
+          {:error, _} = error -> error
+        end
+      end)
+      |> case do
+        {:ok, values} -> {:ok, Enum.reverse(values)}
+        {:error, _} = error -> error
+      end
     else
-      _ -> Enum.map(pairs, fn {_k, v} -> v end)
+      _ -> {:ok, Enum.map(pairs, fn {_k, v} -> v end)}
+    end
+  end
+
+  defp position(name, %Dextrin.Schema.Field{name: field, default: default}, named) do
+    case Map.fetch(named, field) do
+      {:ok, value} ->
+        {:ok, value}
+
+      :error when default != :none ->
+        {:ok, default}
+
+      :error ->
+        {:error,
+         Dextrin.Error.action(
+           "struct #{inspect(name)} has no #{inspect(field)}, and .dxnb fills every position: " <>
+             "give it a value or a default, or declare it nilable",
+           "schema/missing-field"
+         )}
     end
   end
 

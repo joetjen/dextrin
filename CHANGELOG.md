@@ -33,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **An absent optional field is never written as `nil`** (`DXN.md`
+  §4.3): `.dxnb` fills every position, so `encode_binary` writes an
+  absent field's default where it has one and otherwise refuses
+  (`schema/missing-field`). It wrote `nil`, which the same schema then
+  refused to read back. `nil` in an optional field stays an error unless
+  the type is `{:nilable t}`.
 - **Every schema violation carries its `DXN.md` §5 category**:
   `schema/field-count`, `schema/missing-field`, `schema/type-mismatch`
   and `schema/shadowed-field`, decoding text or binary and encoding
