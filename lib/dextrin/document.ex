@@ -113,6 +113,16 @@ defmodule Dextrin.Document do
   @spec render(t()) :: String.t()
   def render(%__MODULE__{tree: tree}), do: Ichor.Syntax.text(tree)
 
+  @doc """
+  `doc` laid out the way the pretty printer lays out a value, with every
+  comment kept beside the entry it belongs to (`Dextrin.Document.Formatter`).
+  Layout only: every token is written as it was. `:indent` is the spaces
+  per level (2).
+  """
+  @spec format(t(), keyword()) :: String.t()
+  def format(%__MODULE__{tree: tree}, opts \\ []),
+    do: Dextrin.Document.Formatter.format(tree, opts)
+
   # ---- edits ------------------------------------------------------------------
 
   @doc """

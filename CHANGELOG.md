@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and its trailing block, and nobody else's; an inserted entry goes above
   the comments of the entry it lands before, laid out like its
   neighbours.
+- `Dextrin.Document.format/2` -- a document laid out the way the pretty
+  printer lays out its value, with every comment kept beside the entry
+  it belongs to. Layout only: every token is written as it was, and a
+  comment-free document comes out exactly as `Dextrin.encode(value,
+  pretty: true)` writes its value.
+- **`mix dextrin.format` keeps comments** (`--mode pretty`, the default):
+  it formats through `Dextrin.Document.format/2`, where it reprinted the
+  value and lost every comment. `--mode condense` still drops them: a
+  comment ends its line, and condensed output is one line.
 - `Dextrin.Document.update/3` -- the document holding a new value, by the
   fewest explicit edits, answered as a changeset. Equal values are left
   as written; lists compare with Myers' diff. A deleted item followed by

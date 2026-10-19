@@ -130,14 +130,41 @@ Dextrin.encode(value, pretty: true, indent: 4)
 `pretty`/`indent` only change *rendering* — the value `decode/2` gets
 back is identical either way. Schema validation (§6 below) runs the
 same regardless too; it's an independent concern from formatting.
-`pretty: true` calls `Dextrin.Text.Formatter.pretty/2` under the hood,
-which is also directly callable on its own (`mix dextrin.format`'s
-`--mode pretty` uses it that way, without going through `encode/2`'s
-validation).
+`pretty: true` calls `Dextrin.Text.Formatter.pretty/2` under the hood.
 
-Comments are never preserved by either path — `.dxn`'s lexer discards
-`#`-comments as trivia before the parser ever sees them, so there's no
-comment text left by the time a value exists to reprint.
+### Keeping comments
+
+A value has no comments: `decode/2` keeps the data and nothing else, so
+decoding a file, changing it and encoding it again deletes every
+comment in it. For a file people annotate, parse it as a
+`Dextrin.Document` instead, which keeps everything — comments, blank
+lines, commas — beside the value:
+
+```elixir
+{:ok, doc} = Dextrin.Document.parse(~s|# the config\n%{name: "acme", version: "1.0.0" # bumped for the fix\n}\n|)
+
+Dextrin.Document.to_value(doc)
+#=> %{name: "acme", version: "1.0.0"}
+
+Dextrin.Document.format(doc)
+#=> "# the config\n%{\n  name: \"acme\"\n  version: \"1.0.0\"  # bumped for the fix\n}"
+```
+
+`format/2` changes layout only and keeps every comment with its entry —
+it is what `mix dextrin.format` does. Edits change exactly what they
+name, and every byte they do not touch stays as it was:
+
+```elixir
+{:ok, doc} = Dextrin.Document.replace(doc, [:version], "2.0.0")
+Dextrin.Document.render(doc)
+#=> "# the config\n%{name: \"acme\", version: \"2.0.0\" # bumped for the fix\n}\n"
+```
+
+`delete/2` takes an entry's own comments with it, the ones above it and
+the one beside it; `insert/4` puts a new entry above the comments of the
+one it lands before; `update/3` turns a whole new value into these
+edits, and refuses where guessing which edit you meant would lose a
+comment.
 
 ## 5. Extending: custom tags
 

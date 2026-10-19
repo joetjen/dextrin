@@ -48,7 +48,20 @@ round-trip through, no line-wrapping or indentation at all. `pretty:`
 only changes rendering, never what the value decodes back to.
 
 ```sh
-mix dextrin.format data.dxn --mode pretty|condense [--in-place]
+mix dextrin.format data.dxn --mode pretty|condense [--in-place]   # pretty keeps comments
+```
+
+## Documents: keeping comments
+
+```elixir
+{:ok, doc} = Dextrin.Document.parse(source, opts)     # decode/2's opts and errors
+Dextrin.Document.to_value(doc)                       # what decode/2 gives
+Dextrin.Document.render(doc)                         # the source, byte for byte
+Dextrin.Document.format(doc)                         # laid out, comments kept
+{:ok, doc} = Dextrin.Document.replace(doc, [:version], "2.0.0")
+{:ok, doc} = Dextrin.Document.delete(doc, [:deps, 0])          # with its own comments
+{:ok, doc} = Dextrin.Document.insert(doc, [:deps], -1, "new")  # index, or a map's new key
+{:ok, doc, changes} = Dextrin.Document.update(doc, new_value, on_ambiguity: :safe)
 ```
 
 ## Value-type cheatsheet

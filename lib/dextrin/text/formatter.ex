@@ -8,15 +8,10 @@ defmodule Dextrin.Text.Formatter do
   at all: it's exactly what `Dextrin.encode/2`/`Dextrin.Text.Printer`
   already produce with `pretty: false` (the default).
 
-  Comments cannot be preserved here, or by any formatter built on this
-  library's decode-then-reprint approach: `Dextrin.Text.Grammar`'s
-  lexer folds `#`-comments into the same auto-spliced trivia as
-  whitespace and discards them before the parser (and therefore any
-  value) ever exists. There is no comment text left to put back by the
-  time a value reaches this module. A genuine comment-preserving
-  formatter would need a second, independent re-lexing pipeline that
-  never goes through the value-producing parse at all — real,
-  separate work, not a flag on this one.
+  A value has no comments, so this formatter has none to keep. To lay
+  out a document and keep its comments, parse it as a
+  `Dextrin.Document` and use `Dextrin.Document.format/2`, which lays a
+  comment-free document out exactly as this module lays out its value.
   """
 
   alias Dextrin.{Array, OrderedMap, SortedSet, Struct}

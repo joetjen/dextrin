@@ -32,6 +32,28 @@ defmodule Mix.Tasks.Dextrin.FormatTest do
   end
 
   @tag :tmp_dir
+  test "--mode pretty keeps every comment beside its entry", %{tmp_dir: dir} do
+    path = Path.join(dir, "in.dxn")
+    File.write!(path, "# the config\n%{name: \"acme\", # the name\n deps: [\"a\"]}\n")
+
+    output = capture_io(fn -> Format.run([path]) end)
+
+    assert output ==
+             "# the config\n%{\n  name: \"acme\"  # the name\n  deps: [\n    \"a\"\n  ]\n}\n"
+  end
+
+  @tag :tmp_dir
+  test "--mode condense drops comments: a comment ends its line, and condensed is one", %{
+    tmp_dir: dir
+  } do
+    path = Path.join(dir, "in.dxn")
+    File.write!(path, "%{name: \"acme\"} # the name\n")
+
+    output = capture_io(fn -> Format.run([path, "--mode", "condense"]) end)
+    assert output == ~s|%{name:"acme"}\n|
+  end
+
+  @tag :tmp_dir
   test "--in-place rewrites the file instead of printing to stdout", %{tmp_dir: dir} do
     path = Path.join(dir, "data.dxn")
     File.write!(path, "%{x: 1}")
