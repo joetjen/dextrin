@@ -52,8 +52,14 @@ defmodule Mix.Tasks.Dextrin.Format do
   defp render(other, _doc),
     do: Mix.raise("unrecognized --mode #{inspect(other)} — expected \"pretty\" or \"condense\"")
 
-  defp write_output(text, _path, in_place) when in_place != true, do: Mix.shell().info(text)
-  defp write_output(text, path, true), do: File.write!(path, text <> "\n")
+  # A file written in place ends with one newline, and printed output
+  # with none of its own, whether or not the formatted text kept the
+  # source's (`Dextrin.Document.format/2` does; condensed text does not).
+  defp write_output(text, _path, in_place) when in_place != true,
+    do: Mix.shell().info(String.trim_trailing(text, "\n"))
+
+  defp write_output(text, path, true),
+    do: File.write!(path, String.trim_trailing(text, "\n") <> "\n")
 
   defp format_error(errors) when is_list(errors),
     do: Enum.map_join(errors, "\n", &Dextrin.Error.format/1)

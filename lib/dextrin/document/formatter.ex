@@ -22,16 +22,40 @@ defmodule Dextrin.Document.Formatter do
 
   alias Ichor.Syntax.{Node, Token}
 
-  @doc "The text of the document `tree`, laid out. `:indent` is the spaces per level (2)."
+  @doc """
+  The text of the document `tree`, laid out. `:indent` is the spaces per
+  level (2).
+
+  It ends with a newline exactly when the source did: a formatter run on
+  save keeps a file's last newline, and a comment-free document without
+  one comes out exactly as `Dextrin.encode(value, pretty: true)` writes
+  its value.
+  """
   @spec format(Node.t(), keyword()) :: String.t()
-  def format(%Node{rule: :document, children: children}, opts \\ []) do
+  def format(%Node{rule: :document, children: children} = tree, opts \\ []) do
     step = String.duplicate(" ", Keyword.get(opts, :indent, 2))
     {header, rest} = Enum.split_with(children, &match?(%Node{rule: :header}, &1))
 
-    head = Enum.map(header, &(tokens_text(&1) <> "\n"))
+    head = Enum.map(header, &(header_text(&1) <> "\n"))
     slots = slots(rest, false)
+    ending = if String.ends_with?(Ichor.Syntax.text(tree), "\n"), do: "\n", else: ""
 
-    IO.iodata_to_binary([head, lines(slots, "", step, fn node -> value(node, "", step) end)])
+    IO.iodata_to_binary([
+      head,
+      lines(slots, "", step, fn node -> value(node, "", step) end),
+      ending
+    ])
+  end
+
+  # The header, `@dxn "1.0"`: its tokens as written, one space between
+  # them however they were spaced.
+  defp header_text(%Node{children: children}) do
+    children
+    |> Enum.reject(&match?(%Token{trivia: true}, &1))
+    |> Enum.map_join(" ", fn
+      %Token{text: text} -> text
+      %Node{} = node -> tokens_text(node)
+    end)
   end
 
   # ---- slots: which comment belongs where -----------------------------------

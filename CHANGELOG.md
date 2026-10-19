@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `Dextrin.Document.format/2` wrote the header without its space
+  (`@dxn"1.0"`); it keeps one space between the tag and the version,
+  however they were spaced.
+- `Dextrin.Document.format/2` dropped a document's final newline; it now
+  ends with one exactly when the source did. `mix dextrin.format` still
+  writes a file with one final newline.
+
 ## [0.2.0] - 2026-10-19
 
 Versioned schemas, extra fields, the conformance suite's adapter and a
