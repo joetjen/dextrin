@@ -37,6 +37,14 @@ defmodule Dextrin.Error do
   defstruct [:message, :stage, :category, :byte_offset, :ichor_error]
 
   @doc """
+  What a text parse refused with -- one Ichor error or several -- as
+  `Dextrin.Error`s, through `from_ichor/1`.
+  """
+  @spec from_parse(Ichor.Error.t() | [Ichor.Error.t()]) :: t() | [t()]
+  def from_parse(errors) when is_list(errors), do: Enum.map(errors, &from_ichor/1)
+  def from_parse(%Ichor.Error{} = error), do: from_ichor(error)
+
+  @doc """
   An Ichor error, as a `Dextrin.Error`. One that carries a
   `Dextrin.Error` in its `data` -- an action's own refusal, with its own
   category -- is that error, with the Ichor error kept for its position;

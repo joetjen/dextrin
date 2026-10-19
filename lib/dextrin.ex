@@ -67,20 +67,9 @@ defmodule Dextrin do
   @spec decode(String.t(), opts()) ::
           {:ok, term()} | {:error, Dextrin.Error.t() | [Dextrin.Error.t()]}
   def decode(text, opts \\ []) when is_binary(text) do
-    registry = registry_with_trusted(opts)
-
-    case Dextrin.Text.Grammar.run(text, registry) do
-      {:ok, value} ->
-        {:ok, Dextrin.Schema.Validated.strip(value)}
-
-      # An action that refused with its own category -- a map key that
-      # is not allowed, a schema violation -- carries its `Dextrin.Error`
-      # in the Ichor error's `data`, which `from_ichor/1` takes back out.
-      {:error, %Ichor.Error{} = error} ->
-        {:error, Dextrin.Error.from_ichor(error)}
-
-      {:error, errors} when is_list(errors) ->
-        {:error, Enum.map(errors, &Dextrin.Error.from_ichor/1)}
+    case Dextrin.Text.Grammar.run(text, Registry.from_options(opts)) do
+      {:ok, value} -> {:ok, Dextrin.Schema.Validated.strip(value)}
+      {:error, errors} -> {:error, Dextrin.Error.from_parse(errors)}
     end
   end
 
@@ -137,7 +126,7 @@ defmodule Dextrin do
   """
   @spec decode_binary(binary(), opts()) :: {:ok, term()} | {:error, Dextrin.Error.t()}
   def decode_binary(bytes, opts \\ []) when is_binary(bytes) do
-    opts = Keyword.put(opts, :registry, registry_with_trusted(opts))
+    opts = Keyword.put(opts, :registry, Registry.from_options(opts))
     Dextrin.Binary.Decoder.decode(bytes, opts)
   end
 
@@ -199,18 +188,4 @@ defmodule Dextrin do
   # `Dextrin.Registry.put_trusted/2` keeps whatever it already had —
   # so `trusted` can be set once on a reused registry, or per call,
   # without one silently clobbering the other.
-  defp registry_with_trusted(opts) do
-    registry = Keyword.get(opts, :registry, Registry.new())
-
-    registry =
-      case Keyword.fetch(opts, :trusted) do
-        {:ok, trusted?} -> Registry.put_trusted(registry, trusted?)
-        :error -> registry
-      end
-
-    case Keyword.fetch(opts, :strict) do
-      {:ok, strict?} -> Registry.put_strict(registry, strict?)
-      :error -> registry
-    end
-  end
 end

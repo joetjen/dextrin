@@ -99,8 +99,12 @@ regenerate it:**
 mix ichor.gen priv/grammar/dxn.aether \
   --module Dextrin.Text.Grammar.Native \
   --actions Dextrin.Text.Actions \
-  --out lib/dextrin/text/grammar/native.ex
+  --out lib/dextrin/text/grammar/native.ex \
+  --lossless
 ```
+
+`--lossless` adds the full-fidelity parse `Dextrin.Document` uses;
+`decode` runs the same code without it.
 
 This requires the `ichor` dependency itself (the Aether front-end,
 analysis, and codegen backends — `only: :dev, runtime: false` in

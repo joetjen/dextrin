@@ -82,6 +82,28 @@ defmodule Dextrin.Registry do
   end
 
   @doc """
+  The registry a decode's `opts` describe: `:registry` (a new one when
+  absent), with `:trusted` and `:strict` applied over it when given --
+  what `Dextrin.decode/2`, `Dextrin.decode_binary/2` and
+  `Dextrin.Document.parse/2` all read.
+  """
+  @spec from_options(keyword()) :: t()
+  def from_options(opts) do
+    registry = Keyword.get(opts, :registry, new())
+
+    registry =
+      case Keyword.fetch(opts, :trusted) do
+        {:ok, trusted?} -> put_trusted(registry, trusted?)
+        :error -> registry
+      end
+
+    case Keyword.fetch(opts, :strict) do
+      {:ok, strict?} -> put_strict(registry, strict?)
+      :error -> registry
+    end
+  end
+
+  @doc """
   Marks this registry as decoding *strictly*: a schema-backed struct
   that carries a field its schema does not declare is refused
   (`schema/undeclared-field`, DXN.md §4.7) instead of keeping it as an

@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Dextrin.Document` -- a `.dxn` document with everything it holds, its
+  comments, blank lines and commas as well as its value: `parse/2` (with
+  `Dextrin.decode/2`'s options and errors), `to_value/1` (what `decode/2`
+  gives) and `render/1` (the source, byte for byte, when nothing was
+  edited). Built on Ichor's lossless parse of the same grammar.
+- `Dextrin.Registry.from_options/1` and `Dextrin.Error.from_parse/1`, what
+  `decode/2` and `Dextrin.Document.parse/2` share.
 - `Dextrin.Canonical.print/1` -- the canonical form of a value
   (`DXN.md` §1.5): one `.dxn` rendering fixed down to the byte, with
   maps and sets in canonical order, floats by one exact algorithm and
