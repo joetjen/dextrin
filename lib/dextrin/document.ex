@@ -41,6 +41,19 @@ defmodule Dextrin.Document do
   keeps every comment around it, even one it has made stale; an
   inserted entry goes above the comments of the entry it lands before,
   so they stay with that entry.
+
+  ## Updating to a new value
+
+  `update/3` is a convenience over the edits, for a caller who has only
+  the new value: it compares it with the document's, leaves what is
+  equal alone -- `1.50` stays `1.50` when the new value is `1.5` -- and
+  answers the edits it made as a changeset. Lists are compared with
+  `List.myers_difference/2`. **A deleted item followed by an inserted
+  one is ambiguous**: a replace keeps the deleted item's comments, a
+  delete and an insert drop them. `on_ambiguity:` decides -- `:safe`
+  (the default) takes it as a replace where the deleted item owns no
+  comment, and refuses where it does; `:guess` always takes it as a
+  replace; `:error` refuses every such pair.
   """
 
   alias Dextrin.Registry
@@ -60,9 +73,16 @@ defmodule Dextrin.Document do
   @typedoc "Where a value sits in a document: one key, field name or index per level."
   @type path :: [term()]
 
+  @typedoc "An edit `update/3` made, in the order it made them."
+  @type change ::
+          {:replace, {path(), term()}}
+          | {:delete, path()}
+          | {:insert, {path(), integer() | term(), term()}}
+
   @typedoc "Why an edit was refused."
   @type refusal ::
           {:not_found, path()}
+          | {:ambiguous, path()}
           | {:exists, path()}
           | {:not_a_collection, path()}
           | Dextrin.Error.t()
@@ -139,6 +159,136 @@ defmodule Dextrin.Document do
       source = render(doc)
       inserted(doc, source, layout(doc.tree), collection, where, text)
     end
+  end
+
+  @doc """
+  `doc` holding `value`, by the fewest edits that make it, and those
+  edits. See "Updating to a new value" above for `on_ambiguity:`.
+  """
+  @spec update(t(), term(), keyword()) :: {:ok, t(), [change()]} | {:error, refusal()}
+  def update(%__MODULE__{} = doc, value, opts \\ []) do
+    mode = Keyword.get(opts, :on_ambiguity, :safe)
+
+    with {:ok, changes} <- changes(doc, [], to_value(doc), value, mode),
+         {:ok, updated} <- applied(doc, changes) do
+      {:ok, updated, changes}
+    end
+  end
+
+  defp applied(doc, changes) do
+    Enum.reduce_while(changes, {:ok, doc}, fn change, {:ok, doc} ->
+      case apply_change(doc, change) do
+        {:ok, doc} -> {:cont, {:ok, doc}}
+        {:error, _} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp apply_change(doc, {:replace, {path, value}}), do: replace(doc, path, value)
+  defp apply_change(doc, {:delete, path}), do: delete(doc, path)
+  defp apply_change(doc, {:insert, {path, where, value}}), do: insert(doc, path, where, value)
+
+  # The edits that turn `old`, at `path`, into `new`. Paths are where the
+  # edit applies once every edit before it has been made.
+  defp changes(_doc, _path, same, same, _mode), do: {:ok, []}
+
+  defp changes(doc, path, %{} = old, %{} = new, mode)
+       when not is_struct(old) and not is_struct(new),
+       do: keyed_changes(doc, path, old, new, mode)
+
+  defp changes(
+         doc,
+         path,
+         %Dextrin.Struct{name: name, version: version, fields: {:keyed, old}},
+         %Dextrin.Struct{name: name, version: version, fields: {:keyed, new}},
+         mode
+       ),
+       do: keyed_changes(doc, path, Map.new(old), Map.new(new), mode)
+
+  defp changes(doc, path, old, new, mode) when is_list(old) and is_list(new),
+    do: listed_changes(doc, path, List.myers_difference(old, new), 0, 0, [], mode)
+
+  defp changes(_doc, path, _old, new, _mode), do: {:ok, [replace: {path, new}]}
+
+  # A map's or a keyed struct's entries: the keys gone are deleted, the
+  # keys kept are compared, the keys new are inserted after the last.
+  defp keyed_changes(doc, path, old, new, mode) do
+    gone = for key <- Map.keys(old), not Map.has_key?(new, key), do: {:delete, path ++ [key]}
+    added = for {key, value} <- new, not Map.has_key?(old, key), do: {:insert, {path, key, value}}
+
+    kept =
+      Enum.reduce_while(old, {:ok, []}, fn {key, value}, {:ok, acc} ->
+        case Map.fetch(new, key) do
+          {:ok, ^value} -> {:cont, {:ok, acc}}
+          {:ok, other} -> nested(changes(doc, path ++ [key], value, other, mode), acc)
+          :error -> {:cont, {:ok, acc}}
+        end
+      end)
+
+    with {:ok, kept} <- kept, do: {:ok, gone ++ kept ++ added}
+  end
+
+  defp nested({:ok, changes}, acc), do: {:cont, {:ok, acc ++ changes}}
+  defp nested({:error, _} = error, _acc), do: {:halt, error}
+
+  # A list's edit script, item by item: `at` is where the next edit
+  # applies, `was` where the item it looks at sat in the document as
+  # parsed -- which is where its comments are.
+  defp listed_changes(_doc, _path, [], _at, _was, acc, _mode), do: {:ok, acc}
+
+  defp listed_changes(doc, path, [{:eq, same} | rest], at, was, acc, mode),
+    do: listed_changes(doc, path, rest, at + length(same), was + length(same), acc, mode)
+
+  defp listed_changes(
+         doc,
+         path,
+         [{:del, [old | gone]}, {:ins, [new | come]} | rest],
+         at,
+         was,
+         acc,
+         mode
+       ) do
+    with :ok <- unambiguous(doc, path ++ [was], mode),
+         {:ok, inner} <- changes(doc, path ++ [at], old, new, mode) do
+      rest = Enum.reject([{:del, gone}, {:ins, come} | rest], &match?({_, []}, &1))
+      listed_changes(doc, path, rest, at + 1, was + 1, acc ++ inner, mode)
+    end
+  end
+
+  defp listed_changes(doc, path, [{:del, gone} | rest], at, was, acc, mode),
+    do:
+      listed_changes(
+        doc,
+        path,
+        rest,
+        at,
+        was + length(gone),
+        acc ++ List.duplicate({:delete, path ++ [at]}, length(gone)),
+        mode
+      )
+
+  defp listed_changes(doc, path, [{:ins, come} | rest], at, was, acc, mode) do
+    inserts =
+      come |> Enum.with_index(at) |> Enum.map(fn {value, i} -> {:insert, {path, i, value}} end)
+
+    listed_changes(doc, path, rest, at + length(come), was, acc ++ inserts, mode)
+  end
+
+  # Whether a deleted item followed by an inserted one may be read as a
+  # replace of the item at `path`, as the document was parsed.
+  defp unambiguous(_doc, _path, :guess), do: :ok
+  defp unambiguous(_doc, path, :error), do: {:error, {:ambiguous, path}}
+
+  defp unambiguous(doc, path, :safe) do
+    if owns_comment?(doc, path), do: {:error, {:ambiguous, path}}, else: :ok
+  end
+
+  defp owns_comment?(doc, path) do
+    {:ok, found} = located(doc, path)
+    source = render(doc)
+    comments = layout(doc.tree)
+    {from, to} = owned_span(source, comments, found.entry, found.siblings)
+    Enum.any?(comments, fn {c, _} -> c >= from and c < to end)
   end
 
   # ---- finding a path -----------------------------------------------------------

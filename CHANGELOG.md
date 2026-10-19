@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and its trailing block, and nobody else's; an inserted entry goes above
   the comments of the entry it lands before, laid out like its
   neighbours.
+- `Dextrin.Document.update/3` -- the document holding a new value, by the
+  fewest explicit edits, answered as a changeset. Equal values are left
+  as written; lists compare with Myers' diff. A deleted item followed by
+  an inserted one is ambiguous, and `on_ambiguity:` decides: `:safe`
+  (the default) refuses only where the deleted item owns a comment,
+  `:guess` reads it as a replace, `:error` refuses every one.
 - `Dextrin.Registry.from_options/1` and `Dextrin.Error.from_parse/1`, what
   `decode/2` and `Dextrin.Document.parse/2` share.
 - `Dextrin.Canonical.print/1` -- the canonical form of a value
