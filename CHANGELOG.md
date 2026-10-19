@@ -51,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   this implementation's adapter for the Dextrin Conformance Suite,
   answering a JSON batch of cases with canonical forms, base64 bytes or
   error categories.
+  It also answers `format` and `edit` cases, a `Dextrin.Document` laid
+  out or edited, as `text`.
 - The tutorial's §8, "Evolving a schema": a worked example of versions,
   reading across them, the materializer, the positional risk and
   `mix dextrin.compat`. The cheatsheet gains versions and extra fields.

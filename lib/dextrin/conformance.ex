@@ -17,6 +17,16 @@ defmodule Dextrin.Conformance do
   - `"encode"` reads `"text"` and answers the exact `.dxnb` bytes, as
     base64.
 
+  - `"format"` reads `"text"` as a `Dextrin.Document` and answers it laid
+    out, comments kept (`Dextrin.Document.format/2`), as `"text"`;
+  - `"edit"` reads `"text"` as a document, makes its `"edits"` in order,
+    and answers the document rendered, as `"text"`. An edit is
+    `{"op": "replace" | "delete" | "insert" | "update", ...}` with
+    `"path"`, `"value"` and `"where"` written as DXN text, read by this
+    implementation's own decoder; `"update"` may say `"on_ambiguity"`. A
+    refused edit answers `document/not-found`, `document/exists`,
+    `document/ambiguous` or `document/not-a-collection`.
+
   A case may carry `"schemas"`, `.dxns` sources compiled in order into
   the registry it runs with, and `"strict": true`, which decodes
   strictly (`DXN.md` §4.7).
@@ -90,8 +100,72 @@ defmodule Dextrin.Conformance do
     end
   end
 
+  defp outcome(%{"operation" => "format", "text" => text}, opts) do
+    case Dextrin.Document.parse(text, opts) do
+      {:ok, doc} -> %{"text" => Dextrin.Document.format(doc)}
+      {:error, error} -> failed(error)
+    end
+  end
+
+  defp outcome(%{"operation" => "edit", "text" => text, "edits" => edits}, opts) do
+    with {:ok, doc} <- Dextrin.Document.parse(text, opts),
+         {:ok, doc} <- edited(doc, edits, opts) do
+      %{"text" => Dextrin.Document.render(doc)}
+    else
+      {:error, error} -> failed(error)
+    end
+  end
+
   defp outcome(%{"operation" => operation}, _opts),
     do: %{"error" => "unsupported operation #{inspect(operation)}"}
+
+  defp edited(doc, edits, opts) do
+    Enum.reduce_while(edits, {:ok, doc}, fn edit, {:ok, doc} ->
+      case edit_once(doc, edit, opts) do
+        {:ok, doc} -> {:cont, {:ok, doc}}
+        {:ok, doc, _changes} -> {:cont, {:ok, doc}}
+        {:error, _} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp edit_once(doc, %{"op" => "replace", "path" => path, "value" => value}, opts) do
+    with {:ok, path} <- Dextrin.decode(path, opts),
+         {:ok, value} <- Dextrin.decode(value, opts),
+         do: Dextrin.Document.replace(doc, path, value)
+  end
+
+  defp edit_once(doc, %{"op" => "delete", "path" => path}, opts) do
+    with {:ok, path} <- Dextrin.decode(path, opts), do: Dextrin.Document.delete(doc, path)
+  end
+
+  defp edit_once(
+         doc,
+         %{"op" => "insert", "path" => path, "where" => where, "value" => value},
+         opts
+       ) do
+    with {:ok, path} <- Dextrin.decode(path, opts),
+         {:ok, where} <- Dextrin.decode(where, opts),
+         {:ok, value} <- Dextrin.decode(value, opts),
+         do: Dextrin.Document.insert(doc, path, where, value)
+  end
+
+  defp edit_once(doc, %{"op" => "update", "value" => value} = edit, opts) do
+    with {:ok, mode} <- ambiguity(Map.get(edit, "on_ambiguity", "safe")),
+         {:ok, value} <- Dextrin.decode(value, opts),
+         do: Dextrin.Document.update(doc, value, on_ambiguity: mode)
+  end
+
+  defp ambiguity("safe"), do: {:ok, :safe}
+  defp ambiguity("guess"), do: {:ok, :guess}
+  defp ambiguity("error"), do: {:ok, :error}
+
+  defp ambiguity(other),
+    do: {:error, Dextrin.Error.action("unknown on_ambiguity #{inspect(other)}")}
+
+  defp failed({reason, _path})
+       when reason in [:not_found, :exists, :ambiguous, :not_a_collection],
+       do: %{"error" => "document/" <> String.replace(Atom.to_string(reason), "_", "-")}
 
   defp failed([error | _]), do: failed(error)
   defp failed(%Dextrin.Error{category: nil}), do: %{"error" => "uncategorised"}

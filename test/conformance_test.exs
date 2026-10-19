@@ -76,6 +76,56 @@ defmodule Dextrin.ConformanceTest do
            ]) == [%{"id" => "a", "error" => "schema/compile"}]
   end
 
+  describe "documents" do
+    @doc_text ~s|%{\n  name: "acme" # the name\n  deps: ["a" "b"]\n}\n|
+
+    test "a format answers the document laid out, its comments kept" do
+      assert answer([%{"id" => "a", "operation" => "format", "text" => "[1 # one\n 2]"}]) ==
+               [%{"id" => "a", "text" => "[\n  1  # one\n  2\n]"}]
+    end
+
+    test "an edit answers the document rendered after its edits, in order" do
+      edits = [
+        %{"op" => "replace", "path" => "[:name]", "value" => ~s|"other"|},
+        %{"op" => "delete", "path" => "[:deps 0]"},
+        %{"op" => "insert", "path" => "[:deps]", "where" => "-1", "value" => ~s|"c"|}
+      ]
+
+      assert answer([
+               %{"id" => "a", "operation" => "edit", "text" => @doc_text, "edits" => edits}
+             ]) ==
+               [
+                 %{
+                   "id" => "a",
+                   "text" => ~s|%{\n  name: "other" # the name\n  deps: ["b" "c"]\n}\n|
+                 }
+               ]
+    end
+
+    test "an update answers the document holding the new value" do
+      edits = [%{"op" => "update", "value" => ~s|%{name: "acme", deps: ["a" "b" "c"]}|}]
+
+      assert answer([
+               %{"id" => "a", "operation" => "edit", "text" => @doc_text, "edits" => edits}
+             ]) ==
+               [
+                 %{
+                   "id" => "a",
+                   "text" => ~s|%{\n  name: "acme" # the name\n  deps: ["a" "b" "c"]\n}\n|
+                 }
+               ]
+    end
+
+    test "a refused edit answers why, as document/<reason>" do
+      edits = [%{"op" => "delete", "path" => "[:nope]"}]
+
+      assert answer([
+               %{"id" => "a", "operation" => "edit", "text" => @doc_text, "edits" => edits}
+             ]) ==
+               [%{"id" => "a", "error" => "document/not-found"}]
+    end
+  end
+
   test "an encode answers the exact bytes, as base64" do
     assert answer([%{"id" => "a", "operation" => "encode", "text" => "42"}]) ==
              [%{"id" => "a", "binary" => "RFgBGCo="}]
