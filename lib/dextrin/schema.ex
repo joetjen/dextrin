@@ -36,6 +36,32 @@ defmodule Dextrin.Schema do
   end
 
   @doc """
+  Compiles several decoded `.dxns` documents into one registry, in order,
+  over `base_registry` -- each document seeing the schemas and named
+  types of those before it, as `compile/2` called on each in turn. The
+  first that does not compile is the refusal, naming which it was.
+
+      iex> docs = for t <- ["%{A: %schema{a: :integer}}", "%{B: %schema{a: A}}"], do: elem(Dextrin.decode(t), 1)
+      iex> {:ok, registry} = Dextrin.Schema.compile_all(docs)
+      iex> match?({:ok, _, _}, Dextrin.Registry.fetch_struct_schema(registry, "B"))
+      true
+  """
+  @spec compile_all([term()], Registry.t()) :: {:ok, Registry.t()} | {:error, Dextrin.Error.t()}
+  def compile_all(schema_docs, base_registry \\ Registry.new()) when is_list(schema_docs) do
+    schema_docs
+    |> Enum.with_index(1)
+    |> Enum.reduce_while({:ok, base_registry}, fn {doc, n}, {:ok, registry} ->
+      case compile(doc, registry) do
+        {:ok, registry} ->
+          {:cont, {:ok, registry}}
+
+        {:error, error} ->
+          {:halt, {:error, %{error | message: "document #{n}: #{error.message}"}}}
+      end
+    end)
+  end
+
+  @doc """
   Validates an already-decoded value against a named, compiled schema
   — for the cases that aren't "check while decoding": a value built
   directly in Elixir before encoding, an opaque `Dextrin.Struct`
