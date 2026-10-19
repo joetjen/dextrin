@@ -14,9 +14,10 @@ defmodule Mix.Tasks.Dextrin.FormatTest do
 
     output = capture_io(fn -> Format.run([path]) end)
 
-    {:ok, value} = Dextrin.decode("%{x: 1, y: 2}")
-    {:ok, pretty} = Dextrin.Text.Formatter.pretty(value)
-    assert output == pretty <> "\n"
+    # The document laid out, its entries in the order the file wrote
+    # them. Not the value re-encoded: a map's key order is the runtime's,
+    # and OTP 26 and 27 write this one `y` first.
+    assert output == "%{\n  x: 1\n  y: 2\n}\n"
     # File itself is untouched without --in-place.
     assert File.read!(path) == "%{x: 1, y: 2}"
   end
