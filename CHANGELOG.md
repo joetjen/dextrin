@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A field typed with a namespaced reference takes a struct of that
+  name** (DXN.md §4.7): a field typed `geo/Address` accepts
+  `%geo/Address{...}`, and refuses `%Address{...}`. It was the other way
+  round, because a schema `FileResolver` found as `geo/Address` kept the
+  name its file gave it, `Address`. Breaking for documents that wrote the
+  bare name; write the name the reference uses.
 - **DXN.md is format version 1.1**: 1.1 changed `.dxns` documents (the
   body lists the fields, `%schema(N)` carries a version) and adds
   `bits`; every 1.0 document reads unchanged, a reader accepts any `1.x`
