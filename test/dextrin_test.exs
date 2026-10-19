@@ -18,8 +18,10 @@ defmodule DextrinTest do
       assert {:ok, %Dextrin.Char{codepoint: 97}} = Dextrin.decode("?a")
       assert {:ok, %Dextrin.Char{codepoint: 32}} = Dextrin.decode("?s")
       assert {:ok, %Dextrin.Symbol{name: "foo-bar?"}} = Dextrin.decode("foo-bar?")
-      assert {:ok, %Dextrin.Keyword{name: "admin"}} = Dextrin.decode(":admin", trusted: false)
-      assert {:ok, :admin} = Dextrin.decode(":admin")
+      # Untrusted by default: a keyword creates no atom unless the caller
+      # says the input is trusted.
+      assert {:ok, %Dextrin.Keyword{name: "admin"}} = Dextrin.decode(":admin")
+      assert {:ok, :admin} = Dextrin.decode(":admin", trusted: true)
     end
 
     test "decodes every collection type" do

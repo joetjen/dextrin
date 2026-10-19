@@ -11,7 +11,7 @@ focuses on the Elixir API around it.
 ## 1. Decoding and encoding text
 
 ```elixir
-{:ok, value} = Dextrin.decode(~s(%{name: "Ada", active: true, score: 19.99M}))
+{:ok, value} = Dextrin.decode(~s(%{name: "Ada", active: true, score: 19.99M}), trusted: true)
 #=> {:ok, %{active: true, name: "Ada", score: Decimal.new("19.99")}}
 
 Dextrin.encode(value)
@@ -20,18 +20,18 @@ Dextrin.encode(value)
 
 Notice the map's keys: a plain map's shorthand keys (`name:`) are
 themselves DXN `keyword`s, not bare strings — `%{name: "Ada"}` and
-`%{:name => "Ada"}` are the exact same value, and `keyword`'s own
-Elixir type (`DXN.md` §1.3) is a real atom, which is what `decode/2`
-produces by default (`trusted: true`, since `Dextrin.Registry.new/0`'s
-default). Pass `trusted: false` for input you don't fully control —
-untrusted `.dxn`/`.dxnb` must never be able to exhaust the atom table
-via an unbounded `String.to_atom/1` — and `keyword` decodes as
-`Dextrin.Keyword.t()` instead:
+`%{:name => "Ada"}` are the exact same value. **By default a keyword
+decodes as `Dextrin.Keyword.t()`**, never an atom: a `.dxn`/`.dxnb` from
+anywhere must never be able to exhaust the atom table via an unbounded
+`String.to_atom/1`:
 
 ```elixir
-Dextrin.decode(~s(%{name: "Ada"}), trusted: false)
+Dextrin.decode(~s(%{name: "Ada"}))
 #=> {:ok, %{%Dextrin.Keyword{name: "name"} => "Ada"}}
 ```
+
+For input you control, `trusted: true` decodes it as a real atom,
+`keyword`'s own Elixir type (`DXN.md` §1.3) -- as in the first example.
 
 A schema-backed `struct`'s fields are the one place names *do* come
 back as plain strings regardless of `trusted:` (§6 below), since a
@@ -59,21 +59,21 @@ information:
 #=> {:ok, %Dextrin.Symbol{name: "some-symbol"}}
 
 {:ok, kw}   = Dextrin.decode(":ok")
-#=> {:ok, :ok}
+#=> {:ok, %Dextrin.Keyword{name: "ok"}}
 
 {:ok, tup}  = Dextrin.decode("{1 2 3}")
 #=> {:ok, %Dextrin.Tuple{items: [1, 2, 3]}}
 
-{:ok, om}   = Dextrin.decode("@ordered %{b: 2, a: 1}")
+{:ok, om}   = Dextrin.decode("@ordered %{b: 2, a: 1}", trusted: true)
 #=> {:ok, %Dextrin.OrderedMap{pairs: [{:b, 2}, {:a, 1}]}}
 ```
 
 `symbol` always wraps a plain `String.t()`, never an Elixir atom —
-decoding untrusted DXN data can never be used to exhaust the atom
-table through a symbol, `trusted:` or not. `keyword` is the one type
-with two faces, controlled by `trusted:` (default `true`): a real
-atom, as shown above, or `Dextrin.Keyword.t()` when decoded untrusted
-(`trusted: false`) — see `Dextrin.Registry.put_trusted/2`'s own doc.
+decoding DXN data can never exhaust the atom table through a symbol,
+`trusted:` or not. `keyword` is the one type with two faces, controlled
+by `trusted:` (default `false`): `Dextrin.Keyword.t()`, as shown above,
+or a real atom when the input is trusted (`trusted: true`) — see
+`Dextrin.Registry.put_trusted/2`'s own doc.
 See the module docs under `Dextrin.Value` (the full type union) and
 each wrapper module for more.
 
@@ -81,7 +81,7 @@ each wrapper module for more.
 
 ```elixir
 {:ok, bytes} = Dextrin.encode_binary(value)
-{:ok, ^value} = Dextrin.decode_binary(bytes)
+{:ok, ^value} = Dextrin.decode_binary(bytes, trusted: true)
 ```
 
 `.dxnb` is CBOR underneath, with a 3-byte envelope (`"DX"` + a version

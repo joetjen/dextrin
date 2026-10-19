@@ -173,18 +173,17 @@ defmodule Dextrin.RoundTripByTypeTest do
   end
 
   describe "bare atom (DXN.md §1.3: keyword's Elixir type is \"Elixir atom\")" do
-    # `trusted: true` is the default (`Dextrin.Registry.put_trusted/2`),
-    # so this one *does* use `assert_round_trips/1`'s untrusted opt
-    # explicitly reversed — a bare atom round-trips to the exact same
-    # atom by default, a genuine, symmetric round trip unlike every
-    # other property above.
-    property "round-trips to the exact same atom by default (trusted)" do
+    # Decoding is untrusted by default (`Dextrin.Registry.put_trusted/2`),
+    # so a bare atom comes back as the same atom only when the input is
+    # trusted -- a genuine, symmetric round trip, unlike every other
+    # property above.
+    property "round-trips to the exact same atom when trusted" do
       check all(value <- Generators.atom()) do
         assert {:ok, encoded} = Dextrin.encode(value)
-        assert {:ok, ^value} = Dextrin.decode(encoded)
+        assert {:ok, ^value} = Dextrin.decode(encoded, trusted: true)
 
         assert {:ok, bytes} = Dextrin.encode_binary(value)
-        assert {:ok, ^value} = Dextrin.decode_binary(bytes)
+        assert {:ok, ^value} = Dextrin.decode_binary(bytes, trusted: true)
       end
     end
 

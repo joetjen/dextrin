@@ -21,10 +21,10 @@ to skip the automatic whole-tree schema check), `pretty:` (`encode/2`
 only, default `false` — multi-line, indented output instead of
 single-line/compact), `indent:` (`encode/2` only, meaningful with
 `pretty: true` — spaces per nesting level, default 2), `trusted:`
-(decode only, default `true` — `keyword` decodes as a real atom;
-`false` for untrusted input decodes it as `Dextrin.Keyword.t()`
-instead, so `String.to_atom/1` is never reachable from attacker
--controlled text).
+(decode only, default `false` — `keyword` decodes as
+`Dextrin.Keyword.t()`, so `String.to_atom/1` is never reachable from
+the input; `true`, for a source you control, decodes it as a real
+atom).
 
 ## Render an error
 
@@ -68,7 +68,7 @@ Dextrin.Document.format(doc)                         # laid out, comments kept
 
 ```text
 symbol      Dextrin.Symbol{name: string}          bare identifier, e.g. `foo`
-keyword     atom (default) / Dextrin.Keyword      `:foo` / `foo:` (key position) — trusted: false for the latter
+keyword     Dextrin.Keyword (default) / atom      `:foo` / `foo:` (key position) — trusted: true for the latter
 tuple       Dextrin.Tuple{items: [term]}          `{1 2 3}` — list-backed, arbitrary length
 array       Dextrin.Array{items: tuple}           `@array[1 2 3]` — tuple-backed, fixed size
 ordered-map Dextrin.OrderedMap{pairs: [{k,v}]}    `@ordered %{...}` — order is part of identity
