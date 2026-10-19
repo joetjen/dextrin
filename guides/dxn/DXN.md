@@ -38,7 +38,9 @@ hex_digit    = digit | "a" | "b" | "c" | "d" | "e" | "f" | "A" | "B" | "C" | "D"
 letter       = ? any character with Unicode property XID_Start (UAX #31) ? ;
 ident_char   = ? any character with Unicode property XID_Continue (UAX #31) ? | "-" | "?" | "!" ;
 
-identifier   = ( letter | "_" ) , { ident_char } , [ "/" , ( letter | "_" ) , { ident_char } ] ;
+identifier   = segments , [ "/" , segments ] ;           (* namespace / name *)
+segments     = segment , { "." , segment } ;              (* Foo.Bar.Baz *)
+segment      = ( letter | "_" ) , { ident_char } ;
 reserved     = "nil" | "true" | "false" | "NaN" | "Infinity" ;
 
 string_char  = ? any character except '"' or "\" ? | escape ;
@@ -600,13 +602,42 @@ one already known before this document was processed."
 
 ### 4.6 Cross-file references
 
-`identifier`'s own grammar already supports one `/` (§1.1),
-`Namespace/Name` — the mechanism this document uses for referencing a
-struct schema or named type defined in a separate `.dxns` file/unit.
-Resolving `Namespace/Name` to an actual document (a file path, a
-registry lookup, a network fetch, ...) is entirely reader-defined; this
-specification fixes only the reference *syntax*, not a resolution
-convention.
+An `identifier` (§1.1) is segments joined by `.`, with at most one `/`
+between a namespace and a name: `Foo.Bar/Baz`, `acme.billing/Invoice`.
+The namespace is everything before the `/`, dots included. A name with a
+`/` is the mechanism this document uses for referencing a struct schema
+or named type defined in a separate `.dxns` file or unit.
+
+Resolving a name to a document (a file path, a registry lookup, a
+network fetch, ...) is reader-defined. **A reader that resolves names to
+files follows this convention**, so that one set of schema files serves
+every implementation. A struct of version `N` named `Foo.Bar/Baz` is
+looked for, on each search path in order, in:
+
+```toon
+schema_files[4]{layout,version_1,version_N}:
+  directories,"Foo/Bar/Baz.dxns or Foo/Bar/Baz-v1.dxns","Foo/Bar/Baz-vN.dxns"
+  one directory per name,"Foo/Bar/Baz/v1.dxns","Foo/Bar/Baz/vN.dxns"
+  flat,"Foo.Bar.Baz.dxns or Foo.Bar.Baz-v1.dxns","Foo.Bar.Baz-vN.dxns"
+  namespace file,"the entry Baz in Foo.Bar.dxns","the same file, by its %schema(N)"
+```
+
+A name with no `/` is its own namespace: `Baz` is looked for as
+`Baz.dxns`, `Baz-vN.dxns`, `Baz/vN.dxns`, and the entry `Baz` in
+`Baz.dxns`. The rules:
+
+- **The first search path that has the name at all decides**; later ones
+  are not consulted for it.
+- **A file's version is its schema's.** `Baz-v2.dxns` holds `Baz` as
+  `%schema(2)`; one that holds another version is refused
+  (`schema/compile`).
+- **One version is found once.** Two files on one search path that both
+  hold the same name and version (`Baz-v2.dxns` and `Baz/v2.dxns`, or
+  either and the namespace file) are refused, naming both, rather than
+  one being picked.
+- **Every version found is loaded**, so that a struct written with an
+  older one reaches the materializer (§4.8); a struct without a version
+  is read as the highest found.
 
 ### 4.7 Enforcement
 

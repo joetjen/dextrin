@@ -29,6 +29,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Dotted names** (DXN.md §1.1, Jan 2026-10-19): a name is segments
+  joined by `.`, with at most one `/` between a namespace and a name --
+  `%Foo.Bar/Baz{...}`, `acme.billing/invoice`, `:a.b`, `a.b: 1` -- for
+  structs, symbols, keywords and map keys alike. A name with two `/`, or
+  an empty segment, is refused. The parser is regenerated.
+- DXN.md §4.6 states the file convention a reader that resolves names to
+  files follows -- `Foo.Bar/Baz(N)` in `Foo/Bar/Baz-vN.dxns`,
+  `Foo/Bar/Baz/vN.dxns` or `Foo.Bar.Baz-vN.dxns` (`-v1` optional), or the
+  entry `Baz` in `Foo.Bar.dxns` -- with a version found twice refused.
+  `Dextrin.Schema.FileResolver` follows it next.
 - **`bits`**, as DXN.md 1.1 defines it: a bitstring that is not whole
   bytes -- bare, or in a `Dextrin.Bytes` -- is written `@bits {"oA==" 3}`
   and `T_BITS` (216), and reads back; `Dextrin.Bits` holds the rules.
