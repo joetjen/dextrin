@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-19
+
+Versioned schemas, extra fields, the conformance suite's adapter and a
+document that keeps its comments. Breaking: a 0.1.x `.dxns` file has
+to be rewritten, and decoding a checked struct answers a
+`Dextrin.Struct`.
+
+### Migrating from 0.1.x
+
+- **`.dxns` files.** The body lists the fields directly, in the order
+  `fields: @ordered %{...}` gave them, and a schema without a version
+  is version 1:
+
+  ```text
+  # 0.1.x
+  User: %schema{closed: true, fields: @ordered %{name: :string, email?: :string}}
+  # 0.2.0
+  User: %schema{name: :string, email?: :string}
+  ```
+
+  An unconverted file is refused when it is compiled (`schema/compile`:
+  `field "fields": unrecognized type expression`), never read as
+  something else.
+- **`closed:`, `forbidden:` and `refine-fn:` are gone.** A struct may
+  carry fields its schema does not declare. Where `closed: true` refused
+  them, decode with `strict: true` (or `Dextrin.Registry.put_strict/2`),
+  which refuses every undeclared field as `schema/undeclared-field`. A
+  `forbidden:` list or a refine predicate becomes a check in the
+  schema's materializer (`Dextrin.Registry.put_struct_materializer/3`),
+  which may refuse.
+- **A checked struct decodes to a `Dextrin.Struct`**, not a string-keyed
+  map. A materializer that answers the map you had keeps the old shape:
+  `fn _name, _version, fields -> {:ok, fields} end`.
+- **`.dxnb` written by 0.1.x still reads**, and so does text: its structs
+  carry no version, and a struct without a version is read as the latest
+  version loaded. Proven against bytes 0.1.3 wrote, in
+  `test/binary/v0_1_3_test.exs`.
+- **Rewrite stored 0.1.x data before you load a version 2.** Once a
+  version 2 is loaded, an unversioned struct is read as version 2, and a
+  `.dxnb` struct with version 1's fields no longer matches it
+  (`schema/field-count`). Decoded and encoded again with 0.2.0, the same
+  value is written as `User(1)`, and from then on it is read as version 1
+  and handed to the materializer to upgrade.
+
 ### Added
 
 - `Dextrin.Document` -- a `.dxn` document with everything it holds, its
@@ -65,6 +109,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Licensed under the Apache License 2.0 (`Apache-2.0`); it was MIT.
+- The Node.js port is published as `@joetjen/dextrin`; the links to it
+  say so. The unscoped npm `dextrin` is deprecated.
 - Requires `ichor_runtime ~> 0.4` (was `~> 0.2`); `ichor ~> 0.5` builds
   the DXN parser, now generated with `--lossless` for the comment-keeping
   document to come. Decoding runs the same code as before.
@@ -158,8 +204,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Removed: `closed:`, `forbidden:` and `refine-fn:`**, and with them
   `Dextrin.Schema.compile/3`'s and `Dextrin.Schema.FileResolver.for_paths/2`'s
   `predicates` argument. A struct may carry fields its schema does not
-  declare. A strict decode option and a per-schema materializer take
-  their places in later changes.
+  declare; `strict: true` refuses the undeclared ones, and the
+  schema's materializer checks what a predicate checked.
 - Schema compile errors are `Dextrin.Error`s with the `schema/compile`
   category, not bare strings.
 - **A map key must be one of the eight types of `DXN.md` §1.6**

@@ -33,7 +33,7 @@ defmodule Dextrin do
 
   This is the reference implementation. Two sibling ports read/write
   the exact same `.dxn`/`.dxnb`/`.dxns` documents:
-  [`node-dextrin`](https://www.npmjs.com/package/dextrin) (Node.js, on
+  [`node-dextrin`](https://www.npmjs.com/package/@joetjen/dextrin) (Node.js, on
   npm) and [`php-dextrin`](https://packagist.org/packages/joetjen/dextrin)
   (PHP, on Packagist) — see the README's own "Other language
   implementations" section for the full comparison.
