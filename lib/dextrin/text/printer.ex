@@ -73,7 +73,20 @@ defmodule Dextrin.Text.Printer do
 
   def print(%Char{codepoint: cp}, _opts), do: {:ok, "?" <> print_char_body(cp)}
 
-  def print(%Symbol{name: name}, _opts), do: {:ok, name}
+  # A symbol is an identifier (DXN.md §1.1); a name that is not one has
+  # no text form, and writing it verbatim would read back as something
+  # else, or as nothing.
+  def print(%Symbol{name: name}, _opts) do
+    if Dextrin.Text.Grammar.identifier?(name),
+      do: {:ok, name},
+      else:
+        {:error,
+         Dextrin.Error.action(
+           "a symbol named #{inspect(name)} has no text form: its name is not an identifier",
+           "encode/unsupported"
+         )}
+  end
+
   def print(%Dextrin.Keyword{name: name}, _opts), do: {:ok, ":" <> keyword_name(name)}
 
   def print(list, opts) when is_list(list) do

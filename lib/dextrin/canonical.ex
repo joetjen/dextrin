@@ -63,7 +63,10 @@ defmodule Dextrin.Canonical do
   defp text(%Rational{numerator: n, denominator: d}), do: "#{n}/#{d}"
   defp text(s) when is_binary(s), do: string(s)
   defp text(%Char{codepoint: cp}), do: "?" <> char_body(cp)
-  defp text(%Symbol{name: name}), do: name
+
+  defp text(%Symbol{name: name} = symbol),
+    do: if(Dextrin.Text.Grammar.identifier?(name), do: name, else: throw({:unsupported, symbol}))
+
   defp text(%Dextrin.Keyword{name: name}), do: keyword(name)
   defp text(list) when is_list(list), do: "[" <> items(list) <> "]"
   defp text(%Dextrin.Tuple{items: items}), do: "{" <> items(items) <> "}"

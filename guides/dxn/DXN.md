@@ -761,7 +761,7 @@ categories[16]{category,raised_when}:
   syntax,"text does not parse"
   binary,"a .dxnb document is malformed: magic, version, a tag's payload"
   key/not-allowed,"a map or extra-field key has a type §1.6 does not allow"
-  encode/unsupported,"a host value has no DXN meaning"
+  encode/unsupported,"a host value has no DXN meaning, or no form in the text being written -- a symbol whose name is not an identifier"
   schema/compile,"a .dxns document is not a valid schema"
   schema/duplicate-version,"a (name, version) is loaded twice"
   schema/not-loaded,"a replace names a (name, version) that is not loaded"
