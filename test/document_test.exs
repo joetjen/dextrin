@@ -63,6 +63,24 @@ defmodule Dextrin.DocumentTest do
     end
   end
 
+  test "a .dxns schema is a document too, and compiles the same with comments as without" do
+    commented = """
+    # The user, version 2.
+    %{
+      User: %schema(2){
+        name: :string     # required
+        email?: :string   # optional since 2
+      }
+    }
+    """
+
+    {:ok, doc} = Document.parse(commented)
+    {:ok, plain} = Dextrin.decode("%{User: %schema(2){name: :string, email?: :string}}")
+
+    assert Dextrin.Schema.compile(Document.to_value(doc)) == Dextrin.Schema.compile(plain)
+    assert Document.render(doc) == commented
+  end
+
   describe "a document that is not one" do
     test "is refused the way decode refuses it" do
       assert Document.parse("[1 2") == Dextrin.decode("[1 2")
