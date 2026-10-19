@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Dextrin.decode/2`'s options and errors), `to_value/1` (what `decode/2`
   gives) and `render/1` (the source, byte for byte, when nothing was
   edited). Built on Ichor's lossless parse of the same grammar.
+- `Dextrin.Document.replace/3`, `delete/2` and `insert/4` -- explicit
+  edits by path (a map's key, a struct's field name, an index). Every byte
+  an edit does not touch renders as it was; a replaced value keeps the
+  comments around it; a deleted entry takes the comment blocks above it
+  and its trailing block, and nobody else's; an inserted entry goes above
+  the comments of the entry it lands before, laid out like its
+  neighbours.
 - `Dextrin.Registry.from_options/1` and `Dextrin.Error.from_parse/1`, what
   `decode/2` and `Dextrin.Document.parse/2` share.
 - `Dextrin.Canonical.print/1` -- the canonical form of a value
