@@ -7,12 +7,17 @@ defmodule Dextrin.Bytes do
   bytes that happen to be valid UTF-8" apart on re-encode. The same
   kind of ambiguity `Dextrin.Char`/`Dextrin.Symbol`/`Dextrin.Keyword`
   each wrap a bare value to avoid.
+
+  **It holds bits too** (DXN.md §1.4, `Dextrin.Bits`): a bitstring
+  whose size is not a multiple of 8 is DXN `bits`, written
+  `@bits {"..." n}`. Bits and bytes are one value space, so one struct
+  holds both.
   """
 
-  @type t :: %__MODULE__{data: binary()}
+  @type t :: %__MODULE__{data: bitstring()}
 
   defstruct [:data]
 
-  @spec new(binary()) :: t()
-  def new(data) when is_binary(data), do: %__MODULE__{data: data}
+  @spec new(bitstring()) :: t()
+  def new(data) when is_bitstring(data), do: %__MODULE__{data: data}
 end

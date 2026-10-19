@@ -62,6 +62,7 @@ defmodule Dextrin.Canonical do
   defp text(%Decimal{} = d), do: decimal(d)
   defp text(%Rational{numerator: n, denominator: d}), do: "#{n}/#{d}"
   defp text(s) when is_binary(s), do: string(s)
+  defp text(bits) when is_bitstring(bits), do: text(Bytes.new(bits))
   defp text(%Char{codepoint: cp}), do: "?" <> char_body(cp)
 
   defp text(%Symbol{name: name} = symbol),
@@ -114,7 +115,8 @@ defmodule Dextrin.Canonical do
 
   defp text(%Uuid{} = uuid), do: "@uuid " <> string(String.downcase(Uuid.format(uuid)))
   defp text(%Uri{value: value}), do: "@uri " <> string(value)
-  defp text(%Bytes{data: data}), do: "@bytes " <> string(Base.encode64(data))
+  defp text(%Bytes{data: data}) when is_binary(data), do: "@bytes " <> string(Base.encode64(data))
+  defp text(%Bytes{data: bits}), do: Dextrin.Text.Printer.bits_form(bits)
 
   defp text(%Regex{source: source, opts: opts}) do
     flags = opts |> Dextrin.Binary.Tags.regex_opts_to_flags() |> String.graphemes() |> Enum.sort()

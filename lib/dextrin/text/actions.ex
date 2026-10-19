@@ -424,6 +424,22 @@ defmodule Dextrin.Text.Actions do
     end
   end
 
+  # `@bits {"..." n}` (DXN.md §1.4): base64 and a bit count. A whole
+  # number of bytes reads as bytes, which is what it is.
+  defp dispatch_tag("bits", value_cap, ctx) do
+    with {:ok, value, ctx} <- value_cap.eval.(ctx) do
+      with %Dextrin.Tuple{items: [text, count]} when is_binary(text) <- value,
+           {:ok, data} <- Base.decode64(text),
+           {:ok, bits} <- Dextrin.Bits.from_parts(data, count) do
+        {:ok, Dextrin.Bytes.new(bits), ctx}
+      else
+        _ ->
+          {:error,
+           action_error(~s|@bits takes {"base64" bit-count}, the count matching the bytes|)}
+      end
+    end
+  end
+
   defp dispatch_tag("datetime", value_cap, ctx) do
     with {:ok, text, ctx} <- value_cap.eval.(ctx),
          {:ok, datetime} <- parse_offset_datetime(text) do

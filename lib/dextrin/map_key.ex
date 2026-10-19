@@ -57,7 +57,8 @@ defmodule Dextrin.MapKey do
   defp allowed?(%Dextrin.Keyword{}), do: true
   defp allowed?(%Dextrin.Uuid{}), do: true
   defp allowed?(%Date{}), do: true
-  defp allowed?(%Dextrin.Bytes{}), do: true
+  # Bytes are a key; bits that are not whole bytes are not (DXN.md §1.6).
+  defp allowed?(%Dextrin.Bytes{data: data}), do: is_binary(data)
   defp allowed?(%Dextrin.Symbol{}), do: true
   defp allowed?(%Dextrin.Char{}), do: true
   defp allowed?(_other), do: false

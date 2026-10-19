@@ -35,6 +35,8 @@ defmodule Dextrin.Binary.Tags do
   def t_custom, do: 214
   # A struct's extra fields: only ever its last item (DXN.md §2.3).
   def t_extra, do: 215
+  # A run of bits that is not whole bytes: `[bytes, count]` (DXN.md §2.3).
+  def t_bits, do: 216
 
   @doc "Duration bitmask field order, low bit first (DXN.md §2.3)."
   @spec duration_bits() :: [atom()]

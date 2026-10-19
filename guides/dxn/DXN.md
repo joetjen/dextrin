@@ -8,6 +8,13 @@ implement a conforming parser, encoder, or decoder — see the
 [cheatsheet](DXN_CHEATSHEET.md) for a gentler introduction, and
 `dextrin`'s own module docs for one particular implementation's choices.
 
+This is **format version 1.1**. 1.1 changed `.dxns` documents (§4.4:
+the body lists the fields, `%schema(N)` carries a version) and added
+`bits` (§1.3); every 1.0 text and binary document reads unchanged. The
+`@dxn` header's version is informational: a reader MUST accept any
+`1.x` and MAY refuse another major version. The `.dxnb` envelope's
+version byte (§2.1) counts major versions and stays `1`.
+
 Grammar is ISO/IEC 14977 EBNF. Reference tables are [TOON](https://toon.sh)
 (`name[N]{fields}:` header, one comma-separated row per record) for
 token-efficient machine parsing; a cell containing a comma or quote is
@@ -104,7 +111,7 @@ design log.
 ### 1.3 Type reference
 
 ```toon
-types[30]{type,category,dxn_syntax,notes}:
+types[31]{type,category,dxn_syntax,notes}:
   nil,scalar,nil,""
   boolean,scalar,"true | false",""
   integer,scalar,"-?[0-9]+","arbitrary precision"
@@ -132,9 +139,10 @@ types[30]{type,category,dxn_syntax,notes}:
   uuid,extended,"@uuid ""...""","RFC 4122"
   uri,extended,"@uri ""...""","RFC 3986"
   bytes,extended,"@bytes ""...""","base64"
+  bits,extended,"@bits {""..."" n}","base64 and a bit count: a run of bits that is not whole bytes"
   regex,extended,"~r/pattern/flags","PCRE-style via Erlang :re"
   custom-tag,extended,"@tag value","open extension point, any unrecognized tag name"
-  header,meta,"@dxn ""1.0""","optional, first form only"
+  header,meta,"@dxn ""1.1""","optional, first form only; the format version (see the introduction)"
 ```
 
 ### 1.4 Semantic notes not expressible in grammar alone
@@ -154,6 +162,15 @@ types[30]{type,category,dxn_syntax,notes}:
   and `months` are calendar-relative (variable length), so they, along
   with weeks/days/hours/minutes/seconds, are tracked as independent
   fields (see §2.3 for the exact field set, shared with `.dxnb`).
+- **`bits` and `bytes` are one value space.** A run of bits whose count
+  is a multiple of 8 *is* bytes: `@bits {"AQID" 24}` reads as
+  `@bytes "AQID"`, and a writer writes it so. In `@bits {data n}`, `n`
+  is a non-negative integer and `data` holds exactly the bytes `n` needs
+  (`ceil(n / 8)`); the bits run from the high bit of the first byte, and
+  a reader MUST refuse (`syntax`, or `binary` for `T_BITS`) a count the
+  data does not match. The unused low bits of the last byte are written
+  zero and ignored when read. A language with no bitstring type holds
+  bits in a value of its own (bytes and a count).
 
 ### 1.5 Canonical form
 
@@ -204,6 +221,7 @@ canonical[30]{type,form}:
   uuid,"@uuid ""8-4-4-4-12"" in lowercase hex"
   uri,"@uri ""..."" as held, with string escaping"
   bytes,"@bytes ""..."" in standard base64 with padding"
+  bits,"@bits {""..."" n}: the bits in standard base64 with padding, the unused low bits of the last byte zero, and n their count; a run of whole bytes is bytes"
   regex,"~r/pattern/flags with the flags in canonical order"
   custom-tag,"@name value"
   extra fields,"in a keyed struct, entries after the declared fields in held order; in a positional struct, entries after the items, in canonical order of their keys (§4.7)"
@@ -295,7 +313,7 @@ resolved away before a value exists to encode.
 ### 2.2 Type mapping
 
 ```toon
-cbor_map[29]{type,cbor_major_or_tag,payload,integrity_note}:
+cbor_map[30]{type,cbor_major_or_tag,payload,integrity_note}:
   nil,"simple(22)","",""
   boolean,"simple(20/21)","","false/true"
   integer,"major0/1; tag2/3","two's complement bignum bytes past 64-bit","arbitrary precision preserved exactly"
@@ -322,6 +340,7 @@ cbor_map[29]{type,cbor_major_or_tag,payload,integrity_note}:
   uuid,"tag37","16 raw bytes","not the 36-char text form"
   uri,"tag32","major3 text",""
   bytes,"major2","raw bytes","no base64 in binary"
+  bits,"tag T_BITS","[major2 bytes, bit count]","the unused low bits of the last byte are zero; a run of whole bytes is bytes, never T_BITS"
   regex,"tag T_REGEX","[pattern text, flags byte]","flags bit layout in §2.3"
   custom-tag,"tag T_CUSTOM","[tag-name-or-ref, value]","binary form of the open extension point"
   header,"envelope, §2.1","magic+version bytes","not a CBOR item; metadata, not data"
@@ -330,7 +349,7 @@ cbor_map[29]{type,cbor_major_or_tag,payload,integrity_note}:
 ### 2.3 Private tag assignments and bit layouts
 
 ```toon
-private_tags[15]{name,number,wraps}:
+private_tags[17]{name,number,wraps}:
   T_CHAR,200,"integer codepoint"
   T_SYMBOL,201,"text string"
   T_KEYWORD,202,"text string"
@@ -347,10 +366,11 @@ private_tags[15]{name,number,wraps}:
   T_REGEX,213,"array: [pattern, flags-byte]"
   T_CUSTOM,214,"array: [tag-ref, value]"
   T_EXTRA,215,"map: {key: value, ...} — a struct's extra fields, only ever its last item (§4.7)"
+  T_BITS,216,"array: [bytes, bit-count] — a run of bits that is not whole bytes (§1.3)"
 ```
 
 Allocated from CBOR's one-extra-byte tag range (24–255), placed at
-200–215 specifically to stay clear of the actively-managed low range
+200–216 specifically to stay clear of the actively-managed low range
 (0–40 has multiple assignments and gaps IANA could fill later). Not
 IANA-registered — collision-free only within `dextrin`-produced documents;
 register formally before any non-`dextrin` interop is expected.
@@ -423,7 +443,7 @@ This is a size optimization only, never an identity/aliasing feature:
 
 Not required for a conforming encoder to produce; a conforming decoder
 MUST accept it. Tags 28/29 do not collide with the private range in
-§2.3 (200–214) or with §2.4's tags (256, 25) — confirm both against
+§2.3 (200–216) or with §2.4's tags (256, 25) — confirm both against
 the current IANA CBOR tags registry before final implementation, as
 with any tag number cited normatively here.
 
@@ -432,7 +452,7 @@ with any tag number cited normatively here.
 ## 3. Worked example
 
 ```
-@dxn "1.0"
+@dxn "1.1"
 %{
   id:      @uuid "550e8400-e29b-41d4-a716-446655440000"
   name:    "Ada Lovelace"
@@ -468,7 +488,7 @@ schema of their own, which would be circular.
 ```toon
 type_expr[13]{form,dxn_shape,meaning}:
   any,":any","matches any value at all"
-  primitive,":integer / :string / ...","one keyword per §1.3 type name"
+  primitive,":integer / :string / ...","one keyword per §1.3 type name; :bits matches bits and bytes alike, :bytes only whole bytes"
   reference,"bare symbol, e.g. Address","names a struct schema or a named type in this document (or Ns/Name, §4.6)"
   list-of,"{:list-of elem}","list whose every element matches elem"
   set-of,"{:set-of elem}","set whose every element matches elem"
@@ -757,7 +777,7 @@ error value. Categories are compared exactly; messages are not
 normative.
 
 ```toon
-categories[16]{category,raised_when}:
+categories[20]{category,raised_when}:
   syntax,"text does not parse"
   binary,"a .dxnb document is malformed: magic, version, a tag's payload"
   key/not-allowed,"a map or extra-field key has a type §1.6 does not allow"
@@ -774,4 +794,8 @@ categories[16]{category,raised_when}:
   schema/shadowed-field,"an extra field has the name of a declared field"
   schema/materializer,"a materializer answers an error, or a value the latest schema rejects"
   schema/version-discipline,"the compatibility check: changed content under the same version, or a version going down"
+  document/not-found,"an edit to a document (a reader that keeps comments) names a path that is not there"
+  document/exists,"an insert names a key the map already has"
+  document/ambiguous,"an update finds a deleted item followed by an inserted one -- a replace, or the two -- and its setting refuses to choose: always, or where the deleted item owns a comment"
+  document/not-a-collection,"an edit's path goes into a value that holds no entries"
 ```

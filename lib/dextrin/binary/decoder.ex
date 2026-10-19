@@ -381,10 +381,32 @@ defmodule Dextrin.Binary.Decoder do
       tag == Tags.t_custom() ->
         build_custom(value, opts)
 
+      tag == Tags.t_bits() ->
+        build_bits(value)
+
       true ->
         {:error, Dextrin.Error.binary("unrecognized CBOR tag #{tag}")}
     end
   end
+
+  # T_BITS, [bytes, count] (DXN.md §2.3): the count must match the bytes.
+  defp build_bits([%Bytes{data: data}, count]) do
+    case Dextrin.Bits.from_parts(data, count) do
+      {:ok, bits} ->
+        {:ok, Bytes.new(bits)}
+
+      :error ->
+        {:error,
+         Dextrin.Error.binary(
+           "bits (tag #{Tags.t_bits()}) whose count does not match their bytes"
+         )}
+    end
+  end
+
+  defp build_bits(_),
+    do:
+      {:error,
+       Dextrin.Error.binary("malformed bits (tag #{Tags.t_bits()}) payload: [bytes, count]")}
 
   defp build_decimal([exponent, mantissa]) when is_integer(exponent) and is_integer(mantissa) do
     sign = if mantissa < 0, do: -1, else: 1
