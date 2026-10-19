@@ -17,7 +17,7 @@ defmodule Dextrin.MixProject do
       docs: docs(),
       aliases: aliases(),
       test_coverage: [tool: ExCoveralls],
-      dialyzer: [plt_add_apps: [:mix], ignore_warnings: ".dialyzer_ignore.exs"]
+      dialyzer: [plt_add_apps: [:mix]]
     ]
   end
 
@@ -71,8 +71,8 @@ defmodule Dextrin.MixProject do
       # generates lib/dextrin/text/grammar/native.ex ahead of time --
       # it's never referenced by any code that ships, hence `only:
       # :dev, runtime: false`.
-      {:ichor_runtime, "~> 0.2"},
-      {:ichor, "~> 0.2", only: :dev, runtime: false},
+      {:ichor_runtime, "~> 0.4"},
+      {:ichor, "~> 0.5", only: :dev, runtime: false},
 
       # `~> 3.0`, not `~> 2.1` -- 2.4.1 (the version that constraint
       # resolved to) carries a real, published MEDIUM-severity DoS
