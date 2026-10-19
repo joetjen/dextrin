@@ -43,15 +43,12 @@ you don't fully trust the contents of, and use
 schema_source = """
 %{
   User: %schema{
-    closed: true
-    fields: @ordered %{
       id:       :uuid
       email:    NonEmptyString
       role:     {:enum :admin :member :guest}
       created:  :timestamp
       note?:    :string
     }
-  }
 }
 """
 
@@ -69,10 +66,6 @@ payload = """
 
 {:ok, user} = Dextrin.decode(payload, registry: registry)
 #=> {:ok, %{"id" => %Dextrin.Uuid{...}, "email" => "ada@example.com", "role" => :admin, ...}}
-
-# A response body accidentally including a legacy field is rejected loudly, not silently dropped:
-Dextrin.decode(~s(%User{id: @uuid "...", email: "a@b.co", role: :admin, created: ~U[2024-01-01 00:00:00Z], legacy_id: 1}), registry: registry)
-#=> {:error, %Dextrin.Error{message: "struct \"User\" violates its schema: unknown field \"legacy_id\" (schema is closed)", ...}}
 ```
 
 ## An event log, streamed to `.dxnb` for storage
@@ -108,11 +101,9 @@ an app-level convention.
 schema_source = """
 %{
   Money: %schema{
-    fields: @ordered %{
       amount:   :decimal
       currency: {:enum :usd :eur :gbp}
     }
-  }
 }
 """
 
@@ -120,41 +111,45 @@ schema_source = """
 {:ok, registry} = Dextrin.Schema.compile(doc)
 
 registry =
-  Dextrin.Registry.put_struct_materializer(registry, "Money", fn %{amount: a, currency: c} ->
-    {:ok, %{amount: a, currency: c.name}}
+  Dextrin.Registry.put_struct_materializer(registry, "Money", fn "Money", _version, fields ->
+    {:ok, %{amount: fields["amount"], currency: fields["currency"]}}
   end)
 
 Dextrin.decode(~s(%Money{amount: 19.99M, currency: :usd}), registry: registry)
-#=> {:ok, %{amount: #Decimal<19.99>, currency: "usd"}}
+#=> {:ok, %{amount: Decimal.new("19.99"), currency: :usd}}
 ```
 
-## Cross-field validation with `refine-fn`
+What a materializer answers is checked against the latest schema, so
+it has to stay a value of the schema's own shape: answering
+`currency: "usd"` here would be refused (`schema/materializer`),
+because the schema declares `{:enum :usd :eur :gbp}`, not a string.
 
-A `type_expr` can only describe shape, not "field A implies field B" —
-`refine-fn:` names a predicate resolved from a `predicates` map passed
-to `compile/3`:
+## Upgrading an older version
+
+One materializer per schema handles every version. A struct written
+with an older version than the latest loaded is read with its own
+version's schema and handed to the materializer, which fills in what
+that version lacked:
 
 ```elixir
-schema_source = """
-%{
-  DateRange: %schema{
-    refine-fn: date-range/valid
-    fields: @ordered %{ starts: :date, ends: :date }
-  }
-}
-"""
+registry =
+  Enum.reduce(
+    ["%{User: %schema{name: :string}}", "%{User: %schema(2){name: :string, email: :string}}"],
+    Dextrin.Registry.new(),
+    fn source, registry ->
+      {:ok, doc} = Dextrin.decode(source)
+      {:ok, registry} = Dextrin.Schema.compile(doc, registry)
+      registry
+    end
+  )
+  |> Dextrin.Registry.put_struct_materializer("User", fn
+    "User", 1, %{"name" => name} -> {:ok, %{name: name, email: "#{name}@example.com"}}
+    "User", 2, fields -> {:ok, %{name: fields["name"], email: fields["email"]}}
+  end)
 
-predicates = %{
-  "date-range/valid" => fn %{starts: s, ends: e} ->
-    if Date.compare(s, e) != :gt, do: :ok, else: {:error, "starts must not be after ends"}
-  end
-}
-
-{:ok, doc} = Dextrin.decode(schema_source)
-{:ok, registry} = Dextrin.Schema.compile(doc, Dextrin.Registry.new(), predicates)
-
-Dextrin.decode(~s(%DateRange{starts: ~D[2024-06-01], ends: ~D[2024-01-01]}), registry: registry)
-#=> {:error, %Dextrin.Error{message: "struct \"DateRange\" violates its schema: starts must not be after ends", ...}}
+Dextrin.decode(~s|%User(1){name: "ada"}|, registry: registry)
+#=> {:ok, %{name: "ada", email: "ada@example.com"}}
+```
 ```
 
 ## A third-party struct provider, end to end
@@ -173,7 +168,7 @@ companion module:
 ```elixir
 # geo_lib's own mix.exs
 defp deps do
-  [{:dextrin, "~> 0.1", optional: true}]
+  [{:dextrin, "~> 0.2", optional: true}]
 end
 ```
 
@@ -195,9 +190,7 @@ if Code.ensure_loaded?(Dextrin.Schema.Provider) do
     def dxn_schema, do: """
     %{
       Degrees: {:refine :float %{min: -180.0, max: 180.0}}
-      LatLng: %schema{
-        fields: @ordered %{ lat: Degrees, lng: Degrees }
-      }
+      LatLng: %schema{ lat: Degrees, lng: Degrees }
     }
     """
 
@@ -208,7 +201,8 @@ if Code.ensure_loaded?(Dextrin.Schema.Provider) do
     def dxn_struct, do: Geo.LatLng
 
     @impl true
-    def dxn_materialize(%{lat: lat, lng: lng}), do: {:ok, %Geo.LatLng{lat: lat, lng: lng}}
+    def dxn_materialize("LatLng", _version, %{"lat" => lat, "lng" => lng}),
+      do: {:ok, %Geo.LatLng{lat: lat, lng: lng}}
   end
 end
 ```
@@ -224,7 +218,7 @@ Dextrin.decode(~s(%LatLng{lat: 51.05, lng: 13.74}), registry: registry)
 #=> {:ok, %Geo.LatLng{lat: 51.05, lng: 13.74}}
 
 Dextrin.encode(%Geo.LatLng{lat: 51.05, lng: 13.74}, registry: registry)
-#=> {:ok, "%LatLng{lat:51.05,lng:13.74}"}
+#=> {:ok, "%LatLng(1){lat:51.05,lng:13.74}"}
 
 # Degrees' own refine constraint is enforced automatically, same as
 # any other schema -- no special handling needed on either side:
@@ -261,11 +255,9 @@ mix dextrin.gen.schema MyApp.Point --out point.dxns --name Point
 ```
 %{
   Point: %schema{
-    fields: @ordered %{
       x?: :integer
       y?: :integer
     }
-  }
 }
 ```
 

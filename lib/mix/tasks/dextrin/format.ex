@@ -7,12 +7,11 @@ defmodule Mix.Tasks.Dextrin.Format do
   Defaults to `--mode pretty`. `--in-place` rewrites `PATH`; otherwise
   prints to stdout.
 
-  Comments are always dropped, not "stripped by default" — `.dxn`'s
-  lexer discards them as trivia before the parser (and therefore any
-  value this formatter could reprint) ever sees them. There is no mode
-  that preserves them; that would need a second, independent
-  re-lexing pipeline this library doesn't have (see
-  `Dextrin.Text.Formatter`'s own moduledoc).
+  **`--mode pretty` keeps every comment** beside the entry it belongs to
+  (`Dextrin.Document.format/2`): it changes layout only, so every token is
+  written as it was. **`--mode condense` drops them**: a comment ends its
+  line, and condensed output is one line -- it reprints the value
+  (`Dextrin.encode/2`).
   """
 
   use Mix.Task
@@ -31,26 +30,26 @@ defmodule Mix.Tasks.Dextrin.Format do
 
   defp format(path, opts) do
     source = File.read!(path)
-    mode = Keyword.get(opts, :mode, "pretty")
 
-    case Dextrin.decode(source) do
-      {:ok, value} ->
-        text = render(mode, value)
-        write_output(text, path, opts[:in_place])
+    case Dextrin.Document.parse(source) do
+      {:ok, doc} ->
+        write_output(render(Keyword.get(opts, :mode, "pretty"), doc), path, opts[:in_place])
 
       {:error, error} ->
         Mix.raise(format_error(error))
     end
   end
 
-  defp render(mode, value) when mode in ["pretty", "condense"] do
-    case Dextrin.encode(value, pretty: mode == "pretty") do
+  defp render("pretty", doc), do: Dextrin.Document.format(doc)
+
+  defp render("condense", doc) do
+    case Dextrin.encode(Dextrin.Document.to_value(doc)) do
       {:ok, text} -> text
       {:error, error} -> Mix.raise(format_error(error))
     end
   end
 
-  defp render(other, _value),
+  defp render(other, _doc),
     do: Mix.raise("unrecognized --mode #{inspect(other)} — expected \"pretty\" or \"condense\"")
 
   defp write_output(text, _path, in_place) when in_place != true, do: Mix.shell().info(text)

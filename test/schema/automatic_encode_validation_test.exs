@@ -17,7 +17,7 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
   end
 
   @dxns """
-  %{ Bar: %schema{ fields: @ordered %{ baz: :integer } } }
+  %{ Bar: %schema{ baz: :integer } }
   """
 
   setup do
@@ -32,7 +32,7 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
     assert message =~ "Bar"
 
     good = Dextrin.Struct.keyed("Bar", [{"baz", 1}])
-    assert {:ok, "%Bar{baz:1}"} = Dextrin.encode(good, registry: registry)
+    assert {:ok, "%Bar(1){baz:1}"} = Dextrin.encode(good, registry: registry)
   end
 
   test "a named struct nested inside an untyped (:any) field is still caught", %{
@@ -41,8 +41,8 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
     {:ok, doc} =
       Dextrin.decode("""
       %{
-        Bar: %schema{ fields: @ordered %{ baz: :integer } }
-        Holder: %schema{ fields: @ordered %{ payload: :any } }
+        Bar: %schema{ baz: :integer }
+        Holder: %schema{ payload: :any }
       }
       """)
 
@@ -72,7 +72,10 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
     registry = Dextrin.Registry.put_struct_module(registry, "Bar", TestBar)
 
     bad = struct(TestBar, baz: true)
-    assert {:error, message} = Dextrin.Schema.validate_encode_tree(bad, registry)
+
+    assert {:error, %Dextrin.Error{message: message, category: "schema/type-mismatch"}} =
+             Dextrin.Schema.validate_encode_tree(bad, registry)
+
     assert message =~ "Bar"
 
     good = struct(TestBar, baz: 1)
@@ -83,7 +86,7 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
     registry: registry
   } do
     bad = Dextrin.Struct.keyed("Bar", [{"baz", true}])
-    assert {:ok, "%Bar{baz:true}"} = Dextrin.encode(bad, registry: registry, validate: false)
+    assert {:ok, "%Bar(1){baz:true}"} = Dextrin.encode(bad, registry: registry, validate: false)
     assert {:ok, _bin} = Dextrin.encode_binary(bad, registry: registry, validate: false)
   end
 
@@ -98,6 +101,6 @@ defmodule Dextrin.Schema.AutomaticEncodeValidationTest do
     value = Dextrin.Struct.keyed("Bar", [{"baz", 42}])
     assert {:ok, text} = Dextrin.encode(value, registry: registry)
     assert {:ok, decoded} = Dextrin.decode(text, registry: registry)
-    assert decoded == %{"baz" => 42}
+    assert decoded == Dextrin.Struct.keyed("Bar", [{"baz", 42}], 1)
   end
 end

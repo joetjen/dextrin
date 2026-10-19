@@ -57,10 +57,8 @@ defmodule Mix.Tasks.Dextrin.Gen.Schema do
     """
     %{
       #{schema_name}: %schema{
-        fields: @ordered %{
     #{field_lines}
         }
-      }
     }
     """
   end

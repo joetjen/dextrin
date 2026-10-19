@@ -1,8 +1,8 @@
 defmodule Dextrin.Schema.Validator do
   @moduledoc """
   Checks a value's fields against a `Dextrin.Schema.Compiled` schema
-  (required/closed/forbidden/refine) — shared by decode (`materialize/4`,
-  which also produces a materialized result) and encode-time validation
+  (required fields and declared types) — shared by decode (`resolve/3`,
+  whose result `Dextrin.Schema.Reader` builds a value from) and encode-time validation
   (`validate_for_encode/3`/`validate_tree_for_encode/2`, which never
   transforms `value`). Both directions reuse the exact same
   `resolve_fields/3`/`TypeExpr.matches?/3` field-checking — encode's
@@ -13,6 +13,12 @@ defmodule Dextrin.Schema.Validator do
   Enforcement is decode-time and fail-fast, with no lenient escape
   hatch to get the materialized value anyway — a violation is always
   an error, on the same channel an ordinary syntax error already uses.
+
+  **Every violation is a `Dextrin.Error` carrying its `DXN.md` §5
+  category** -- `schema/field-count`, `schema/missing-field`,
+  `schema/type-mismatch`, `schema/shadowed-field` -- which the text and
+  binary decoders and the encoder pass on unchanged, so a violation is
+  the same error whichever channel it travelled on.
   """
 
   alias Dextrin.Schema.{Compiled, Field, TypeExpr, Validated}
@@ -22,29 +28,24 @@ defmodule Dextrin.Schema.Validator do
   @type fields :: {:keyed, [{String.t(), term()}]} | {:positional, [term()]}
 
   @doc """
-  Validates and materializes `fields` against `compiled`, using
-  `materializer` if given. On success, the result is wrapped in a
-  `Validated` (name: `compiled.name`) — internal bookkeeping so an
-  *outer* schema's `{:reference, name}` field can verify this value's
-  origin even after materialization; callers that aren't another
-  schema check (the true top of decoding) must call `Validated.strip/1`
-  on the final result.
+  `fields` checked against `compiled`: every declared field, in the
+  schema's own order, as `{name, value}` pairs keyed by string.
+
+  A required field that is missing is an error, and so is a present
+  field whose value does not match its declared type. An optional field
+  that is missing takes its default, or stays absent when it has none --
+  DXN tells an absent field from one written `nil`. Nested values have
+  already been read, bottom-up; their internal `Validated` markers are
+  stripped here, so nothing past this point sees one.
+
+  Which schema the fields are read with, and what is built from them,
+  is `Dextrin.Schema.Reader`'s business.
   """
-  @spec materialize(
-          Compiled.t(),
-          fields(),
-          Dextrin.Registry.struct_materializer() | nil,
-          Registry.t()
-        ) ::
-          {:ok, Validated.t()} | {:error, String.t()}
-  def materialize(%Compiled{} = compiled, fields, materializer, registry) do
-    with {:ok, given} <- to_name_map(compiled, fields),
-         :ok <- check_forbidden(compiled, given),
-         :ok <- check_closed(compiled, given),
-         {:ok, resolved} <- resolve_fields(compiled, given, registry),
-         :ok <- run_refine_fn(compiled, resolved),
-         {:ok, result} <- materialize_result(resolved, materializer) do
-      {:ok, %Validated{name: compiled.name, value: result}}
+  @spec resolve(Compiled.t(), fields(), Registry.t()) ::
+          {:ok, [{String.t(), term()}]} | {:error, Dextrin.Error.t()}
+  def resolve(%Compiled{} = compiled, fields, registry) do
+    with {:ok, given} <- to_name_map(compiled, fields) do
+      resolve_fields(compiled, given, registry)
     end
   end
 
@@ -56,35 +57,25 @@ defmodule Dextrin.Schema.Validator do
     if length(names) == length(items) do
       {:ok, Map.new(Enum.zip(names, items))}
     else
-      {:error, "expected #{length(names)} positional field(s), got #{length(items)}"}
-    end
-  end
-
-  defp check_forbidden(%Compiled{forbidden: forbidden}, given) do
-    case Enum.find(forbidden, &Map.has_key?(given, &1)) do
-      nil -> :ok
-      name -> {:error, "field #{inspect(name)} is forbidden"}
-    end
-  end
-
-  defp check_closed(%Compiled{closed: false}, _given), do: :ok
-
-  defp check_closed(%Compiled{closed: true, fields: fields}, given) do
-    allowed = MapSet.new(fields, & &1.name)
-
-    case Enum.find(Map.keys(given), &(not MapSet.member?(allowed, &1))) do
-      nil -> :ok
-      extra -> {:error, "unknown field #{inspect(extra)} (schema is closed)"}
+      violation(
+        "expected #{length(names)} positional field(s), got #{length(items)}",
+        "schema/field-count"
+      )
     end
   end
 
   defp resolve_fields(%Compiled{fields: fields}, given, registry) do
-    Result.reduce_ok(fields, %{}, fn %Field{} = field, acc ->
+    Result.reduce_ok(fields, [], fn %Field{} = field, acc ->
       case resolve_field(field, given, registry) do
-        {:ok, value} -> {:ok, Map.put(acc, String.to_atom(field.name), value)}
+        {:ok, value} -> {:ok, [{field.name, value} | acc]}
+        :absent -> {:ok, acc}
         {:error, _} = err -> err
       end
     end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      {:error, _} = err -> err
+    end
   end
 
   defp resolve_field(
@@ -93,10 +84,17 @@ defmodule Dextrin.Schema.Validator do
          registry
        ) do
     case Map.fetch(given, name) do
-      {:ok, value} -> check_type(name, value, type, registry)
-      :error when default != :none -> {:ok, default}
-      :error when required -> {:error, "missing required field #{inspect(name)}"}
-      :error -> {:ok, nil}
+      {:ok, value} ->
+        check_type(name, value, type, registry)
+
+      :error when default != :none ->
+        {:ok, default}
+
+      :error when required ->
+        violation("missing required field #{inspect(name)}", "schema/missing-field")
+
+      :error ->
+        :absent
     end
   end
 
@@ -108,21 +106,15 @@ defmodule Dextrin.Schema.Validator do
       # internal `Validated` wrapper once it's done its one job.
       {:ok, Validated.strip(value)}
     else
-      {:error, "field #{inspect(name)} does not match its declared type"}
+      violation("field #{inspect(name)} does not match its declared type", "schema/type-mismatch")
     end
   end
 
-  defp run_refine_fn(%Compiled{refine_fn: nil}, _resolved), do: :ok
-  defp run_refine_fn(%Compiled{refine_fn: fun}, resolved), do: fun.(resolved)
-
-  defp materialize_result(resolved, nil),
-    do: {:ok, Map.new(resolved, fn {k, v} -> {Atom.to_string(k), v} end)}
-
-  defp materialize_result(resolved, materializer), do: materializer.(resolved)
+  defp violation(message, category), do: {:error, Dextrin.Error.action(message, category)}
 
   # ---- encode-time validation -------------------------------------------------
   #
-  # The mirror image of `materialize/4`, for data on its way *out*:
+  # The mirror image of `resolve/3`, for data on its way *out*:
   # `value` here is ordinary Elixir data you're about to encode — a
   # `Dextrin.Struct` (the one shape that round-trips to `%Name{...}`
   # wire syntax), a plain map (atom or string keys), or a real
@@ -146,7 +138,8 @@ defmodule Dextrin.Schema.Validator do
   against `compiled`. Never materializes; `value` itself is never
   transformed.
   """
-  @spec validate_for_encode(Compiled.t(), term(), Registry.t()) :: :ok | {:error, String.t()}
+  @spec validate_for_encode(Compiled.t(), term(), Registry.t()) ::
+          :ok | {:error, Dextrin.Error.t()}
   def validate_for_encode(%Compiled{} = compiled, value, registry),
     do: check_compiled(compiled, value, registry)
 
@@ -159,7 +152,7 @@ defmodule Dextrin.Schema.Validator do
   `Dextrin.encode/2`/`encode_binary/2` call this automatically (opt
   out with `validate: false`).
   """
-  @spec validate_tree_for_encode(term(), Registry.t()) :: :ok | {:error, String.t()}
+  @spec validate_tree_for_encode(term(), Registry.t()) :: :ok | {:error, Dextrin.Error.t()}
   def validate_tree_for_encode(value, registry) do
     case wrap_and_check(value, registry) do
       {:ok, _wrapped} -> :ok
@@ -168,15 +161,29 @@ defmodule Dextrin.Schema.Validator do
   end
 
   defp check_compiled(compiled, value, registry) do
-    with {:ok, given} <- to_name_map_for_encode(compiled, value),
+    with :ok <- unshadowed(compiled, value),
+         {:ok, given} <- to_name_map_for_encode(compiled, value),
          {:ok, given} <- wrap_given(given, registry),
-         :ok <- check_forbidden(compiled, given),
-         :ok <- check_closed(compiled, given),
-         {:ok, resolved} <- resolve_fields(compiled, given, registry),
-         :ok <- run_refine_fn(compiled, resolved) do
+         {:ok, _resolved} <- resolve_fields(compiled, given, registry) do
       :ok
     end
   end
+
+  # An extra field never shadows a declared one (DXN.md §4.7), on the way
+  # out as on the way in.
+  defp unshadowed(%Compiled{} = compiled, %Struct{extra: [_ | _] = extra}) do
+    declared = MapSet.new(Compiled.field_names(compiled))
+
+    case Enum.find(extra, fn {key, _} -> MapSet.member?(declared, key) end) do
+      nil ->
+        :ok
+
+      {key, _} ->
+        violation("extra field #{inspect(key)} shadows a declared field", "schema/shadowed-field")
+    end
+  end
+
+  defp unshadowed(_compiled, _value), do: :ok
 
   defp to_name_map_for_encode(_compiled, %Struct{fields: {:keyed, pairs}}),
     do: {:ok, Map.new(pairs)}
@@ -189,7 +196,10 @@ defmodule Dextrin.Schema.Validator do
     if length(names) == length(items) do
       {:ok, Map.new(Enum.zip(names, items))}
     else
-      {:error, "expected #{length(names)} positional field(s), got #{length(items)}"}
+      violation(
+        "expected #{length(names)} positional field(s), got #{length(items)}",
+        "schema/field-count"
+      )
     end
   end
 
@@ -202,7 +212,10 @@ defmodule Dextrin.Schema.Validator do
   end
 
   defp to_name_map_for_encode(_compiled, other) do
-    {:error, "expected a map or struct to validate against a schema, got #{inspect(other)}"}
+    violation(
+      "expected a map or struct to validate against a schema, got #{inspect(other)}",
+      "schema/type-mismatch"
+    )
   end
 
   # A plain map decoded straight from `.dxn` source (as opposed to one
@@ -227,8 +240,12 @@ defmodule Dextrin.Schema.Validator do
     case schema_name_for(value, registry) do
       {:ok, name, compiled} ->
         case check_compiled(compiled, value, registry) do
-          :ok -> {:ok, %Validated{name: name, value: value}}
-          {:error, reason} -> {:error, "struct #{inspect(name)} violates its schema: #{reason}"}
+          :ok ->
+            {:ok, %Validated{name: name, value: value}}
+
+          {:error, %Dextrin.Error{} = error} ->
+            {:error,
+             %{error | message: "struct #{inspect(name)} violates its schema: #{error.message}"}}
         end
 
       :unknown ->

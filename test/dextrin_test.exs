@@ -114,7 +114,7 @@ defmodule DextrinTest do
 
     test "pretty: and indent: don't change validation -- schema violations still fail either way" do
       {:ok, doc} =
-        Dextrin.decode("%{ Point: %schema{ fields: @ordered %{ x: :integer, y: :integer } } }")
+        Dextrin.decode("%{ Point: %schema{ x: :integer, y: :integer } }")
 
       {:ok, registry} = Dextrin.Schema.compile(doc)
       bad = Dextrin.Struct.keyed("Point", [{"x", 1}])

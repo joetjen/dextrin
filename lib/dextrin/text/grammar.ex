@@ -35,7 +35,11 @@ defmodule Dextrin.Text.Grammar do
       mix ichor.gen priv/grammar/dxn.aether \\
         --module Dextrin.Text.Grammar.Native \\
         --actions Dextrin.Text.Actions \\
-        --out lib/dextrin/text/grammar/native.ex
+        --out lib/dextrin/text/grammar/native.ex \\
+        --lossless
+
+  `--lossless` adds `run_lossless/2`, which `Dextrin.Document` parses
+  with; `run/2`, and so `Dextrin.decode/2`, are the same code without it.
 
   Rerun that command (`mix dextrin.gen.unicode` already reminds you to)
   any time `priv/grammar/dxn.aether` changes — there's no automatic
@@ -56,6 +60,14 @@ defmodule Dextrin.Text.Grammar do
   through as `initial_context`.
   """
   defdelegate run(input, initial_context \\ nil), to: Native
+
+  @doc """
+  Like `run/2`, and with the full-fidelity syntax tree beside the value
+  (`Ichor.Syntax.Node`): every token, comments and whitespace included,
+  so the tree's text is `input` byte for byte. What `Dextrin.Document`
+  parses with.
+  """
+  defdelegate run_lossless(input, initial_context \\ nil), to: Native
 
   @doc "Like `run/2`, but evaluates `input` as a sequence of top-level matches, threading context from each into the next."
   defdelegate run_sequence(input, initial_context), to: Native

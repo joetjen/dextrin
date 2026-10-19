@@ -17,28 +17,59 @@ defmodule Dextrin.Error do
 
   @type stage :: Ichor.Error.stage() | :binary
 
+  @typedoc """
+  What kind of error this is, as `DXN.md` §5 names it — `"syntax"`,
+  `"binary"`, `"encode/unsupported"`, `"schema/missing-field"`, ... —
+  which every conforming implementation exposes, so the conformance
+  suite can compare errors across languages without comparing messages.
+  `nil` where no category has been assigned yet.
+  """
+  @type category :: String.t() | nil
+
   @type t :: %__MODULE__{
           message: String.t(),
           stage: stage(),
+          category: category(),
           byte_offset: non_neg_integer() | nil,
           ichor_error: Ichor.Error.t() | nil
         }
 
-  defstruct [:message, :stage, :byte_offset, :ichor_error]
+  defstruct [:message, :stage, :category, :byte_offset, :ichor_error]
 
+  @doc """
+  What a text parse refused with -- one Ichor error or several -- as
+  `Dextrin.Error`s, through `from_ichor/1`.
+  """
+  @spec from_parse(Ichor.Error.t() | [Ichor.Error.t()]) :: t() | [t()]
+  def from_parse(errors) when is_list(errors), do: Enum.map(errors, &from_ichor/1)
+  def from_parse(%Ichor.Error{} = error), do: from_ichor(error)
+
+  @doc """
+  An Ichor error, as a `Dextrin.Error`. One that carries a
+  `Dextrin.Error` in its `data` -- an action's own refusal, with its own
+  category -- is that error, with the Ichor error kept for its position;
+  any other is a `syntax` error.
+  """
   @spec from_ichor(Ichor.Error.t()) :: t()
+  def from_ichor(%Ichor.Error{data: %__MODULE__{} = carried} = err),
+    do: %{carried | ichor_error: err}
+
   def from_ichor(%Ichor.Error{message: message, stage: stage} = err) do
-    %__MODULE__{message: message, stage: stage, ichor_error: err}
+    %__MODULE__{message: message, stage: stage, category: "syntax", ichor_error: err}
   end
 
   @spec binary(String.t(), non_neg_integer() | nil) :: t()
   def binary(message, byte_offset \\ nil) when is_binary(message) do
-    %__MODULE__{message: message, stage: :binary, byte_offset: byte_offset}
+    %__MODULE__{message: message, stage: :binary, category: "binary", byte_offset: byte_offset}
   end
 
-  @spec action(String.t()) :: t()
-  def action(message) when is_binary(message) do
-    %__MODULE__{message: message, stage: :action}
+  @doc """
+  An error raised outside the parsers — a schema violation, a value
+  with no DXN meaning — with its `DXN.md` §5 category, when it has one.
+  """
+  @spec action(String.t(), category()) :: t()
+  def action(message, category \\ nil) when is_binary(message) do
+    %__MODULE__{message: message, stage: :action, category: category}
   end
 
   @spec format(t()) :: String.t()

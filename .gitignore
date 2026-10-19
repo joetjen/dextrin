@@ -27,3 +27,6 @@ dextrin-*.tar
 
 # macOS Finder metadata.
 .DS_Store
+
+# Libraries do not check in their lock file.
+/mix.lock

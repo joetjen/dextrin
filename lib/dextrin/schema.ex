@@ -17,19 +17,22 @@ defmodule Dextrin.Schema do
   """
 
   alias Dextrin.Registry
-  alias Dextrin.Schema.{Compiled, Validator}
+  alias Dextrin.Schema.Validator
 
   @doc """
   Compiles a decoded `.dxns` document (see `Dextrin.decode/2`) into
   `base_registry` — a struct schema for each `%schema{}` entry, and a
   reusable named type for every other entry, e.g.
-  `PositiveInt: {:refine :integer {min: 1}}`. `predicates` resolves any
-  `refine-fn:` names used in the document.
+  `PositiveInt: {:refine :integer {min: 1}}`.
+
+  Each document describes one version of each schema it holds
+  (`%schema(N){...}`); compiling a second version of a schema into a
+  registry adds it beside the first, and compiling a version already
+  there is a `schema/duplicate-version` error.
   """
-  @spec compile(term(), Registry.t(), %{optional(String.t()) => Compiled.refine_fn()}) ::
-          {:ok, Registry.t()} | {:error, term()}
-  def compile(schema_doc, base_registry \\ Registry.new(), predicates \\ %{}) do
-    Dextrin.Schema.Compiler.compile(schema_doc, base_registry, predicates)
+  @spec compile(term(), Registry.t()) :: {:ok, Registry.t()} | {:error, Dextrin.Error.t()}
+  def compile(schema_doc, base_registry \\ Registry.new()) do
+    Dextrin.Schema.Compiler.compile(schema_doc, base_registry)
   end
 
   @doc """
@@ -39,28 +42,34 @@ defmodule Dextrin.Schema do
   decoded before a schema became available, or checking against a
   different schema than the one originally used.
   """
-  @spec validate(term(), Registry.t(), String.t()) :: :ok | {:error, term()}
-  def validate(%Dextrin.Struct{name: name, fields: fields}, %Registry{} = registry, schema_name)
+  @spec validate(term(), Registry.t(), String.t()) :: :ok | {:error, Dextrin.Error.t()}
+  def validate(
+        %Dextrin.Struct{name: name, version: version, fields: fields},
+        %Registry{} = registry,
+        schema_name
+      )
       when name == schema_name do
-    case Registry.fetch_struct_schema(registry, schema_name) do
-      {:ok, compiled, _registry} ->
-        materializer =
-          case Registry.fetch_materializer(registry, schema_name) do
-            {:ok, fun} -> fun
-            :error -> nil
-          end
-
-        with {:ok, _materialized} <-
-               Validator.materialize(compiled, fields, materializer, registry),
-             do: :ok
+    # Read exactly as a decode would read it, version and materializer
+    # included (Dextrin.Schema.Reader).
+    case Dextrin.Schema.Reader.read(registry, schema_name, version, fields) do
+      {:ok, _value, _registry} ->
+        :ok
 
       {:unknown, _registry} ->
-        {:error, "no compiled schema registered for #{inspect(schema_name)}"}
+        {:error,
+         Dextrin.Error.action("no compiled schema registered for #{inspect(schema_name)}")}
+
+      {:error, _} = error ->
+        error
     end
   end
 
   def validate(value, %Registry{}, schema_name) do
-    {:error, "expected a Dextrin.Struct named #{inspect(schema_name)}, got #{inspect(value)}"}
+    {:error,
+     Dextrin.Error.action(
+       "expected a Dextrin.Struct named #{inspect(schema_name)}, got #{inspect(value)}",
+       "schema/type-mismatch"
+     )}
   end
 
   @doc """
@@ -74,14 +83,15 @@ defmodule Dextrin.Schema do
   wrong shape. `Dextrin.encode/2`/`encode_binary/2`'s `schema:` opt
   calls this automatically.
   """
-  @spec validate_encode(term(), Registry.t(), String.t()) :: :ok | {:error, term()}
+  @spec validate_encode(term(), Registry.t(), String.t()) :: :ok | {:error, Dextrin.Error.t()}
   def validate_encode(value, %Registry{} = registry, schema_name) do
     case Registry.fetch_struct_schema(registry, schema_name) do
       {:ok, compiled, _registry} ->
         Validator.validate_for_encode(compiled, value, registry)
 
       {:unknown, _registry} ->
-        {:error, "no compiled schema registered for #{inspect(schema_name)}"}
+        {:error,
+         Dextrin.Error.action("no compiled schema registered for #{inspect(schema_name)}")}
     end
   end
 
@@ -95,7 +105,7 @@ defmodule Dextrin.Schema do
   `encode_binary/2` call this automatically by default (opt out with
   `validate: false`).
   """
-  @spec validate_encode_tree(term(), Registry.t()) :: :ok | {:error, term()}
+  @spec validate_encode_tree(term(), Registry.t()) :: :ok | {:error, Dextrin.Error.t()}
   def validate_encode_tree(value, %Registry{} = registry) do
     Validator.validate_tree_for_encode(value, registry)
   end
@@ -132,10 +142,10 @@ defmodule Dextrin.Schema do
        what lets `Dextrin.encode/2`/`encode_binary/2` serialize
        `dxn_struct/0`'s struct directly and lets `{:reference, name}`
        checks recognize it.
-    4. If `module` exports `dxn_materialize/1` (the one optional
+    4. If `module` exports `dxn_materialize/3` (the one optional
        callback), registers it via
        `Dextrin.Registry.put_struct_materializer/3`. If not, decoding
-       this schema falls back to the default plain field map, same as
+       this schema falls back to the generic `Dextrin.Struct`, same as
        any other materializer-less schema.
 
   Composes exactly like `compile/3`'s own `base_registry` — calling
@@ -159,8 +169,8 @@ defmodule Dextrin.Schema do
           registry = Registry.put_struct_module(registry, name, module.dxn_struct())
 
           registry =
-            if function_exported?(module, :dxn_materialize, 1) do
-              Registry.put_struct_materializer(registry, name, &module.dxn_materialize/1)
+            if function_exported?(module, :dxn_materialize, 3) do
+              Registry.put_struct_materializer(registry, name, &module.dxn_materialize/3)
             else
               registry
             end
