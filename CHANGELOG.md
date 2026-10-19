@@ -7,8 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Takes `ichor_runtime` from its GitHub develop for now (the action
+  errors below); back to a version requirement when it is released. The
+  DXN parser is regenerated with the matching `ichor`.
+
 ### Fixed
 
+- **An error found while parsing text says where it is**: a map key
+  that is not allowed, a value that is not one, a schema violation now
+  carry the line and column of what they are about, and
+  `Dextrin.Error.format/1` shows them. 0.2.0 said they did; they had
+  neither, because Ichor placed no error an action returned.
 - `Dextrin.Document.format/2` wrote the header without its space
   (`@dxn"1.0"`); it keeps one space between the tag and the version,
   however they were spaced.
