@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The pretty layout keeps short collections on one line** (Jan,
+  2026-10-20): the top-level collection still breaks, one entry per
+  line, however short; a nested one is written on one line, its entries
+  single-space separated, when that line -- indent and key included --
+  fits the width (`width:`, 80). `encode/2` with `pretty: true`,
+  `Dextrin.Document.format/2` and `mix dextrin.format` all lay out this
+  way. A nested collection holding a comment, or a blank line between
+  its entries, stays over lines.
 - **Decoding is untrusted by default** (Jan, 2026-10-19, ASCO's
   proposal): `decode/2`, `decode_binary/2` and `Dextrin.Document` decode
   a keyword as `Dextrin.Keyword.t()`, so no input can exhaust the atom

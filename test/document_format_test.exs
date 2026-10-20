@@ -106,5 +106,34 @@ defmodule Dextrin.DocumentFormatTest do
     end
   end
 
+  # Jan, 2026-10-20: a nested collection that fits goes on one line, as
+  # Dextrin.Text.Formatter writes it -- unless it holds a comment or a
+  # blank line, which keep it over lines.
+  describe "layout" do
+    test "a nested collection that fits is written on one line" do
+      assert formatted("%{deps: [\"a\" \"b\"], at: %{x: 1, y: 2}}") ==
+               "%{\n  deps: [\"a\" \"b\"]\n  at: %{x: 1 y: 2}\n}"
+    end
+
+    test "the top level breaks however short it is" do
+      assert formatted("[1]") == "[\n  1\n]"
+    end
+
+    test "a comment inside keeps it over lines" do
+      assert formatted("%{deps: [\"a\" # why\n]}") == "%{\n  deps: [\n    \"a\"  # why\n  ]\n}"
+    end
+
+    test "and so does a blank line between its entries" do
+      assert formatted("%{deps: [\"a\"\n\n\"b\"]}") ==
+               "%{\n  deps: [\n    \"a\"\n\n    \"b\"\n  ]\n}"
+    end
+
+    test "the width counts the indent and the key" do
+      {:ok, doc} = Document.parse("%{key: [1 2 3]}")
+      assert Document.format(doc, width: 14) == "%{\n  key: [1 2 3]\n}"
+      assert Document.format(doc, width: 13) == "%{\n  key: [\n    1\n    2\n    3\n  ]\n}"
+    end
+  end
+
   defp comments(text), do: Regex.scan(~r/# c\d+/, text) |> List.flatten() |> Enum.sort()
 end

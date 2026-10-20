@@ -1,9 +1,13 @@
 defmodule Dextrin.Document.Formatter do
   @moduledoc """
   A document's syntax tree laid out the way `Dextrin.Text.Formatter`
-  lays out a value -- every non-empty collection over lines, one entry
-  per line, indented -- with every comment kept beside the entry it
-  belongs to (`design/comment-retention.md`, "The rules").
+  lays out a value -- the top-level collection over lines, one entry per
+  line, indented; a nested one on one line when that line fits the width
+  (`:width`, 80) -- with every comment kept beside the entry it belongs
+  to (`design/comment-retention.md`, "The rules"). A nested collection
+  holding a comment, or a blank line between its entries, is laid out
+  over lines whatever its width: the comment needs its line, and the
+  blank line is the author's grouping.
 
   **Layout only.** Every token is written exactly as it was -- a
   literal's spelling, a key's form, an escape -- and only the space
@@ -24,7 +28,8 @@ defmodule Dextrin.Document.Formatter do
 
   @doc """
   The text of the document `tree`, laid out. `:indent` is the spaces per
-  level (2).
+  level (2), `:width` the columns a nested collection's one line must fit
+  in (80).
 
   It ends with a newline exactly when the source did: a formatter run on
   save keeps a file's last newline, and a comment-free document without
@@ -33,7 +38,9 @@ defmodule Dextrin.Document.Formatter do
   """
   @spec format(Node.t(), keyword()) :: String.t()
   def format(%Node{rule: :document, children: children} = tree, opts \\ []) do
+    width = Keyword.get(opts, :width, 80)
     step = String.duplicate(" ", Keyword.get(opts, :indent, 2))
+    ctx = %{step: step, width: width, room: width, flat: false}
     {header, rest} = Enum.split_with(children, &match?(%Node{rule: :header}, &1))
 
     head = Enum.map(header, &(header_text(&1) <> "\n"))
@@ -42,7 +49,7 @@ defmodule Dextrin.Document.Formatter do
 
     IO.iodata_to_binary([
       head,
-      lines(slots, "", step, fn node -> value(node, "", step) end),
+      lines(slots, "", ctx, fn node -> value(node, "", ctx) end),
       ending
     ])
   end
@@ -148,7 +155,7 @@ defmodule Dextrin.Document.Formatter do
   # ---- lines --------------------------------------------------------------
 
   # A container's entries and comments, one line each at `indent`.
-  defp lines(%{entries: entries, terminal: terminal}, indent, _step, render) do
+  defp lines(%{entries: entries, terminal: terminal}, indent, _ctx, render) do
     body =
       Enum.map(entries, fn {node, above, blank?, trailing} ->
         [
@@ -184,92 +191,147 @@ defmodule Dextrin.Document.Formatter do
 
   # ---- values -------------------------------------------------------------
 
-  defp value(%Node{rule: :value, children: children}, indent, step) do
+  defp value(%Node{rule: :value, children: children}, indent, ctx) do
     children
     |> Enum.reject(&match?(%Token{trivia: true}, &1))
     |> Enum.map_join(" ", fn
       %Node{rule: :discard, children: discard} ->
-        "@_ " <> value(Enum.find(discard, &match?(%Node{rule: :value}, &1)), indent, step)
+        "@_ " <>
+          value(
+            Enum.find(discard, &match?(%Node{rule: :value}, &1)),
+            indent,
+            %{ctx | room: ctx.room - 3}
+          )
 
       %Node{rule: :value_body, children: [body]} ->
-        body(body, indent, step)
+        body(body, indent, ctx)
     end)
   end
 
-  defp body(%Node{rule: rule} = node, indent, step)
+  defp body(%Node{rule: rule} = node, indent, ctx)
        when rule in [:list, :tuple, :set_lit, :map_lit],
-       do: collection(node, "", indent, step)
+       do: collection(node, "", indent, ctx)
 
-  defp body(%Node{rule: :struct_lit, children: children}, indent, step) do
+  defp body(%Node{rule: :struct_lit, children: children}, indent, ctx) do
     {head, [body | _]} = Enum.split_while(children, &(not match?(%Node{}, &1)))
-    collection(body, tokens_text(%Node{children: head}), indent, step)
+    collection(body, tokens_text(%Node{children: head}), indent, ctx)
   end
 
   # A tag and its value. Written together, `@array[1 2]` -- the spec's
   # own spelling -- they stay together; with anything between them, one
   # space does.
-  defp body(%Node{rule: :tag_form, children: children}, indent, step) do
+  defp body(%Node{rule: :tag_form, children: children}, indent, ctx) do
     {tag, [inner]} = Enum.split_with(children, &(not match?(%Node{rule: :value}, &1)))
     name = tokens_text(%Node{children: tag})
 
     if Enum.any?(tag, &match?(%Token{trivia: true}, &1)),
       do:
-        between(name, comments_in(tag), fn deeper -> value(inner, deeper, step) end, indent, step),
-      else: name <> value(inner, indent, step)
+        between(
+          name,
+          comments_in(tag),
+          fn deeper, at -> value(inner, deeper, at) end,
+          indent,
+          ctx
+        ),
+      else: name <> value(inner, indent, %{ctx | room: ctx.room - String.length(name)})
   end
 
-  defp body(node, _indent, _step), do: Ichor.Syntax.text(node)
+  defp body(node, _indent, _ctx), do: Ichor.Syntax.text(node)
 
   # A collection: its opening tokens after `head`, its entries one per
   # line a level deeper, its closing token -- or `[]` when it holds
   # nothing, not even a comment.
-  defp collection(%Node{children: children}, head, indent, step) do
+  defp collection(%Node{children: children}, head, indent, ctx) do
     {before_close, [close]} = Enum.split(children, -1)
     {opening, inner} = Enum.split_while(before_close, &match?(%Token{trivia: false}, &1))
     open = head <> tokens_text(%Node{children: opening})
     slots = slots(inner, true)
 
-    if slots.entries == [] and slots.open == [] and slots.terminal == [] do
-      open <> Ichor.Syntax.text(close)
-    else
-      deeper = indent <> step
-      entries = lines(slots, deeper, step, &item(&1, deeper, step))
-      trailed(open, slots.open) <> "\n" <> entries <> "\n" <> indent <> Ichor.Syntax.text(close)
+    cond do
+      slots.entries == [] and slots.open == [] and slots.terminal == [] ->
+        open <> Ichor.Syntax.text(close)
+
+      ctx.flat ->
+        one_line(open, slots, close, indent, ctx)
+
+      indent != "" and plain?(inner) ->
+        text = one_line(open, slots, close, indent, %{ctx | flat: true})
+
+        if String.length(text) <= ctx.room,
+          do: text,
+          else: over_lines(open, slots, close, indent, ctx)
+
+      true ->
+        over_lines(open, slots, close, indent, ctx)
     end
   end
 
-  defp item(%Node{rule: :map_entry, children: children}, indent, step) do
+  # A collection's entries single-space separated between its brackets.
+  defp one_line(open, slots, close, indent, ctx) do
+    items =
+      Enum.map(slots.entries, fn {node, _above, _blank?, _trailing} -> item(node, indent, ctx) end)
+
+    open <> Enum.join(items, " ") <> Ichor.Syntax.text(close)
+  end
+
+  # A collection's entries one per line, a level deeper than `indent`.
+  defp over_lines(open, slots, close, indent, ctx) do
+    deeper = indent <> ctx.step
+    at_line = %{ctx | room: ctx.width - String.length(deeper)}
+    entries = lines(slots, deeper, ctx, &item(&1, deeper, at_line))
+    trailed(open, slots.open) <> "\n" <> entries <> "\n" <> indent <> Ichor.Syntax.text(close)
+  end
+
+  # Whether `children` hold no comment and no blank line, however deep:
+  # what may go on one line.
+  defp plain?(children) do
+    Enum.all?(children, fn
+      %Token{trivia: true, text: text} ->
+        not String.contains?(text, "#") and length(String.split(text, "\n")) <= 2
+
+      %Token{} ->
+        true
+
+      %Node{children: inner} ->
+        plain?(inner)
+    end)
+  end
+
+  defp item(%Node{rule: :map_entry, children: children}, indent, ctx) do
     case Enum.reject(children, &match?(%Token{trivia: true}, &1)) do
       [%Token{name: :MAP_KEY, text: key}, value] ->
         between(
           key,
           comments_in(children),
-          fn deeper -> value(value, deeper, step) end,
+          fn deeper, at -> value(value, deeper, at) end,
           indent,
-          step
+          ctx
         )
 
       [key, _arrow, value] ->
         between(
-          value(key, indent, step) <> " =>",
+          value(key, indent, ctx) <> " =>",
           comments_in(children),
-          fn deeper -> value(value, deeper, step) end,
+          fn deeper, at -> value(value, deeper, at) end,
           indent,
-          step
+          ctx
         )
     end
   end
 
-  defp item(%Node{rule: :value} = node, indent, step), do: value(node, indent, step)
+  defp item(%Node{rule: :value} = node, indent, ctx), do: value(node, indent, ctx)
 
   # `prefix` and the value after it: on one line, or, with a comment
   # between them, the comment beside the prefix and the value on the
   # next line, a level deeper.
-  defp between(prefix, [], render, indent, _step), do: prefix <> " " <> render.(indent)
+  # `render` takes the indent of the value's line and the room left on it.
+  defp between(prefix, [], render, indent, ctx),
+    do: prefix <> " " <> render.(indent, %{ctx | room: ctx.room - String.length(prefix) - 1})
 
-  defp between(prefix, comments, render, indent, step) do
-    deeper = indent <> step
-    trailed(prefix, comments) <> "\n" <> deeper <> render.(deeper)
+  defp between(prefix, comments, render, indent, ctx) do
+    deeper = indent <> ctx.step
+    room = ctx.width - String.length(deeper)
+    trailed(prefix, comments) <> "\n" <> deeper <> render.(deeper, %{ctx | room: room})
   end
 
   defp comments_in(children) do
