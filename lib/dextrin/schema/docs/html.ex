@@ -1,9 +1,10 @@
 defmodule Dextrin.Schema.Docs.Html do
   @moduledoc """
-  The pages of `Dextrin.Schema.Docs`: `index.html`, a page for each
-  namespace (`global.html` for the names with none), and the stylesheet
-  they share, `style.css`. Everything is plain HTML and CSS, so the site
-  opens from disk and needs no script.
+  The pages of `Dextrin.Schema.Docs`: `index.html` at the top -- a
+  section per root namespace, then the names with no namespace -- an
+  `index.html` in a directory per namespace, and the stylesheet they
+  share, `style.css`. Everything is plain HTML and CSS, so the site opens
+  from disk; one small script only switches light and dark.
   """
 
   alias Dextrin.Schema.Docs
