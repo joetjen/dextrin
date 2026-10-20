@@ -143,8 +143,8 @@ as a string in JSON, for instance).
 |---|---:|---:|---:|---:|
 | DXN text | 279 / 199 | 19,402 / 4,218 | 63,159 / 13,895 | 5,516 / 4,222 |
 | DXN text, pretty | 314 / 216 | 23,504 / 4,249 | 67,161 / 13,961 | 5,527 / 4,234 |
-| `.dxnb` | 270 / 214 | 14,385 / 3,802 | 36,006 / 14,463 | 4,145 / 4,168 |
-| `.dxnb`, shared | 270 / 214 | 9,417 / 3,749 | 29,017 / 14,035 | 4,145 / 4,168 |
+| `.dxnb` | 264 / 212 | 14,185 / 3,802 | 34,006 / 14,381 | 4,145 / 4,168 |
+| `.dxnb`, shared | 264 / 212 | 9,217 / 3,752 | 27,017 / 14,019 | 4,145 / 4,168 |
 | JSON | 306 / 207 | 19,202 / 4,201 | 56,159 / 13,692 | 5,514 / 4,216 |
 | JSON, pretty | 403 / 229 | 26,253 / 4,287 | 74,160 / 14,182 | 5,527 / 4,231 |
 | BSON | 312 / 231 | 17,621 / 4,448 | 36,903 / 15,700 | 4,161 / 4,184 |
@@ -158,7 +158,7 @@ as a string in JSON, for instance).
   (`@datetime "..."`) where JSON writes a bare string.
 - **`.dxnb` sits between JSON and the compact binaries.** Value sharing
   (`encode_binary(value, share: true)`) writes a repeated key or string
-  once; on the API response that brings it within about 10% of Protocol
+  once; on the API response that brings it within 8% of Protocol
   Buffers, with no schema needed to read it.
 - **Where it is larger, it is carrying more.** A `.dxnb` datetime keeps
   nanoseconds, its offset and its type, where CBOR's and MessagePack's

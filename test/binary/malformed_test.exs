@@ -41,11 +41,6 @@ defmodule Dextrin.Binary.MalformedTest do
     assert_decode_error(corrupted)
   end
 
-  test "a half-precision (16-bit) float is explicitly rejected" do
-    body = <<7::3, 25::5, 0::16>>
-    assert_decode_error("DX" <> <<1>> <> body)
-  end
-
   test "an unrecognized CBOR tag" do
     # tag 999 (well outside both the IANA-registered tags this library
     # uses and its own private 200-214 block), wrapping a small integer.
