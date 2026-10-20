@@ -97,4 +97,25 @@ defmodule Dextrin.Schema.ReferenceFixesTest do
       assert {:ok, true} = trusted("true")
     end
   end
+
+  describe "the node port's cross-check" do
+    test "bits is a built-in tag, no custom one" do
+      {:error, %Dextrin.Error{message: message}} = compiled("{:tagged bits :any}")
+      assert message =~ "built-in"
+    end
+
+    test "an enum's literal is the value itself: 1 is not 1.0" do
+      refute takes?("{:enum 1}", 1.0)
+      refute takes?("{:const 1.0}", 1)
+      assert takes?("{:enum 1 2}", 2)
+      refute takes?("{:enum %{a: 1}}", %{Dextrin.Keyword.new("a") => 1.0})
+    end
+
+    test "the docs show a value whose annotations are no map, and do not crash" do
+      root = Path.join(System.tmp_dir!(), "dextrin-fix-#{System.unique_integer([:positive])}")
+      File.mkdir_p!(root)
+      File.write!(Path.join(root, "c.dxns"), "%{C: {:doc {:enum :a} %{values: %{:a => 5}}}}")
+      assert {:ok, _pages} = Dextrin.Schema.Docs.site(root, title: "T")
+    end
+  end
 end

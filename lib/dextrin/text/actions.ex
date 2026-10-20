@@ -345,8 +345,10 @@ defmodule Dextrin.Text.Actions do
 
   @doc false
   # The tags DXN.md §1.3 builds in: no custom tag has one of their names.
+  # `@bits` is one, read by a clause of its own rather than through the
+  # list.
   @spec built_in_tags() :: [String.t()]
-  def built_in_tags, do: @built_in_tags
+  def built_in_tags, do: ["bits" | @built_in_tags]
 
   defp dispatch_tag("ordered", value_cap, ctx), do: eval_ordered_map(value_cap, ctx)
 

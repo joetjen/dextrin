@@ -643,7 +643,9 @@ defmodule Dextrin.Schema.TypeExpr do
        when is_atom(value) and value not in [nil, true, false],
        do: Atom.to_string(value) == name
 
-  defp keyword_aware_eq?(literal, value), do: literal == value
+  # The value itself, not one equal to it: `1` is no `1.0` (DXN.md §1.5),
+  # where Elixir's `==` says it is.
+  defp keyword_aware_eq?(literal, value), do: literal === value
 
   # ---- refine constraints -----------------------------------------------------
 

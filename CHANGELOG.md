@@ -271,6 +271,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An enum's literal is the value itself**: `{:enum 1}` took `1.0`,
+  which Elixir's `==` calls equal and DXN does not (§1.5).
+- **`bits` is a built-in tag** for `{:tagged}`, which took it as custom.
+- **The docs show an enum value whose annotations are no map**, where
+  `mix dextrin.docs` raised.
+
 - **A trusted decode keeps `:nan`, `:positive_infinity`,
   `:negative_infinity`, `:nil`, `:true` and `:false` keywords**
   (`Dextrin.Keyword.trusted/1`): their atoms are already NaN, the

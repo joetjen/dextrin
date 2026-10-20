@@ -270,7 +270,8 @@ defmodule Dextrin.Schema.Docs do
     Map.new(map, fn {key, value} ->
       case annotation_name(key) do
         "values" when is_map(value) ->
-          {"values", Map.new(value, fn {lit, n} -> {lit, named_notes(n)} end)}
+          {"values",
+           Map.new(value, fn {lit, n} -> {lit, if(is_map(n), do: named_notes(n), else: %{})} end)}
 
         name ->
           {name, value}
