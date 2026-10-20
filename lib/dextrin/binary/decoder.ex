@@ -80,14 +80,12 @@ defmodule Dextrin.Binary.Decoder do
   defp decode_item(<<7::3, 21::5, rest::binary>>, _opts), do: {:ok, true, rest}
   defp decode_item(<<7::3, 22::5, rest::binary>>, _opts), do: {:ok, nil, rest}
 
-  defp decode_item(<<7::3, 25::5, _bits::16, _rest::binary>>, _opts) do
-    {:error, Dextrin.Error.binary("half-precision (16-bit) CBOR floats are not supported")}
-  end
+  # Every width CBOR has; the encoder writes the shortest exact one.
+  defp decode_item(<<7::3, 25::5, bits::16, rest::binary>>, _opts),
+    do: {:ok, Dextrin.Binary.Float.from_half(bits), rest}
 
-  defp decode_item(<<7::3, 26::5, bits::32, rest::binary>>, _opts) do
-    <<f::float-32>> = <<bits::32>>
-    {:ok, f, rest}
-  end
+  defp decode_item(<<7::3, 26::5, bits::32, rest::binary>>, _opts),
+    do: {:ok, Dextrin.Binary.Float.from_single(bits), rest}
 
   defp decode_item(<<7::3, 27::5, bits::64, rest::binary>>, _opts) do
     {:ok, decode_float(bits), rest}
@@ -662,6 +660,8 @@ defmodule Dextrin.Binary.Decoder do
   defp build_time(_),
     do: {:error, Dextrin.Error.binary("malformed time (tag #{Tags.t_time()}) payload")}
 
+  defp build_datetime(nanos) when is_integer(nanos), do: build_datetime([nanos, 0])
+
   defp build_datetime([nanos, offset])
        when is_integer(nanos) and is_integer(offset) and abs(offset) < 1440 do
     {:ok, Dextrin.Temporal.datetime_from(nanos, offset)}
@@ -707,6 +707,8 @@ defmodule Dextrin.Binary.Decoder do
 
   defp build_duration(_, _scale),
     do: {:error, Dextrin.Error.binary("malformed duration (tag #{Tags.t_duration()}) payload")}
+
+  defp build_regex(source) when is_binary(source), do: build_regex([source, 0])
 
   defp build_regex([source, flags_byte]) when is_binary(source) and is_integer(flags_byte) do
     case Regex.compile(source, Tags.regex_byte_to_opts(flags_byte)) do

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`.dxnb` writes the smallest form of a float, a UTC datetime and a
+  regex without flags** (Jan, 2026-10-20; DXN.md §2.2): a float in the
+  shortest of CBOR's half, single and double precision that holds it
+  exactly (NaN and the infinities in half), a datetime in UTC as its bare
+  nanoseconds, a regex without flags as its bare pattern. A reader reads
+  every form, half-precision floats included, which it refused before.
 - **One way to write a value: every sigil is gone** (Jan, 2026-10-20;
   DXN.md §1.2). Breaking. Dates and times are ISO 8601 strings under a
   tag -- `@date "2026-10-20"`, `@time "14:30:00.5"`, `@datetime
