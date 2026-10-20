@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **An array is written `@array[1 2]`**, its bracket against the tag
+  (Jan, 2026-10-20): the preferred spelling, which the compact text
+  form now writes as the pretty layout and the canonical form already
+  did. `@array [1 2]` still reads, as the same array.
 - **The README opens with a warning** (Jan, 2026-10-20): the library
   is under heavy development and not for production use before `1.0.0`;
   things can and will break, and the specification can and will change,

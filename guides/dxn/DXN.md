@@ -112,6 +112,12 @@ a **custom tag** — parses identically (`@tag value`), decodes to an
 application-defined type via a registered decoder, per §2 goal 4 of the
 design log.
 
+Whitespace between a tag and its value is allowed and means nothing:
+`@array[1 2]` and `@array [1 2]` are the same array. **`@array[`, the
+bracket against the tag, is the preferred spelling** (Jan, 2026-10-20),
+and the one every writer produces; every other tag is written with one
+space before its value (`@ordered %{...}`, `@uuid "..."`).
+
 ### 1.3 Type reference
 
 ```toon
