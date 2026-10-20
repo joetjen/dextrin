@@ -14,6 +14,9 @@ defmodule Dextrin.Binary.Tags do
   def t_rational, do: 30
   def t_uri, do: 32
   def t_uuid, do: 37
+  # RFC 9164: an IPv4 or IPv6 address, or a prefix.
+  def t_ipv4, do: 52
+  def t_ipv6, do: 54
   def t_stringref_namespace, do: 256
   def t_stringref, do: 25
   def t_shareable, do: 28
@@ -50,6 +53,8 @@ defmodule Dextrin.Binary.Tags do
   def t_datetime, do: 219
   # The duration bitmask, its seventh field nanoseconds.
   def t_duration, do: 220
+  # BSON's ObjectId: 12 raw bytes (Jan, 2026-10-20).
+  def t_objectid, do: 221
 
   @doc "Duration bitmask field order, low bit first (DXN.md §2.3)."
   @spec duration_bits() :: [atom()]

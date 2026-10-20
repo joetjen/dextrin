@@ -105,6 +105,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`@objectid` and `@ip` are built in** (Jan, 2026-10-20; DXN.md §1.3),
+  like `@uuid`: readable in text, their raw bytes in `.dxnb`.
+  `@objectid "507f1f77bcf86cd799439011"` is BSON's 12-byte ObjectId
+  (`Dextrin.ObjectId`, tag 221), and may be a map key. `@ip "192.0.2.1"`,
+  `"10.0.0.0/8"`, `"2001:db8::1"` and `"2001:db8::/32"` are an address or
+  a prefix (`Dextrin.Ip`), written as RFC 9164 says, CBOR tags 52 and 54;
+  DXNS adds `:objectid`, `:ip` and the refine keys `version:` and
+  `prefix:`. **`.dxnb` uses the smallest representation that keeps a
+  value**, now said in DXN.md §2.2.
 - **`mix dextrin.check` and `Dextrin.Schema.Tree`** (Jan, 2026-10-20): a
   tree of `.dxns` files read as one -- every entry named from its path
   (DXN.md §4.6, `Dextrin.Schema.Layout`), the files compiled in the order

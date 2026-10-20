@@ -124,6 +124,12 @@ an offset, `Z` or `±HH:MM`; `Z` is `+00:00`, and `-00:00` ("offset
 unknown") is refused -- a value with no offset is a `local-datetime`. A
 string that is not the form its tag names is `syntax`.
 
+**`@objectid` and `@ip` are built in** (Jan, 2026-10-20), like `@uuid`:
+readable in text, raw bytes in `.dxnb`. An ObjectId is BSON's 12 bytes,
+written as 24 hex digits, either case read, lowercase written. An `@ip`
+is an IPv4 or IPv6 address, or a prefix with its length; a prefix whose
+host bits are not zero (`10.0.0.1/8`) is `syntax`, as RFC 9164 asks.
+
 **A regex is its pattern as a string**, its flags in a header against
 the tag: `@regex(im) "^\\d+$"`. PCRE's own inline modifiers are part of
 the pattern and need no header: `@regex "(?im)^\\d+$"` matches what the
@@ -146,7 +152,7 @@ space before its value (`@ordered %{...}`, `@uuid "..."`).
 ### 1.3 Type reference
 
 ```toon
-types[31]{type,category,dxn_syntax,notes}:
+types[33]{type,category,dxn_syntax,notes}:
   nil,scalar,nil,""
   boolean,scalar,"true | false",""
   integer,scalar,"-?[0-9]+","arbitrary precision"
@@ -172,6 +178,8 @@ types[31]{type,category,dxn_syntax,notes}:
   local-datetime,temporal,"@local-datetime ""YYYY-MM-DDTHH:MM:SS(.f{1,9})?""","ISO 8601, no offset: a wall-clock time"
   duration,temporal,"@duration ""P...""","ISO 8601 duration, nanoseconds"
   uuid,extended,"@uuid ""...""","RFC 4122"
+  objectid,extended,"@objectid ""<24 hex digits>""","BSON's ObjectId: 12 bytes"
+  ip,extended,"@ip ""192.0.2.1"" | ""10.0.0.0/8"" | ""2001:db8::1"" | ""2001:db8::/32""","an IPv4 or IPv6 address, or a prefix (RFC 9164)"
   uri,extended,"@uri ""...""","RFC 3986"
   bytes,extended,"@bytes ""...""","base64"
   bits,extended,"@bits {""..."" n}","base64 and a bit count: a run of bits that is not whole bytes"
@@ -228,7 +236,7 @@ General rules:
 Per type:
 
 ```toon
-canonical[30]{type,form}:
+canonical[32]{type,form}:
   nil,"nil"
   boolean,"true | false"
   integer,"optional -, then decimal digits without leading zeros"
@@ -254,6 +262,8 @@ canonical[30]{type,form}:
   local-datetime,"@local-datetime ""YYYY-MM-DDTHH:MM:SS"" with the fraction as for time"
   duration,"@duration ""P..."" with fields in the order of §2.3, zero fields omitted, PT0S when all are zero"
   uuid,"@uuid ""8-4-4-4-12"" in lowercase hex"
+  objectid,"@objectid ""..."" in 24 lowercase hex digits"
+  ip,"@ip ""..."": IPv4 in dotted decimal, IPv6 as RFC 5952 writes it (lowercase, the longest run of zero groups as ::), then /length for a prefix"
   uri,"@uri ""..."" as held, with string escaping"
   bytes,"@bytes ""..."" in standard base64 with padding"
   bits,"@bits {""..."" n}: the bits in standard base64 with padding, the unused low bits of the last byte zero, and n their count; a run of whole bytes is bytes"
@@ -294,8 +304,8 @@ zeros, everything else literally; then `"`.
 ### 1.6 Map keys
 
 A map key, and the key of a struct's extra field (§4.7), MUST be one of
-`string`, `keyword`, `integer`, `uuid`, `date`, `bytes`, `symbol`,
-`char`. Any other key is an error (`key/not-allowed`, §5), in text, in
+`string`, `keyword`, `integer`, `uuid`, `objectid`, `date`, `bytes`,
+`symbol`, `char`. Any other key is an error (`key/not-allowed`, §5), in text, in
 binary and when encoding.
 
 Two keys are the same key exactly when their canonical forms (§1.5) are
@@ -347,8 +357,14 @@ resolved away before a value exists to encode.
 
 ### 2.2 Type mapping
 
+**Every value takes the smallest representation that keeps it exactly**
+(Jan, 2026-10-20): raw bytes where a type is bytes at heart (a uuid, an
+ObjectId, an IP address), integers where it is a count (dates, times,
+durations), CBOR's shortest integer and length forms everywhere, and
+never the text form a value has in `.dxn`.
+
 ```toon
-cbor_map[30]{type,cbor_major_or_tag,payload,integrity_note}:
+cbor_map[32]{type,cbor_major_or_tag,payload,integrity_note}:
   nil,"simple(22)","",""
   boolean,"simple(20/21)","","false/true"
   integer,"major0/1; tag2/3","two's complement bignum bytes past 64-bit","arbitrary precision preserved exactly"
@@ -373,6 +389,8 @@ cbor_map[30]{type,cbor_major_or_tag,payload,integrity_note}:
   local-datetime,"tag T_LOCAL_DATETIME","integer nanoseconds since 1970-01-01T00:00:00 on the wall clock","no offset, so no instant"
   duration,"tag T_DURATION (220)","bitmask byte + present fields, §2.3","0.2's T_DURATION_US (212), its seventh field microseconds, is read, never written"
   uuid,"tag37","16 raw bytes","not the 36-char text form"
+  objectid,"tag T_OBJECTID","12 raw bytes","not the 24-char text form"
+  ip,"tag52 (IPv4) | tag54 (IPv6), RFC 9164","an address: its raw bytes; a prefix: [length, the bytes with trailing zero bytes left off]","host bits of a prefix are zero, or it is refused"
   uri,"tag32","major3 text",""
   bytes,"major2","raw bytes","no base64 in binary"
   bits,"tag T_BITS","[major2 bytes, bit count]","the unused low bits of the last byte are zero; a run of whole bytes is bytes, never T_BITS"
@@ -384,7 +402,7 @@ cbor_map[30]{type,cbor_major_or_tag,payload,integrity_note}:
 ### 2.3 Private tag assignments and bit layouts
 
 ```toon
-private_tags[21]{name,number,wraps}:
+private_tags[22]{name,number,wraps}:
   T_CHAR,200,"integer codepoint"
   T_SYMBOL,201,"text string"
   T_KEYWORD,202,"text string"
@@ -406,6 +424,7 @@ private_tags[21]{name,number,wraps}:
   T_TIME,218,"integer: nanoseconds since midnight"
   T_DATETIME,219,"array: [epoch-ns, offset-min]"
   T_DURATION,220,"bitmask byte + fields, the seventh nanoseconds"
+  T_OBJECTID,221,"byte string: BSON's 12-byte ObjectId"
 ```
 
 **A tag never changes its meaning** (2026-10-20): when DXN's times went
@@ -414,7 +433,7 @@ and a reader still reads the old ones as what they meant -- a
 document DXN 0.2 wrote is not misread, and nothing writes them again.
 
 Allocated from CBOR's one-extra-byte tag range (24–255), placed at
-200–220 specifically to stay clear of the actively-managed low range
+200–221 specifically to stay clear of the actively-managed low range
 (0–40 has multiple assignments and gaps IANA could fill later). Not
 IANA-registered — collision-free only within `dextrin`-produced documents;
 register formally before any non-`dextrin` interop is expected.
@@ -487,7 +506,7 @@ This is a size optimization only, never an identity/aliasing feature:
 
 Not required for a conforming encoder to produce; a conforming decoder
 MUST accept it. Tags 28/29 do not collide with the private range in
-§2.3 (200–220) or with §2.4's tags (256, 25) — confirm both against
+§2.3 (200–221) or with §2.4's tags (256, 25) — confirm both against
 the current IANA CBOR tags registry before final implementation, as
 with any tag number cited normatively here.
 
@@ -565,7 +584,7 @@ takes arguments.
 ### 4.2 `refine` constraints
 
 ```toon
-refine_constraints[12]{key,applies_to,meaning}:
+refine_constraints[14]{key,applies_to,meaning}:
   min,"integer/float/decimal/rational","value >= given number"
   max,"integer/float/decimal/rational","value <= given number"
   exclusive-min,"integer/float/decimal/rational","value > given number"
@@ -578,6 +597,8 @@ refine_constraints[12]{key,applies_to,meaning}:
   max-count,"list/set/tuple","element count <= given integer"
   finite,float,"true: neither NaN nor an infinity"
   offsets,datetime,"the value's offset is one of the given strings, Z or ±HH:MM"
+  version,ip,"4 or 6: the value is that family"
+  prefix,ip,"true: a prefix; false: an address"
 ```
 
 `{:refine t %{k: v, ...}}`'s constraint map may combine any number of

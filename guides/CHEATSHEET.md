@@ -80,6 +80,8 @@ struct      Dextrin.Struct{name, fields}          `%Name{...}` / `%Name[...]`, o
 duration    Dextrin.Duration{years, months, ...}  `@duration "P1Y2M"` — 7 independent fields
 rational    Dextrin.Rational{numerator, denom}    `22/7` — stored exactly, never auto-reduced
 uuid        Dextrin.Uuid{bytes: <<_::128>>}       `@uuid "..."` — 16 raw bytes, not the text form
+objectid    Dextrin.ObjectId{bytes: <<_::96>>}    `@objectid "..."` — 12 raw bytes, BSON's ObjectId
+ip          Dextrin.Ip{address: _, prefix: _}     `@ip "10.0.0.0/8"` — an address or a prefix, raw bytes
 uri         Dextrin.Uri{value: string}            `@uri "..."` — raw string, not parsed
 bytes       Dextrin.Bytes{data: binary}           `@bytes "..."` (base64 in text)
 char        Dextrin.Char{codepoint: integer}      `?a` — distinct from a 1-grapheme string

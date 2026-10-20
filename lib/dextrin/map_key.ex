@@ -56,6 +56,7 @@ defmodule Dextrin.MapKey do
   defp allowed?(key) when is_atom(key), do: key not in [nil, true, false]
   defp allowed?(%Dextrin.Keyword{}), do: true
   defp allowed?(%Dextrin.Uuid{}), do: true
+  defp allowed?(%Dextrin.ObjectId{}), do: true
   defp allowed?(%Date{}), do: true
   # Bytes are a key; bits that are not whole bytes are not (DXN.md §1.6).
   defp allowed?(%Dextrin.Bytes{data: data}), do: is_binary(data)

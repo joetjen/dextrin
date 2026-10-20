@@ -341,7 +341,7 @@ defmodule Dextrin.Text.Actions do
 
   # ---- built-in tag dispatch (DXN.md §1.3) -----------------------------------
 
-  @built_in_tags ~w(ordered sorted-set array uuid uri bytes date time datetime local-datetime duration regex)
+  @built_in_tags ~w(ordered sorted-set array uuid objectid ip uri bytes date time datetime local-datetime duration regex)
 
   defp dispatch_tag("ordered", value_cap, ctx), do: eval_ordered_map(value_cap, ctx)
 
@@ -364,6 +364,24 @@ defmodule Dextrin.Text.Actions do
     else
       {:error, :invalid_uuid} -> {:error, action_error("invalid uuid")}
       {:error, _} = err -> err
+    end
+  end
+
+  defp dispatch_tag("objectid", value_cap, ctx) do
+    with {:ok, text, ctx} <- value_cap.eval.(ctx) do
+      case is_binary(text) && Dextrin.ObjectId.parse(text) do
+        {:ok, id} -> {:ok, id, ctx}
+        _ -> {:error, action_error("invalid objectid #{inspect(text)}")}
+      end
+    end
+  end
+
+  defp dispatch_tag("ip", value_cap, ctx) do
+    with {:ok, text, ctx} <- value_cap.eval.(ctx) do
+      case is_binary(text) && Dextrin.Ip.parse(text) do
+        {:ok, ip} -> {:ok, ip, ctx}
+        _ -> {:error, action_error("invalid ip #{inspect(text)}")}
+      end
     end
   end
 

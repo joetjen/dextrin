@@ -105,6 +105,8 @@ defmodule Dextrin.Canonical do
   end
 
   defp text(%Uuid{} = uuid), do: "@uuid " <> string(String.downcase(Uuid.format(uuid)))
+  defp text(%Dextrin.ObjectId{} = id), do: "@objectid " <> string(Dextrin.ObjectId.format(id))
+  defp text(%Dextrin.Ip{} = ip), do: "@ip " <> string(Dextrin.Ip.format(ip))
   defp text(%Uri{value: value}), do: "@uri " <> string(value)
   defp text(%Bytes{data: data}) when is_binary(data), do: "@bytes " <> string(Base.encode64(data))
   defp text(%Bytes{data: bits}), do: Dextrin.Text.Printer.bits_form(bits)

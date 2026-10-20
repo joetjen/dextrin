@@ -41,7 +41,7 @@ defmodule Dextrin.Schema.Compiler do
 
   @primitives ~w(nil boolean integer float decimal rational string char symbol keyword
                  list tuple map ordered-map set sorted-set array
-                 date time datetime local-datetime duration uuid uri bytes bits regex)
+                 date time datetime local-datetime duration uuid objectid ip uri bytes bits regex)
 
   @doc """
   Compiles every entry of a decoded `.dxns` document into

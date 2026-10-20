@@ -495,6 +495,8 @@ defmodule Dextrin.Schema.TypeExpr do
   defp primitive_matches?("duration", value), do: match?(%Duration{}, value)
   defp primitive_matches?("uuid", value), do: match?(%Uuid{}, value)
   defp primitive_matches?("uri", value), do: match?(%Uri{}, value)
+  defp primitive_matches?("objectid", value), do: match?(%Dextrin.ObjectId{}, value)
+  defp primitive_matches?("ip", value), do: match?(%Dextrin.Ip{}, value)
 
   defp primitive_matches?("bytes", value),
     do: match?(%Bytes{data: data} when is_binary(data), value)
@@ -533,6 +535,12 @@ defmodule Dextrin.Schema.TypeExpr do
     do: value not in [:nan, :positive_infinity, :negative_infinity]
 
   defp satisfies_constraint?("finite", false, _value), do: true
+
+  defp satisfies_constraint?("version", version, %Dextrin.Ip{} = ip),
+    do: Dextrin.Ip.version(ip) == version
+
+  defp satisfies_constraint?("prefix", wanted, %Dextrin.Ip{prefix: prefix}),
+    do: prefix != nil == wanted
 
   # The datetime's offset is one of these, `Z` or `±HH:MM`.
   defp satisfies_constraint?("offsets", offsets, value) when is_list(offsets) do

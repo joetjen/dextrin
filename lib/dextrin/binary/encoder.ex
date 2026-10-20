@@ -338,6 +338,25 @@ defmodule Dextrin.Binary.Encoder do
   # ---- extended -----------------------------------------------------------
 
   defp encode_item_dispatch(%Uuid{bytes: raw}, _opts), do: {:ok, tag(Tags.t_uuid(), bytes(raw))}
+
+  defp encode_item_dispatch(%Dextrin.ObjectId{bytes: raw}, _opts),
+    do: {:ok, tag(Tags.t_objectid(), bytes(raw))}
+
+  # RFC 9164, its smallest form: an address as raw bytes, a prefix as its
+  # length and the bytes without their trailing zero bytes.
+  defp encode_item_dispatch(%Dextrin.Ip{address: raw, prefix: prefix}, opts) do
+    ip_tag = if byte_size(raw) == 4, do: Tags.t_ipv4(), else: Tags.t_ipv6()
+
+    case prefix do
+      nil ->
+        {:ok, tag(ip_tag, bytes(raw))}
+
+      length ->
+        with {:ok, length_item} <- encode_item(length, opts),
+             do: {:ok, tag(ip_tag, array_of([length_item, bytes(trim_zeros(raw))]))}
+    end
+  end
+
   defp encode_item_dispatch(%Uri{value: value}, _opts), do: {:ok, tag(Tags.t_uri(), text(value))}
 
   defp encode_item_dispatch(%Regex{source: source, opts: re_opts}, opts) do
@@ -590,4 +609,13 @@ defmodule Dextrin.Binary.Encoder do
     with {:ok, item} <- encode_item(Dextrin.Temporal.local_nanos(local), opts),
          do: {:ok, tag(Tags.t_local_datetime(), item)}
   end
+
+  defp trim_zeros(raw),
+    do:
+      raw
+      |> :binary.bin_to_list()
+      |> Enum.reverse()
+      |> Enum.drop_while(&(&1 == 0))
+      |> Enum.reverse()
+      |> :binary.list_to_bin()
 end
