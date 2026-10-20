@@ -158,6 +158,10 @@ Address                        bare symbol — a struct name or a named type
 {:tuple-of-all T}              tuple of any length, every element a T
 {:tagged acme.money T}         a custom tag of that name, its value a T
 {:doc T %{description: ...}}   T, annotated: title description examples read-only write-only deprecated meta values
+:int32 :int64 :uint32 :uint64  integer ranges; :float32 single precision
+:number                        any integer, float, decimal or rational
+{:const v}                     the one value v
+{:if I T E}                    an I must be a T, anything else an E
 {:map-of K V}                  every key matches K, every value matches V
 {:array-of T}                  array whose every element matches T
 {:ordered-map-of K V}          ordered map: keys match K, values match V

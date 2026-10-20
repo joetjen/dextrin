@@ -551,7 +551,7 @@ schema of their own, which would be circular.
 ### 4.1 `type_expr` forms
 
 ```toon
-type_expr[27]{form,dxn_shape,meaning}:
+type_expr[31]{form,dxn_shape,meaning}:
   any,":any","matches any value at all"
   never,":never","matches no value at all (JSON Schema's false)"
   primitive,":integer / :string / ...","one keyword per §1.3 type name; :bits matches bits and bytes alike, :bytes only whole bytes"
@@ -566,6 +566,10 @@ type_expr[27]{form,dxn_shape,meaning}:
   ordered-map-of,"{:ordered-map-of key-type val-type}","ordered map: every key matches key-type, every value matches val-type"
   sorted-set-of,"{:sorted-set-of elem}","sorted set whose every element matches elem"
   tagged,"{:tagged acme.money T}","a custom tag of that name whose value matches T; an application's value as its registered tag encoder writes it"
+  sized,":int32 :int64 :uint32 :uint64","sugar: {:refine :integer %{min: ..., max: ...}} over that range; :float32 is {:refine :float %{float32: true}}"
+  number,":number","sugar: {:any-of :integer :float :decimal :rational}"
+  const,"{:const v}","sugar: {:enum v}, the one value v"
+  if,"{:if I T E}","a value that matches I must match T, any other E (JSON Schema's if/then/else); E is :any when left out"
   enum,"{:enum lit lit ...}","value must equal one of the given literals (any type)"
   one-of,"{:one-of a b}","exactly one variant matches (JSON Schema's oneOf): none, or two or more, is a refusal"
   any-of,"{:any-of a b}","union — one or more variants match (JSON Schema's anyOf)"
@@ -958,7 +962,7 @@ a `%shape` or `%schema`, or the elements of a collection (`list-of`,
 `list-items`, `set-of`, `map-of`, `tuple-of`, `tuple-of-all`,
 `array-of`, `ordered-map-of`, `sorted-set-of`, `tagged`, and a refine's
 `contains`, `content`, `encodes` and `encodes-seq`). `nilable`, `any-of`, `one-of`, `all-of`, `not`,
-`refine`, `doc` and `case` check the same value again, so they are no guard:
+`refine`, `doc`, `if` and `case` check the same value again, so they are no guard:
 `A: {:nilable A}` describes no value and is a compile error
 (`schema/compile`). A guarded check always ends, since a DXN value is
 finite (§2.5) and every guard steps into a smaller part of it:
