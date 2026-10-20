@@ -198,7 +198,7 @@ defmodule Dextrin.Binary.Encoder do
         {:ok, <<7::3, 25::5, bits::16>>}
 
       :error ->
-        if single?(f),
+        if Dextrin.Binary.Float.single?(f),
           do: {:ok, <<7::3, 26::5, f::float-32>>},
           else: {:ok, float_head() <> <<f::float>>}
     end
@@ -625,16 +625,6 @@ defmodule Dextrin.Binary.Encoder do
           {:ok, tag(Tags.t_datetime(), array_of([nanos_item, offset_item]))}
         end
     end
-  end
-
-  # Whether `f` survives single precision exactly.
-  # (Past single's range it is written as an infinity, which is no float.)
-  defp single?(f) do
-    <<bits::32>> = <<f::float-32>>
-    back = Dextrin.Binary.Float.from_single(bits)
-    is_float(back) and <<back::float>> == <<f::float>>
-  rescue
-    ArgumentError -> false
   end
 
   defp encode_local(local, opts) do

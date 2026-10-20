@@ -33,7 +33,7 @@ defmodule Dextrin.Schema.Compiler do
   """
 
   alias Dextrin.{Keyword, OrderedMap, Registry, Struct, Symbol, Tuple}
-  alias Dextrin.Schema.{Compiled, Field}
+  alias Dextrin.Schema.{Compiled, Field, TypeExpr}
   alias Ichor.Toolkit.Result
 
   # The scope key the document's names travel under (see compile/3).
@@ -762,33 +762,66 @@ defmodule Dextrin.Schema.Compiler do
   end
 
   @refine_keys ~w(min max exclusive-min exclusive-max multiple-of min-length max-length
-                  pattern min-count max-count finite offsets version prefix contains
-                  min-contains max-contains unique unique-by)
+                  min-bytes max-bytes pattern min-count max-count finite float32 offsets
+                  version prefix contains min-contains max-contains unique unique-by
+                  min-precision max-precision min-exponent max-exponent bits before-now
+                  after-now within resolution)
 
   # A refine's constraints by name, every key one DXN.md §4.2 knows:
   # a misspelt key would otherwise refuse every value, silently.
-  # `contains` holds a type, compiled here; `unique-by` a field's name.
+  # `contains` holds a type, compiled here; `unique-by` and `resolution`
+  # a name.
   defp refine_constraints(constraints, aliases) do
-    named = Map.new(constraints, fn {k, v} -> {literal_name(k), v} end)
+    with {:ok, named} <- constraint_names(constraints) do
+      cond do
+        key = Enum.find(Enum.sort(Map.keys(named)), &(&1 not in @refine_keys)) ->
+          {:error, "#{key} is no refine constraint (DXN.md §4.2)"}
 
-    cond do
-      key = Enum.find(Enum.sort(Map.keys(named)), &(&1 not in @refine_keys)) ->
-        {:error, "#{key} is no refine constraint (DXN.md §4.2)"}
+        not Map.has_key?(named, "contains") and
+            (Map.has_key?(named, "min-contains") or Map.has_key?(named, "max-contains")) ->
+          {:error, "min-contains and max-contains count the items a contains matches"}
 
-      not Map.has_key?(named, "contains") and
-          (Map.has_key?(named, "min-contains") or Map.has_key?(named, "max-contains")) ->
-        {:error, "min-contains and max-contains count the items a contains matches"}
-
-      true ->
-        with {:ok, named} <- contains_type(named, aliases) do
-          {:ok,
-           if(Map.has_key?(named, "unique-by"),
-             do: %{named | "unique-by" => literal_name(named["unique-by"])},
-             else: named
-           )}
-        end
+        true ->
+          with {:ok, named} <- contains_type(named, aliases),
+               {:ok, named} <- named_arg(named, "unique-by", nil),
+               do: named_arg(named, "resolution", TypeExpr.resolutions())
+      end
     end
   end
+
+  # The constraints keyed by their names; a key that is no name is an
+  # error, not a crash.
+  defp constraint_names(constraints) do
+    Enum.reduce_while(constraints, {:ok, %{}}, fn {key, value}, {:ok, acc} ->
+      case name_of(key) do
+        nil -> {:halt, {:error, "a refine constraint's key is a name, not #{inspect(key)}"}}
+        name -> {:cont, {:ok, Map.put(acc, name, value)}}
+      end
+    end)
+  end
+
+  # `key`'s argument as a name, one of `allowed` when they are given.
+  defp named_arg(named, key, allowed) do
+    case Map.fetch(named, key) do
+      :error ->
+        {:ok, named}
+
+      {:ok, arg} ->
+        name = name_of(arg)
+
+        if name != nil and (allowed == nil or name in allowed),
+          do: {:ok, %{named | key => name}},
+          else: {:error, "#{key} takes #{expected(allowed)}, not #{inspect(arg)}"}
+    end
+  end
+
+  defp expected(nil), do: "a name"
+  defp expected(allowed), do: "one of " <> Enum.map_join(Enum.sort(allowed), " ", &":#{&1}")
+
+  defp name_of(%Keyword{name: name}), do: name
+  defp name_of(%Symbol{name: name}), do: name
+  defp name_of(name) when is_binary(name), do: name
+  defp name_of(_other), do: nil
 
   defp contains_type(%{"contains" => type} = named, aliases) do
     with {:ok, t} <- compile_type_expr(type, aliases), do: {:ok, %{named | "contains" => t}}

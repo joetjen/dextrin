@@ -104,6 +104,14 @@ refine keys became a compile error on the way.
 
 ### 5. Scalar constraints: new refine keys (J M C I P Y)
 
+**Lengths, patterns, decimals, `float32`, `bits` and temporal ranges
+done** (Jan, 2026-10-20; DXN.md §4.2). Two changes from the proposal:
+a temporal's precision is `resolution: :millisecond` (no part finer),
+since a DXN time carries no written precision for a `min-precision` to
+read, and a refine key now refuses a value it does not apply to. Left
+out: `grammar:` and `check:`, rated low value below. `format:` and the
+encoding keys follow.
+
 | Gap | Proposed |
 |---|---|
 | String formats (every draft's: date-time, date, time, duration, email, idn-email, hostname, idn-hostname, ipv4, ipv6, uri, uri-reference, iri, iri-reference, uri-template, json-pointer, relative-json-pointer, regex, uuid; also semver, mac and host-port) | refine `format: :email` and so on, from a closed set |

@@ -37,6 +37,19 @@ defmodule Dextrin.Binary.Float do
     end
   end
 
+  @doc """
+  Whether single precision holds `f` exactly. Past single's range it
+  would be an infinity, which is no float.
+  """
+  @spec single?(float()) :: boolean()
+  def single?(f) do
+    <<bits::32>> = <<f::float-32>>
+    back = from_single(bits)
+    is_float(back) and <<back::float>> == <<f::float>>
+  rescue
+    ArgumentError -> false
+  end
+
   @doc "`f`'s half-precision bits, when half precision holds it exactly."
   @spec half(float()) :: {:ok, non_neg_integer()} | :error
   def half(f) do

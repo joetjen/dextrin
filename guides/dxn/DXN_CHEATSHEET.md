@@ -105,7 +105,15 @@ Name                            bare symbol -- a struct name or a named type
 
 ```text
 min / max / exclusive-min / exclusive-max / multiple-of   int/float/decimal/rational
-min-length / max-length / pattern                          string
+min / max / exclusive-*  on temporals                     date/time/datetime/local-datetime/duration, same kind
+min-bytes / max-bytes                                     string: UTF-8 bytes
+float32                                                   float: single precision holds it
+min-precision / max-precision                             decimal: coefficient digits
+min-exponent / max-exponent                               decimal: exponent
+bits                                                      integer/bytes: only these bit numbers set
+before-now / after-now / within                           datetime against the clock
+resolution                                                time/datetime/duration: :second :millisecond ...
+min-length / max-length / pattern                          string/keyword/symbol/bytes (bits: length only)
 min-count / max-count                                       list/set/tuple/sorted-set/array
 contains / min-contains / max-contains                      how many elements are a given type
 unique / unique-by                                          no two elements, or their field, the same
