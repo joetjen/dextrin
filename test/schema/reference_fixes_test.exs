@@ -118,4 +118,23 @@ defmodule Dextrin.Schema.ReferenceFixesTest do
       assert {:ok, _pages} = Dextrin.Schema.Docs.site(root, title: "T")
     end
   end
+
+  describe "the php port's cross-check" do
+    test "a generic checked by its own name refuses the value, and raises nothing" do
+      {:ok, doc} =
+        Dextrin.decode("""
+        %{
+          Page: {:generic [t] %shape{items: {:list-of t}}}
+          Doc: {:doc {:generic [t] {:list-of t}} %{description: "x"}}
+        }
+        """)
+
+      {:ok, registry} = Schema.compile(doc)
+
+      for name <- ["Page", "Doc"] do
+        assert {:error, %Dextrin.Error{category: "schema/type-mismatch"}} =
+                 Schema.check(%{items: []}, registry, name)
+      end
+    end
+  end
 end

@@ -253,6 +253,9 @@ defmodule Dextrin.Schema.TypeExpr do
     end
   end
 
+  # A generic takes no value until `{:of Name ...}` gives its arguments.
+  def conform({:generic, _params, _body}, _value, _context), do: :error
+
   # Annotations change nothing a type takes.
   def conform({:doc, type, _notes}, value, context), do: conform(type, value, context)
 
