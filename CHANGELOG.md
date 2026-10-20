@@ -125,6 +125,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The README compares DXNS with the other schema languages**, says
+  why a DXNS type is never closed, and how to change a schema across
+  services that deploy one at a time.
 - **Sugar** (Jan, 2026-10-20; DXN.md §4.1; the superset's group 9):
   `:int32`, `:int64`, `:uint32`, `:uint64` and `:float32`, `:number`,
   `{:const v}`, and `{:if I T E}` (JSON Schema's if/then/else).
