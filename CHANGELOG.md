@@ -56,6 +56,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`Dextrin.Format`** (DXN.md §6, ASCO's proposal): `media_type/1`,
+  `extension/1`, `form/1` -- the three media types, and any `+dxn`
+  suffix as text -- and `identifies?/2`, a cheap prefix test of whether
+  a body is worth decoding as a form: binary by the envelope's magic,
+  text and schemas by a first significant `%` after whitespace, comments
+  and a header. Lists and scalars stay unrecognised on purpose: they
+  overlap with JSON (Jan, 2026-10-20).
+
 - `Dextrin.Schema.compile_all/2`: several `.dxns` documents compiled into
   one registry, in order, over a base registry; the first that does not
   compile is the refusal, naming which (ASCO's proposal, part 3).
