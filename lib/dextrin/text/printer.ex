@@ -105,7 +105,9 @@ defmodule Dextrin.Text.Printer do
 
   def print(%Array{items: items}, opts) do
     with {:ok, printed} <- items |> Tuple.to_list() |> print_all(opts) do
-      {:ok, tag_form("array", "[" <> Enum.join(printed, " ") <> "]")}
+      # `@array[`, the bracket against the tag, is the preferred spelling
+      # (Jan, 2026-10-20); `@array [` still reads.
+      {:ok, "@array[" <> Enum.join(printed, " ") <> "]"}
     end
   end
 

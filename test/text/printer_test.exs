@@ -109,7 +109,7 @@ defmodule Dextrin.Text.PrinterTest do
     end
 
     test "array" do
-      assert Printer.print(Array.new([1, 2])) == {:ok, "@array [1 2]"}
+      assert Printer.print(Array.new([1, 2])) == {:ok, "@array[1 2]"}
     end
 
     test "set and sorted-set" do
