@@ -2,7 +2,7 @@ defmodule Dextrin.Schema.TypeExpr do
   @moduledoc """
   Internal, compiled representation of a `.dxns` type expression — the
   vocabulary of DXN.md §4.1 (`any`, `never`, `primitive`, `reference`,
-  `list-of`, `set-of`, `tuple-of`, `map-of`, `array-of`,
+  `list-of`, `list-items`, `set-of`, `tuple-of`, `tuple-of-all`, `map-of`, `array-of`,
   `ordered-map-of`, `sorted-set-of`, `enum`, `one-of`, `any-of`,
   `all-of`, `not`, `nilable`, `refine`, `struct`, and `shape` and `case`,
   design/shapes-and-case.md) `Dextrin.Schema.Compiler` turns a
@@ -38,7 +38,9 @@ defmodule Dextrin.Schema.TypeExpr do
           | {:reference, String.t()}
           | {:list_of, t()}
           | {:set_of, t()}
+          | {:list_items, [particle()]}
           | {:tuple_of, [t()]}
+          | {:tuple_of_all, t()}
           | {:map_of, t(), t()}
           | {:array_of, t()}
           | {:ordered_map_of, t(), t()}
@@ -56,6 +58,15 @@ defmodule Dextrin.Schema.TypeExpr do
           | {:param, String.t()}
           | {:nilable, t()}
           | {:refine, t(), %{optional(String.t()) => term()}}
+
+  @typedoc """
+  One of a `{:list-items}`'s items: a type for exactly one item, or a
+  repeat of a group of them, `most` nil when there is no upper bound
+  (DXN.md §4.1a).
+  """
+  @type particle ::
+          {:one, t()}
+          | {:repeat, [particle()], non_neg_integer(), non_neg_integer() | nil}
 
   @typedoc """
   What a check knows besides the type and the value: the registry
@@ -198,6 +209,11 @@ defmodule Dextrin.Schema.TypeExpr do
 
   def conform({:list_of, _}, _value, _context), do: :error
 
+  def conform({:list_items, particles}, value, context) when is_list(value),
+    do: items(particles, value, context, &all_taken/1)
+
+  def conform({:list_items, _}, _value, _context), do: :error
+
   def conform({:set_of, elem_type}, %MapSet{} = value, context) do
     with {:ok, items} <- all(MapSet.to_list(value), &conform(elem_type, &1, context)),
          do: {:ok, MapSet.new(items)}
@@ -212,6 +228,13 @@ defmodule Dextrin.Schema.TypeExpr do
   end
 
   def conform({:tuple_of, _}, _value, _context), do: :error
+
+  def conform({:tuple_of_all, elem_type}, %Tuple{items: items} = value, context) do
+    with {:ok, conformed} <- all(items, &conform(elem_type, &1, context)),
+         do: {:ok, %{value | items: conformed}}
+  end
+
+  def conform({:tuple_of_all, _}, _value, _context), do: :error
 
   def conform({:map_of, key_type, val_type}, value, context)
       when is_map(value) and not is_struct(value) do
@@ -299,7 +322,7 @@ defmodule Dextrin.Schema.TypeExpr do
 
   def conform({:refine, type, constraints}, value, context) do
     with {:ok, conformed} <- conform(type, value, context),
-         true <- satisfies_constraints?(conformed, constraints) do
+         true <- satisfies_constraints?(conformed, constraints, context) do
       {:ok, conformed}
     else
       _ -> :error
@@ -323,6 +346,50 @@ defmodule Dextrin.Schema.TypeExpr do
     end
   end
 
+  # ---- list items -------------------------------------------------------------
+
+  # `particles` matched against the front of `left`, then `rest` against
+  # what they leave: the items conformed, in order, or `:error`. A repeat
+  # takes as many items as it can while the rest still matches, and
+  # gives back one at a time until it does (DXN.md §4.1a).
+  defp items([], left, _context, rest), do: rest.(left)
+  defp items([{:one, _type} | _], [], _context, _rest), do: :error
+
+  defp items([{:one, type} | more], [item | left], context, rest) do
+    with {:ok, conformed} <- conform(type, item, context),
+         {:ok, tail} <- items(more, left, context, rest),
+         do: {:ok, [conformed | tail]}
+  end
+
+  defp items([{:repeat, group, least, most} | more], left, context, rest),
+    do: repeat(group, least, most, left, context, &items(more, &1, context, rest))
+
+  # One more repetition first, while `most` allows it; stopping once
+  # `least` is reached. A repetition that took no item is the last: every
+  # further one would take none either, so `least` is met by them.
+  defp repeat(group, least, most, left, context, rest) do
+    again =
+      if most == nil or most > 0 do
+        items(group, left, context, fn after_one ->
+          if length(after_one) == length(left),
+            do: rest.(after_one),
+            else: repeat(group, max(least - 1, 0), most && most - 1, after_one, context, rest)
+        end)
+      else
+        :error
+      end
+
+    case again do
+      {:ok, _} = ok -> ok
+      :error when least == 0 -> rest.(left)
+      :error -> :error
+    end
+  end
+
+  # The end of a `{:list-items}`: every item taken.
+  defp all_taken([]), do: {:ok, []}
+  defp all_taken(_left), do: :error
+
   defp pair(key_type, val_type, {k, v}, context) do
     with {:ok, k} <- conform(key_type, k, context),
          {:ok, v} <- conform(val_type, v, context),
@@ -345,20 +412,33 @@ defmodule Dextrin.Schema.TypeExpr do
      substitute(otherwise, bound)}
   end
 
+  defp substitute({:refine, type, %{"contains" => contains} = constraints}, bound),
+    do:
+      {:refine, substitute(type, bound),
+       %{constraints | "contains" => substitute(contains, bound)}}
+
   defp substitute({:refine, type, constraints}, bound),
     do: {:refine, substitute(type, bound), constraints}
+
+  defp substitute({:list_items, particles}, bound),
+    do: {:list_items, Enum.map(particles, &substitute_particle(&1, bound))}
 
   defp substitute({form, types}, bound) when form in [:tuple_of, :one_of, :any_of, :all_of],
     do: {form, Enum.map(types, &substitute(&1, bound))}
 
   defp substitute({form, type}, bound)
-       when form in [:list_of, :set_of, :array_of, :sorted_set_of, :not, :nilable],
+       when form in [:list_of, :set_of, :array_of, :sorted_set_of, :tuple_of_all, :not, :nilable],
        do: {form, substitute(type, bound)}
 
   defp substitute({form, key, value}, bound) when form in [:map_of, :ordered_map_of],
     do: {form, substitute(key, bound), substitute(value, bound)}
 
   defp substitute(type, _bound), do: type
+
+  defp substitute_particle({:one, type}, bound), do: {:one, substitute(type, bound)}
+
+  defp substitute_particle({:repeat, group, least, most}, bound),
+    do: {:repeat, Enum.map(group, &substitute_particle(&1, bound)), least, most}
 
   # ---- {:case} ----------------------------------------------------------------
 
@@ -519,8 +599,25 @@ defmodule Dextrin.Schema.TypeExpr do
 
   # ---- refine constraints -----------------------------------------------------
 
-  defp satisfies_constraints?(value, constraints) do
-    Enum.all?(constraints, fn {key, arg} -> satisfies_constraint?(key, arg, value) end)
+  defp satisfies_constraints?(value, constraints, context) do
+    Enum.all?(constraints, fn
+      {"contains", type} -> contains?(type, constraints, value, context)
+      {key, arg} -> satisfies_constraint?(key, arg, value)
+    end)
+  end
+
+  # Between `min-contains` (1 when not given) and `max-contains` of the
+  # collection's items are a `type`.
+  defp contains?(type, constraints, value, context) do
+    case items_of(value) do
+      nil ->
+        false
+
+      items ->
+        count = Enum.count(items, &match?({:ok, _}, conform(type, &1, context)))
+        most = Map.get(constraints, "max-contains")
+        count >= Map.get(constraints, "min-contains", 1) and (most == nil or count <= most)
+    end
   end
 
   # NaN lies outside every range, as every IEEE 754 comparison with it is
@@ -556,12 +653,80 @@ defmodule Dextrin.Schema.TypeExpr do
   defp satisfies_constraint?("pattern", %Regex{} = re, value), do: Regex.match?(re, value)
   defp satisfies_constraint?("min-count", n, value), do: count_of(value) >= n
   defp satisfies_constraint?("max-count", n, value), do: count_of(value) <= n
+
+  # Counted with `contains`, which reads them.
+  defp satisfies_constraint?(key, _n, _value) when key in ["min-contains", "max-contains"],
+    do: true
+
+  defp satisfies_constraint?("unique", false, _value), do: true
+
+  defp satisfies_constraint?("unique", true, value),
+    do: distinct?(items_of(value), &{:ok, identity(&1)})
+
+  # Items without the field are compared with none.
+  defp satisfies_constraint?("unique-by", field, value),
+    do: distinct?(items_of(value), &field_identity(&1, field))
+
   defp satisfies_constraint?(_key, _arg, _value), do: false
 
   defp count_of(value) when is_list(value), do: length(value)
   defp count_of(%MapSet{} = value), do: MapSet.size(value)
   defp count_of(%Tuple{items: items}), do: length(items)
   defp count_of(%SortedSet{items: items}), do: length(items)
+  defp count_of(%Array{items: items}), do: tuple_size(items)
+
+  # A collection's items, `nil` for a value that is none.
+  defp items_of(value) when is_list(value), do: value
+  defp items_of(%MapSet{} = value), do: MapSet.to_list(value)
+  defp items_of(%Tuple{items: items}), do: items
+  defp items_of(%SortedSet{items: items}), do: items
+  defp items_of(%Array{items: items}), do: Elixir.Tuple.to_list(items)
+  defp items_of(_value), do: nil
+
+  # Whether no two of `items` give the same identity; `identify` answers
+  # `{:ok, identity}`, or `:none` for an item left out.
+  defp distinct?(nil, _identify), do: false
+
+  defp distinct?(items, identify) do
+    identities = for item <- items, {:ok, id} <- [identify.(item)], do: id
+    length(identities) == length(Enum.uniq(identities))
+  end
+
+  # Two values are the same when their canonical forms are (DXN.md
+  # §1.5): `1` and `1.0` differ, as `name:` and `"name" =>` do. A value
+  # with no DXN meaning, an application's struct, is compared as itself.
+  defp identity(value) do
+    case Dextrin.Canonical.print(Validated.strip(value)) do
+      {:ok, text} -> text
+      {:error, _} -> {:term, value}
+    end
+  end
+
+  defp field_identity(item, field) do
+    case field_of(item, field) do
+      {:ok, value} -> {:ok, identity(value)}
+      :none -> :none
+    end
+  end
+
+  # The value of the field named `field`, whatever its key's spelling.
+  defp field_of(%Validated{value: value}, field), do: field_of(value, field)
+
+  defp field_of(%Dextrin.Struct{fields: {:keyed, pairs}}, field) do
+    case List.keyfind(pairs, field, 0) do
+      {_name, value} -> {:ok, value}
+      nil -> :none
+    end
+  end
+
+  defp field_of(%Dextrin.Struct{}, _field), do: :none
+  defp field_of(%_{} = struct, field), do: field_of(Map.from_struct(struct), field)
+
+  defp field_of(map, field) when is_map(map) do
+    Enum.find_value(map, :none, fn {key, value} -> key_name(key) == field && {:ok, value} end)
+  end
+
+  defp field_of(_value, _field), do: :none
 
   defp rem_zero?(a, b) when is_integer(a) and is_integer(b), do: rem(a, b) == 0
   defp rem_zero?(a, b), do: :math.fmod(a, b) == 0.0
