@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The README opens with a warning** (Jan, 2026-10-20): the library
+  is under heavy development and not for production use before `1.0.0`;
+  things can and will break, and the specification can and will change,
+  between any two releases until then.
 - **`{:one-of ...}` means exactly one variant matches** (Jan,
   2026-10-20; JSON Schema's `oneOf`), and **`{:any-of ...}`** is the new
   "one or more" (`anyOf`) -- what `one-of` meant before. Breaking: a
