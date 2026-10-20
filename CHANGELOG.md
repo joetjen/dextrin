@@ -83,6 +83,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`mix dextrin.check` and `Dextrin.Schema.Tree`** (Jan, 2026-10-20): a
+  tree of `.dxns` files read as one -- every entry named from its path
+  (DXN.md §4.6, `Dextrin.Schema.Layout`), the files compiled in the order
+  their references need -- with every problem reported as `file:line`:
+  syntax, compiling, a versioned file holding another version, one
+  version in two files, files needing each other, and a name resolving
+  to nothing unless its namespace is `--extern`. `Dextrin.Schema.compile/3`
+  takes the full names a tree gives a file's entries.
 - **Generic named types** (DXN.md §4.5, Jan, 2026-10-20):
   `Page: {:generic [t] %shape{items: {:list-of t}}}` declares a named
   type with parameters, and `{:of Page Order}` uses it. A generic may use
@@ -158,6 +166,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A field naming another file's named type resolves** (DXN.md §4.6):
+  `Dextrin.Schema.FileResolver` compiled each file on its own, so
+  `discount: acme.common/Percentage` named a struct that never came and
+  refused every decimal. A file is now compiled with its full names, over
+  the named types its search path defines.
 - **An error found while parsing text says where it is**: a map key
   that is not allowed, a value that is not one, a schema violation now
   carry the line and column of what they are about, and

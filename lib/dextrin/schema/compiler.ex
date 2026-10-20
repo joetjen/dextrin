@@ -36,6 +36,9 @@ defmodule Dextrin.Schema.Compiler do
   alias Dextrin.Schema.{Compiled, Field}
   alias Ichor.Toolkit.Result
 
+  # The scope key the document's names travel under (see compile/3).
+  @names :"$names"
+
   @primitives ~w(nil boolean integer float decimal rational string char symbol keyword
                  list tuple map ordered-map set sorted-set array
                  date time timestamp datetime duration uuid uri bytes bits regex)
@@ -58,20 +61,34 @@ defmodule Dextrin.Schema.Compiler do
   machinery a same-document case would need. A schema's *fields*,
   compiled afterwards, can freely use any named type from either source.
   """
-  @spec compile(term(), Dextrin.Registry.t()) ::
+  @spec compile(term(), Dextrin.Registry.t(), %{String.t() => String.t()}) ::
           {:ok, Dextrin.Registry.t()} | {:error, Dextrin.Error.t()}
+  #
+  # `names` maps an entry's key to the name it is registered under -- a
+  # tree's full names (DXN.md §4.6, `Dextrin.Schema.Layout`); a bare
+  # symbol naming a sibling resolves to the sibling's full name. It
+  # travels in the scope under `@names`, beside the named types.
+  #
   # A plain map only: a struct (`%P{...}`, `@ordered %{...}`) and a tuple
   # are maps to `is_map/1` too, and crashed what follows (ASCO's report).
-  def compile(schema_doc, base_registry) when is_map(schema_doc) and not is_struct(schema_doc) do
+  def compile(schema_doc, base_registry, names \\ %{})
+
+  def compile(schema_doc, base_registry, names)
+      when is_map(schema_doc) and not is_struct(schema_doc) do
     schema_doc = atomize_back(schema_doc)
-    named_entries = Enum.map(schema_doc, fn {k, v} -> {entry_name(k), v} end)
+
+    named_entries =
+      Enum.map(schema_doc, fn {k, v} ->
+        name = entry_name(k)
+        {Map.get(names, name, name), v}
+      end)
 
     {schema_entries, alias_entries} =
       Enum.split_with(named_entries, fn {_name, v} -> match?(%Struct{name: "schema"}, v) end)
 
-    with {:ok, registry} <- compile_aliases(alias_entries, base_registry) do
+    with {:ok, registry} <- compile_aliases(alias_entries, base_registry, names) do
       Result.reduce_ok(schema_entries, registry, fn {name, entry}, registry ->
-        case compile_entry(entry, registry.type_aliases) do
+        case compile_entry(entry, Map.put(registry.type_aliases, @names, names)) do
           {:ok, %Compiled{} = compiled} ->
             Registry.add_struct_schema(registry, name, %{compiled | name: name})
 
@@ -82,7 +99,7 @@ defmodule Dextrin.Schema.Compiler do
     end
   end
 
-  def compile(other, _base_registry),
+  def compile(other, _base_registry, _names),
     do: {:error, compile_error("a .dxns document is a map, got #{inspect(other)}")}
 
   defp compile_error(message), do: Dextrin.Error.action(message, "schema/compile")
@@ -94,9 +111,9 @@ defmodule Dextrin.Schema.Compiler do
   # give, never matters. A named type may reach itself only through a
   # guard -- a field, or a collection's elements (Jan, 2026-10-20) --
   # and there the reference stays by name, looked up when it is checked.
-  defp compile_aliases(alias_entries, registry) do
+  defp compile_aliases(alias_entries, registry, names) do
     siblings = Map.new(alias_entries, fn {name, _} -> {name, {:named, name}} end)
-    scope = Map.merge(registry.type_aliases, siblings)
+    scope = registry.type_aliases |> Map.merge(siblings) |> Map.put(@names, names)
 
     with {:ok, compiled} <-
            Result.reduce_ok(alias_entries, %{}, fn {name, raw_value}, acc ->
@@ -553,7 +570,9 @@ defmodule Dextrin.Schema.Compiler do
   # general atom-was-a-keyword path at all.
   defp compile_type_expr(nil, _aliases), do: {:ok, {:primitive, "nil"}}
 
-  defp compile_type_expr(%Symbol{name: name}, aliases) do
+  defp compile_type_expr(%Symbol{name: written}, aliases) do
+    name = full_name(written, aliases)
+
     case Map.fetch(aliases, name) do
       {:ok, {:generic, _, _}} -> {:error, takes_arguments(name, aliases)}
       {:ok, type_expr} -> {:ok, type_expr}
@@ -563,10 +582,12 @@ defmodule Dextrin.Schema.Compiler do
 
   # `{:of Name type ...}`: one use of the generic `Name`.
   defp compile_type_expr(
-         %Tuple{items: [%Keyword{name: "of"}, %Symbol{name: name} | args]},
+         %Tuple{items: [%Keyword{name: "of"}, %Symbol{name: written} | args]},
          aliases
        )
        when args != [] do
+    name = full_name(written, aliases)
+
     with :ok <- applies(name, length(args), aliases),
          {:ok, args} <- map_compile(args, aliases),
          do: {:ok, {:apply, name, args}}
@@ -647,6 +668,15 @@ defmodule Dextrin.Schema.Compiler do
 
   defp compile_type_expr(other, _aliases),
     do: {:error, "unrecognized type expression: #{inspect(other)}"}
+
+  # The name a written symbol stands for: itself where it is in scope
+  # already (a generic's parameter, a name known so), otherwise the full
+  # name this document's `names` give it.
+  defp full_name(written, aliases) do
+    if Map.has_key?(aliases, written),
+      do: written,
+      else: Map.get(Map.get(aliases, @names, %{}), written, written)
+  end
 
   defp maybe_compile(:none, _aliases), do: {:ok, :none}
   defp maybe_compile(value, aliases), do: compile_type_expr(value, aliases)

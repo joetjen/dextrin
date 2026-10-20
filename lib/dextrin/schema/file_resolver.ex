@@ -42,7 +42,9 @@ defmodule Dextrin.Schema.FileResolver do
   # cannot be used.
   defp in_path(dir, name) do
     {entry, candidates} = candidates(dir, name)
-    found = Enum.flat_map(candidates, fn {path, expected} -> load(path, entry, expected) end)
+
+    found =
+      Enum.flat_map(candidates, fn {path, expected} -> load(path, entry, expected, dir, name) end)
 
     case Enum.find(found, &match?({:error, _}, &1)) do
       {:error, error} -> {:error, error}
@@ -96,12 +98,19 @@ defmodule Dextrin.Schema.FileResolver do
   # The versions of `entry` in the file at `path`: `[{version, compiled,
   # path}]`, `[]` when the file is not there or holds no such entry, or
   # `[{:error, why}]`.
-  defp load(path, entry, expected) do
+  #
+  # The file is compiled as a tree compiles it (`Dextrin.Schema.Tree`):
+  # its entries under their full names (DXN.md §4.6), over the named
+  # types the rest of its search path defines -- so a field naming
+  # another file's shape or named type resolves.
+  defp load(path, entry, expected, dir, name) do
     with true <- File.regular?(path),
          {:ok, source} <- File.read(path),
          {:ok, doc} <- Dextrin.decode(source),
-         {:ok, registry} <- Dextrin.Schema.compile(doc, Dextrin.Registry.new()) do
-      versions = Map.get(registry.structs, entry, %{})
+         names = file_names(doc, Path.relative_to(path, dir)),
+         base = %{Dextrin.Registry.new() | type_aliases: Dextrin.Schema.Tree.named_types([dir])},
+         {:ok, registry} <- Dextrin.Schema.compile(doc, base, names) do
+      versions = Map.get(registry.structs, name, Map.get(registry.structs, entry, %{}))
       checked(path, entry, expected, versions)
     else
       false ->
@@ -114,6 +123,20 @@ defmodule Dextrin.Schema.FileResolver do
         [{:error, refusal("#{path}: #{inspect(reason)}")}]
     end
   end
+
+  defp file_names(doc, relative) when is_map(doc) and not is_struct(doc) do
+    keys =
+      Enum.map(Map.keys(doc), fn
+        %Dextrin.Keyword{name: n} -> n
+        %Dextrin.Symbol{name: n} -> n
+        n when is_atom(n) -> Atom.to_string(n)
+        n -> n
+      end)
+
+    Dextrin.Schema.Layout.of(relative, keys).names
+  end
+
+  defp file_names(_doc, _relative), do: %{}
 
   defp checked(_path, _entry, _expected, versions) when map_size(versions) == 0, do: []
 
