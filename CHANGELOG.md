@@ -203,6 +203,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`@ip` writes every address so it reads back, and refuses a sign**:
+  Erlang's `:inet.ntoa` wrote a link-local address with a non-zero second
+  group (`fe80:1::1`) as `fe80::1%01`, which no reader takes, and its
+  parser took `+1.2.3.4`. Found by node-dextrin's port.
 - **A field naming another file's named type resolves** (DXN.md §4.6):
   `Dextrin.Schema.FileResolver` compiled each file on its own, so
   `discount: acme.common/Percentage` named a struct that never came and

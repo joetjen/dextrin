@@ -81,6 +81,21 @@ defmodule Dextrin.ObjectIdIpTest do
       end
     end
 
+    # Erlang's :inet.ntoa writes a link-local address with a non-zero
+    # second group as BSD's scope form, fe80::1%01, which is no RFC 5952
+    # and which no reader takes back.
+    test "every address is written in RFC 5952's form, and reads back" do
+      for text <- ["fe80:1::1", "ff02:1::2", "fe80::1", "::ffff:192.0.2.1", "1:2:3:4:5:6:7:0"] do
+        assert canonical(~s|@ip "#{text}"|) == ~s|@ip "#{text}"|, text
+      end
+    end
+
+    test "a sign is no part of an address" do
+      for bad <- ["+1.2.3.4", "1.+2.3.4", "+::1"] do
+        assert category(Dextrin.decode(~s|@ip "#{bad}"|)) == "syntax", bad
+      end
+    end
+
     test "a prefix with host bits set, a zone, or a shorthand address is refused" do
       for bad <- ["10.0.0.1/8", "10.0.0.0/33", "fe80::1%eth0", "10.1", "nope"] do
         assert category(Dextrin.decode(~s|@ip "#{bad}"|)) == "syntax", bad
