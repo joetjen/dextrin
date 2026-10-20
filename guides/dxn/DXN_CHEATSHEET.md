@@ -107,6 +107,7 @@ Name                            bare symbol -- a struct name or a named type
 min / max / exclusive-min / exclusive-max / multiple-of   int/float/decimal/rational
 min / max / exclusive-*  on temporals                     date/time/datetime/local-datetime/duration, same kind
 min-bytes / max-bytes                                     string: UTF-8 bytes
+format                                                    string: :email :uri :hostname :semver ... (DXN.md §4.2a)
 float32                                                   float: single precision holds it
 min-precision / max-precision                             decimal: coefficient digits
 min-exponent / max-exponent                               decimal: exponent

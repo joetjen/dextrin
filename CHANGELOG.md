@@ -119,6 +119,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`format:`** (Jan, 2026-10-20; DXN.md §4.2a): a string in one of a
+  closed set of 22 formats -- `date`, `time`, `datetime`,
+  `local-datetime`, `duration`, `uuid`, `ipv4`, `ipv6`, `hostname`,
+  `idn-hostname`, `email`, `idn-email`, `uri`, `uri-reference`, `iri`,
+  `iri-reference`, `uri-template`, `json-pointer`,
+  `relative-json-pointer`, `semver`, `mac`, `host-port` --
+  `Dextrin.Schema.Format`. A format DXN has a tag for is read by that
+  tag's reader; every other one by a grammar the spec gives.
 - **Refine keys on scalars** (Jan, 2026-10-20; DXN.md §4.2; the
   superset's group 5): `min-length`/`max-length` on keywords, symbols,
   bytes (in bytes) and bits (in bits, under `:bits`); `min-bytes`/
@@ -230,6 +238,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   action errors below; the DXN parser is regenerated with `ichor` 0.6.
 
 ### Fixed
+
+- **`@uuid` reads only 8-4-4-4-12 hex digits.** It took 32 bare hex
+  digits, or hyphens anywhere, which the other implementations refuse.
 
 - **`@ip` writes every address so it reads back, and refuses a sign**:
   Erlang's `:inet.ntoa` wrote a link-local address with a non-zero second

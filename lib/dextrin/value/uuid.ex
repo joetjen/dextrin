@@ -13,20 +13,23 @@ defmodule Dextrin.Uuid do
   @spec new(<<_::128>>) :: t()
   def new(<<bytes::binary-size(16)>>), do: %__MODULE__{bytes: bytes}
 
-  @doc "Parses the canonical 36-char hyphenated text form."
+  @doc """
+  Parses the 36-character hyphenated text form, 8-4-4-4-12 hex digits in
+  either case -- nothing else: hyphens elsewhere, or none, are refused,
+  as every implementation refuses them.
+  """
   @spec parse(String.t()) :: {:ok, t()} | {:error, :invalid_uuid}
-  def parse(str) when is_binary(str) do
-    case String.replace(str, "-", "") do
-      <<hex::binary-size(32)>> ->
-        case Base.decode16(hex, case: :mixed) do
-          {:ok, bytes} -> {:ok, %__MODULE__{bytes: bytes}}
-          :error -> {:error, :invalid_uuid}
-        end
-
-      _ ->
-        {:error, :invalid_uuid}
+  def parse(
+        <<a::binary-size(8), "-", b::binary-size(4), "-", c::binary-size(4), "-",
+          d::binary-size(4), "-", e::binary-size(12)>>
+      ) do
+    case Base.decode16(a <> b <> c <> d <> e, case: :mixed) do
+      {:ok, bytes} -> {:ok, %__MODULE__{bytes: bytes}}
+      :error -> {:error, :invalid_uuid}
     end
   end
+
+  def parse(str) when is_binary(str), do: {:error, :invalid_uuid}
 
   @doc "Renders the canonical 36-char hyphenated text form."
   @spec format(t()) :: String.t()

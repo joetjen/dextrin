@@ -109,8 +109,10 @@ done** (Jan, 2026-10-20; DXN.md §4.2). Two changes from the proposal:
 a temporal's precision is `resolution: :millisecond` (no part finer),
 since a DXN time carries no written precision for a `min-precision` to
 read, and a refine key now refuses a value it does not apply to. Left
-out: `grammar:` and `check:`, rated low value below. `format:` and the
-encoding keys follow.
+out: `grammar:` and `check:`, rated low value below. **`format:` done**
+too (DXN.md §4.2a): every format of the row below but `regex`, whose
+answer depends on the engine, plus `datetime`/`local-datetime` in
+DXN's own names for JSON Schema's `date-time`. The encoding keys follow.
 
 | Gap | Proposed |
 |---|---|
