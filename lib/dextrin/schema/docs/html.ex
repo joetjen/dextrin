@@ -372,15 +372,110 @@ defmodule Dextrin.Schema.Docs.Html do
     <article class="def kind-#{d.kind}" id="#{escape(anchor(d))}">
       <header class="def-head">
         <h2><a class="self" href="##{escape(anchor(d))}"><code>#{escape(d.short)}</code></a></h2>
-        <div class="chips">#{kind_chip(d)}#{internal_chip(d, ctx)}#{version_chips(d)}</div>
-        <p class="full-name"><code>#{escape(d.name)}</code></p>
+        <div class="chips">#{kind_chip(d)}#{internal_chip(d, ctx)}#{version_chips(d)}#{annotation_chips(latest.annotations)}</div>
+        #{title(latest.annotations)}<p class="full-name"><code>#{escape(d.name)}</code></p>
       </header>
-      #{prose(d.doc, d, ctx)}
+      #{about(d, latest.annotations, ctx)}
       #{version_body(d, latest, ctx, true)}
       #{Enum.map_join(older, "", &older_version(d, &1, ctx))}
       #{if used == "", do: "", else: ~s(<p class="used-by"><span class="label">Used by</span> #{used}</p>)}
     </article>
     """
+  end
+
+  # ---- annotations, {:doc T %{...}} (DXN.md §4.1b) ---------------------------
+
+  # What a definition's page says about it before its body: the doc's
+  # description, the comments, examples and meta -- each only when there
+  # is one, so a definition without annotations reads as it always did.
+  defp about(d, notes, ctx) do
+    [
+      prose(notes["description"], d, ctx),
+      prose(d.doc, d, ctx),
+      values(notes, d, ctx),
+      examples(notes),
+      meta(notes)
+    ]
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.join("\n  ")
+  end
+
+  # Deprecated (with its reason), read-only and write-only, as chips.
+  defp annotation_chips(notes) do
+    deprecated =
+      case notes["deprecated"] do
+        true ->
+          ~s(<span class="chip chip-deprecated">deprecated</span>)
+
+        reason when is_binary(reason) ->
+          ~s(<span class="chip chip-deprecated" title="#{escape(reason)}">deprecated: #{escape(reason)}</span>)
+
+        _ ->
+          ""
+      end
+
+    flags =
+      for {key, class} <- [{"read-only", "chip-read-only"}, {"write-only", "chip-write-only"}],
+          notes[key] == true,
+          into: "",
+          do: ~s(<span class="chip #{class}">#{key}</span>)
+
+    deprecated <> flags
+  end
+
+  # An enum's values, each with what its own annotations say.
+  defp values(%{"values" => values}, d, ctx) when map_size(values) > 0 do
+    rows =
+      values
+      |> Enum.map(fn {literal, notes} -> {written(literal), notes} end)
+      |> Enum.sort()
+      |> Enum.map_join("", fn {literal, notes} ->
+        description =
+          case notes["description"] do
+            text when is_binary(text) -> Markdown.to_html(text, linker(d, ctx))
+            _ -> ""
+          end
+
+        ~s(<dt><code>#{escape(literal)}</code>#{annotation_chips(notes)}</dt><dd>#{description}</dd>)
+      end)
+
+    ~s(<dl class="values"><p class="label">Values</p>#{rows}</dl>)
+  end
+
+  defp values(_notes, _d, _ctx), do: ""
+
+  defp title(%{"title" => title}) when is_binary(title),
+    do: ~s(<p class="title">#{escape(title)}</p>)
+
+  defp title(_notes), do: ""
+
+  defp examples(%{"examples" => [_ | _] = examples}) do
+    items = Enum.map_join(examples, "", &~s(<li><code>#{escape(written(&1))}</code></li>))
+    ~s(<div class="examples"><p class="label">Examples</p><ul>#{items}</ul></div>)
+  end
+
+  defp examples(_notes), do: ""
+
+  defp meta(%{"meta" => meta}) when map_size(meta) > 0 do
+    rows =
+      meta
+      |> Enum.map(fn {key, value} -> {written(key), written(value)} end)
+      |> Enum.sort()
+      |> Enum.map_join("", fn {key, value} ->
+        ~s(<dt><code>#{escape(key)}</code></dt><dd><code>#{escape(value)}</code></dd>)
+      end)
+
+    ~s(<dl class="meta"><p class="label">Meta</p>#{rows}</dl>)
+  end
+
+  defp meta(_notes), do: ""
+
+  # A decoded value as DXN writes it.
+  defp written(value) do
+    case Dextrin.Canonical.print(value) do
+      {:ok, text} -> text
+      {:error, _} -> inspect(value)
+    end
   end
 
   defp display(%{internal_to: nil, name: name}), do: name
@@ -452,9 +547,11 @@ defmodule Dextrin.Schema.Docs.Html do
     rows =
       Enum.map_join(version.fields, "", fn f ->
         notes =
-          [f.description, f.doc]
-          |> Enum.reject(&(&1 in [nil, ""]))
-          |> Enum.map_join("", &Markdown.to_html(&1, linker(d, ctx)))
+          annotation_chips(f.annotations) <>
+            ([f.annotations["description"], f.description, f.doc]
+             |> Enum.reject(&(&1 in [nil, ""]))
+             |> Enum.map_join("", &Markdown.to_html(&1, linker(d, ctx)))) <>
+            values(f.annotations, d, ctx) <> examples(f.annotations) <> meta(f.annotations)
 
         default =
           if f.default,
@@ -603,6 +700,8 @@ defmodule Dextrin.Schema.Docs.Html do
       --shape-soft: #e2f0f6;
       --type: #6b5a1f;
       --type-soft: #f4efdc;
+      --warn: #8a3b12;
+      --warn-soft: #fbe9df;
       --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
       --font-code: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
       --step--1: 0.8125rem;
@@ -616,6 +715,7 @@ defmodule Dextrin.Schema.Docs.Html do
         --bg: #14131c; --surface: #1c1b27; --ink: #ecebf4; --muted: #a6a3bd; --rule: #2f2d3e;
         --accent: #b9a4f0; --accent-soft: #2c2445; --code-bg: #24222f; --kw: #e2a3cf; --str: #8fd3ad;
         --shape: #8cc9e6; --shape-soft: #1d3340; --type: #e3cf88; --type-soft: #35301c;
+        --warn: #f0a37a; --warn-soft: #3a2218;
         color-scheme: dark;
       }
     }
@@ -623,6 +723,7 @@ defmodule Dextrin.Schema.Docs.Html do
       --bg: #14131c; --surface: #1c1b27; --ink: #ecebf4; --muted: #a6a3bd; --rule: #2f2d3e;
       --accent: #b9a4f0; --accent-soft: #2c2445; --code-bg: #24222f; --kw: #e2a3cf; --str: #8fd3ad;
       --shape: #8cc9e6; --shape-soft: #1d3340; --type: #e3cf88; --type-soft: #35301c;
+        --warn: #f0a37a; --warn-soft: #3a2218;
       color-scheme: dark;
     }
     *, *::before, *::after { box-sizing: border-box; }
@@ -711,6 +812,17 @@ defmodule Dextrin.Schema.Docs.Html do
     .chip-internal { border-color: var(--rule); color: var(--muted); }
     .chip-version { border-color: var(--accent); color: var(--accent); font-family: var(--font-code); }
     .chip-quiet { color: var(--muted); }
+    .chip-deprecated { background: var(--warn-soft); color: var(--warn); }
+    .chip-read-only, .chip-write-only { border-color: var(--rule); color: var(--muted); }
+    .def-head .title { margin: 0; font-size: var(--step-0); color: var(--ink); }
+    .examples, .meta { margin: 0.6rem 0 0; }
+    .examples ul { margin: 0.2rem 0 0; padding-left: 1.2rem; }
+    .meta dt, .meta dd { display: inline; margin: 0; }
+    .meta dd { margin-right: 1rem; }
+    .meta dt::after { content: " = "; color: var(--muted); }
+    .values { margin: 0.6rem 0 0; }
+    .values dt { margin-top: 0.2rem; }
+    .values dd { margin: 0 0 0 1.2rem; }
 
     .prose { max-width: 42rem; }
     .prose > * + * { margin-top: 0.6rem; }

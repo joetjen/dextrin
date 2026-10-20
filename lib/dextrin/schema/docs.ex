@@ -218,9 +218,10 @@ defmodule Dextrin.Schema.Docs do
     own = holder
     owner = holder && Map.fetch!(names, holder)
 
-    for %{key: key, value: value, doc: doc} <- entries do
+    for %{key: key, value: written, doc: doc} <- entries do
       name = Map.fetch!(names, key)
       internal_to = if holder && key != own, do: owner
+      {value, notes} = undoc(written)
       {kind, version, fields} = classify(value, file.file_version)
 
       %{
@@ -238,12 +239,52 @@ defmodule Dextrin.Schema.Docs do
             file: file.file,
             note: if(holder && key == own, do: file.leading, else: nil),
             fields: fields,
-            value: value
+            value: value,
+            annotations: notes
           }
         ]
       }
     end
   end
+
+  @doc """
+  A value node without the `{:doc T %{...}}` around it, and what the doc
+  says (DXN.md §4.1b): its annotations by name, each value decoded --
+  `%{}` for a value without one.
+  """
+  @spec undoc(Node.t() | nil) :: {Node.t() | nil, %{optional(String.t()) => term()}}
+  def undoc(value) do
+    with %Node{rule: :tuple, children: children} <- body(value),
+         [head, inner, notes] <- Enum.filter(children, &match?(%Node{rule: :value}, &1)),
+         ":doc" <- text(head),
+         {:ok, map} when is_map(map) <- Dextrin.decode(source(notes)) do
+      {inner, named_notes(map)}
+    else
+      _ -> {value, %{}}
+    end
+  end
+
+  # Annotations keyed by name, and so are each enum value's under
+  # `values`.
+  defp named_notes(map) do
+    Map.new(map, fn {key, value} ->
+      case annotation_name(key) do
+        "values" when is_map(value) ->
+          {"values", Map.new(value, fn {lit, n} -> {lit, named_notes(n)} end)}
+
+        name ->
+          {name, value}
+      end
+    end)
+  end
+
+  defp annotation_name(%Dextrin.Keyword{name: name}), do: name
+  defp annotation_name(name) when is_binary(name), do: name
+  defp annotation_name(other), do: inspect(other)
+
+  # A node's tokens as written, trivia included, so it decodes as it reads.
+  defp source(%Token{text: text}), do: text
+  defp source(%Node{children: children}), do: Enum.map_join(children, &source/1)
 
   @doc false
   def namespace_of(name) do
@@ -308,14 +349,17 @@ defmodule Dextrin.Schema.Docs do
     end
   end
 
-  defp field(name, optional?, value, doc) do
+  defp field(name, optional?, written, doc) do
+    {value, notes} = undoc(written)
+
     base = %{
       name: name,
       optional?: optional?,
       type: value,
       default: nil,
       description: nil,
-      doc: doc
+      doc: doc,
+      annotations: notes
     }
 
     with %Node{rule: :struct_lit} = struct <- body(value),
@@ -325,11 +369,14 @@ defmodule Dextrin.Schema.Docs do
       parts =
         for e <- body, match?(%Node{rule: :map_entry}, e), into: %{}, do: {key_of(e), value_of(e)}
 
+      {type, type_notes} = undoc(Map.get(parts, "type"))
+
       %{
         base
-        | type: Map.get(parts, "type"),
+        | type: type,
           default: Map.get(parts, "default"),
-          description: parts |> Map.get("description") |> string_value()
+          description: parts |> Map.get("description") |> string_value(),
+          annotations: Map.merge(notes, type_notes)
       }
     else
       _ -> base

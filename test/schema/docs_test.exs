@@ -162,4 +162,61 @@ defmodule Dextrin.Schema.DocsTest do
     # index, acme, acme.common, acme.events, acme.shop, style.css
     assert length(pages) == 6
   end
+
+  describe "annotations, {:doc T %{...}} (DXN.md §4.1b)" do
+    @annotated """
+    %{
+      Order: {:doc %schema(2){
+        id: :integer
+        email: {:doc :string %{description: "Where *receipts* go", read-only: true}}
+        legacy?: {:doc :string %{deprecated: "use email"}}
+      } %{title: "An order", description: "One checkout.", examples: [%Order(2){id: 1, email: "a@b"}]}}
+
+      Port: {:doc {:refine :integer %{min: 1}} %{deprecated: true, meta: %{"acme.owner" => "net"}}}
+    }
+    """
+
+    test "an annotated schema is still a schema, its fields still fields" do
+      html =
+        Enum.find_value(site(%{"shop.dxns" => @annotated}), fn {_, page} ->
+          page =~ ~s(id="Order") && page
+        end)
+
+      assert html =~ "struct schema"
+      assert html =~ ~s(<code>email</code>)
+      refute html =~ "{:doc"
+    end
+
+    test "a title, a description, examples and meta are shown with the definition" do
+      pages = site(%{"shop.dxns" => @annotated})
+      html = Enum.find_value(pages, fn {_path, page} -> page =~ ~s(id="Order") && page end)
+      assert html =~ "An order"
+      assert html =~ "One checkout."
+      assert html =~ "Examples"
+      assert html =~ "a@b"
+      assert html =~ "acme.owner"
+    end
+
+    test "deprecated, read-only and write-only are chips; a field's description is its note" do
+      pages = site(%{"shop.dxns" => @annotated})
+      html = Enum.find_value(pages, fn {_path, page} -> page =~ ~s(id="Order") && page end)
+      assert html =~ ~s(class="chip chip-deprecated")
+      assert html =~ "use email"
+      assert html =~ ~s(class="chip chip-read-only")
+      assert html =~ "<em>receipts</em>"
+    end
+
+    test "an enum's values are listed with their own notes" do
+      pages =
+        site(%{
+          "c.dxns" =>
+            ~s|%{Color: {:doc {:enum :red :old} %{values: %{:old => %{deprecated: true, description: "Use red"}}}}}|
+        })
+
+      html = Enum.find_value(pages, fn {_, page} -> page =~ ~s(id="Color") && page end)
+      assert html =~ ~s(<dl class="values">)
+      assert html =~ "Use red"
+      assert html =~ ~s(<code>:old</code><span class="chip chip-deprecated">)
+    end
+  end
 end

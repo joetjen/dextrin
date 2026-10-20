@@ -9,7 +9,7 @@
   Product: %schema{
     id: :uuid
     # The stock-keeping unit: three letters, a dash, five digits.
-    sku: {:refine :string %{pattern: @regex "^[A-Z]{3}-[0-9]{5}$"}}
+    sku: {:doc {:refine :string %{pattern: @regex "^[A-Z]{3}-[0-9]{5}$"}} %{examples: ["TEE-00042"]}}
     name: acme.common/NonEmptyString
     price: acme.common/Money
     # In kilograms; never zero.
@@ -33,7 +33,7 @@
       description: "How long the warranty lasts."
     }
     # Feature flags, one bit each, set by the warehouse system.
-    flags?: :bits
+    flags?: {:doc :bits %{read-only: true, meta: %{"acme.owner" => "warehouse"}}}
     # The grade of a refurbished product: `?A`, `?B` or `?C`.
     grade?: :char
     discontinued: %field{type: :boolean, default: false}
