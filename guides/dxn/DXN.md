@@ -490,18 +490,24 @@ schema of their own, which would be circular.
 ### 4.1 `type_expr` forms
 
 ```toon
-type_expr[13]{form,dxn_shape,meaning}:
+type_expr[19]{form,dxn_shape,meaning}:
   any,":any","matches any value at all"
+  never,":never","matches no value at all (JSON Schema's false)"
   primitive,":integer / :string / ...","one keyword per §1.3 type name; :bits matches bits and bytes alike, :bytes only whole bytes"
   reference,"bare symbol, e.g. Address","names a struct schema or a named type in this document (or Ns/Name, §4.6)"
   list-of,"{:list-of elem}","list whose every element matches elem"
   set-of,"{:set-of elem}","set whose every element matches elem"
   tuple-of,"{:tuple-of a b c}","fixed-arity positional tuple, one type_expr per slot"
   map-of,"{:map-of key-type val-type}","every key matches key-type, every value matches val-type"
+  array-of,"{:array-of elem}","array whose every element matches elem"
+  ordered-map-of,"{:ordered-map-of key-type val-type}","ordered map: every key matches key-type, every value matches val-type"
+  sorted-set-of,"{:sorted-set-of elem}","sorted set whose every element matches elem"
   enum,"{:enum lit lit ...}","value must equal one of the given literals (any type)"
-  one-of,"{:one-of a b}","union — value must match at least one variant"
+  one-of,"{:one-of a b}","exactly one variant matches (JSON Schema's oneOf): none, or two or more, is a refusal"
+  any-of,"{:any-of a b}","union — one or more variants match (JSON Schema's anyOf)"
   all-of,"{:all-of a b}","intersection — value must match every variant"
-  nilable,"{:nilable t}","sugar for {:one-of :nil t}"
+  not,"{:not t}","value must not match t"
+  nilable,"{:nilable t}","sugar for {:any-of :nil t}"
   refine,"{:refine t %{constraints}}","base type plus constraints, §4.2"
   struct,"%schema{...}","struct/record shape, §4.4"
 ```
