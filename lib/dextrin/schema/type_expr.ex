@@ -51,6 +51,9 @@ defmodule Dextrin.Schema.TypeExpr do
           | {:shape, String.t(), [Dextrin.Schema.Field.t()]}
           | {:case, String.t(), [{term(), t()}], t() | :none}
           | {:named, String.t()}
+          | {:generic, [String.t()], t()}
+          | {:apply, String.t(), [t()]}
+          | {:param, String.t()}
           | {:nilable, t()}
           | {:refine, t(), %{optional(String.t()) => term()}}
 
@@ -157,6 +160,25 @@ defmodule Dextrin.Schema.TypeExpr do
   end
 
   def conform({:named, _name}, _value, _context), do: :error
+
+  # One use of a generic: its body, the arguments standing where its
+  # parameters stand, checked like any other type.
+  def conform(
+        {:apply, name, args},
+        value,
+        %{registry: %Dextrin.Registry{type_aliases: aliases}} = context
+      ) do
+    case Map.fetch(aliases, name) do
+      {:ok, {:generic, params, body}} when length(params) == length(args) ->
+        conform(substitute(body, Map.new(Enum.zip(params, args))), value, context)
+
+      _ ->
+        :error
+    end
+  end
+
+  def conform({:apply, _name, _args}, _value, _context), do: :error
+  def conform({:param, _name}, _value, _context), do: :error
 
   def conform(type, %Validated{value: inner} = value, context) do
     with {:ok, conformed} <- conform(type, inner, context), do: {:ok, %{value | value: conformed}}
@@ -306,6 +328,37 @@ defmodule Dextrin.Schema.TypeExpr do
          {:ok, v} <- conform(val_type, v, context),
          do: {:ok, {k, v}}
   end
+
+  # ---- generics -----------------------------------------------------------------
+
+  # `type` with each parameter `bound` names replaced by its argument.
+  defp substitute({:param, name} = param, bound), do: Map.get(bound, name, param)
+
+  defp substitute({:apply, name, args}, bound),
+    do: {:apply, name, Enum.map(args, &substitute(&1, bound))}
+
+  defp substitute({:shape, name, fields}, bound),
+    do: {:shape, name, Enum.map(fields, &%{&1 | type: substitute(&1.type, bound)})}
+
+  defp substitute({:case, field, branches, otherwise}, bound) do
+    {:case, field, Enum.map(branches, fn {literal, t} -> {literal, substitute(t, bound)} end),
+     substitute(otherwise, bound)}
+  end
+
+  defp substitute({:refine, type, constraints}, bound),
+    do: {:refine, substitute(type, bound), constraints}
+
+  defp substitute({form, types}, bound) when form in [:tuple_of, :one_of, :any_of, :all_of],
+    do: {form, Enum.map(types, &substitute(&1, bound))}
+
+  defp substitute({form, type}, bound)
+       when form in [:list_of, :set_of, :array_of, :sorted_set_of, :not, :nilable],
+       do: {form, substitute(type, bound)}
+
+  defp substitute({form, key, value}, bound) when form in [:map_of, :ordered_map_of],
+    do: {form, substitute(key, bound), substitute(value, bound)}
+
+  defp substitute(type, _bound), do: type
 
   # ---- {:case} ----------------------------------------------------------------
 

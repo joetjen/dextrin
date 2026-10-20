@@ -93,6 +93,8 @@ Name                            bare symbol -- a struct name or a named type
 %schema{}    struct/record shape
 %shape{}     plain map with these fields, defaults filled (unversioned)
 {:case f %{v => T, :else => U}}  the type field f's value chooses
+{:generic [t] body}             a named type with parameters
+{:of Name T}                    one use of a generic
 ```
 
 ## `refine` constraints

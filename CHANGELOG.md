@@ -83,6 +83,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Generic named types** (DXN.md §4.5, Jan, 2026-10-20):
+  `Page: {:generic [t] %shape{items: {:list-of t}}}` declares a named
+  type with parameters, and `{:of Page Order}` uses it. A generic may use
+  itself, guarded; a `%schema` cannot be generic, since a struct has one
+  name on the wire.
 - **Recursive named types** (DXN.md §4.5, Jan, 2026-10-20): a named type
   or shape may refer to itself, directly or through others, when the
   cycle passes a field or a collection's elements -- `Comment:

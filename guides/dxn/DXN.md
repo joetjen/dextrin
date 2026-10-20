@@ -498,7 +498,7 @@ schema of their own, which would be circular.
 ### 4.1 `type_expr` forms
 
 ```toon
-type_expr[21]{form,dxn_shape,meaning}:
+type_expr[23]{form,dxn_shape,meaning}:
   any,":any","matches any value at all"
   never,":never","matches no value at all (JSON Schema's false)"
   primitive,":integer / :string / ...","one keyword per §1.3 type name; :bits matches bits and bytes alike, :bytes only whole bytes"
@@ -520,6 +520,8 @@ type_expr[21]{form,dxn_shape,meaning}:
   struct,"%schema{...}","struct/record shape, §4.4"
   shape,"%shape{...}","a plain map with these fields, defaults filled, §4.4a"
   case,"{:case field %{value => type, :else => type}}","the type the sibling field's value chooses, §4.4a"
+  generic,"{:generic [t ...] body}","a named type with parameters, §4.5"
+  of,"{:of Name type ...}","one use of a generic, its arguments where its parameters stand, §4.5"
 ```
 
 A bare `type_expr` (no wrapping tuple/struct) is always a `primitive`
@@ -667,6 +669,25 @@ JsonValue: {:any-of :nil :boolean :integer :float :string
 
 A cycle stays within one document: a reference to another file sees
 only documents read before it (§4.6).
+
+**A named type may take parameters** (Jan, 2026-10-20):
+`{:generic [t ...] body}` is a named type whose `body` names each
+parameter wherever a type goes, and `{:of Name type ...}` is one use of
+it, each argument standing where its parameter stands. A generic is a
+named type's whole definition, and is only ever used through `{:of}`:
+a bare `Page`, a wrong number of arguments, or `{:of}` on a type that is
+not generic, is a compile error. A generic may use itself, guarded as
+above.
+
+```text
+Page: {:generic [t] %shape{items: {:list-of t}, next?: :string}}
+Orders: {:of Page Order}
+List: {:generic [t] {:any-of :nil %shape{head: t, tail: {:of List t}}}}
+```
+
+**A `%schema` cannot be generic**: a struct goes on the wire under its
+one name, so two uses could not be told apart. A schema may use a
+generic in its fields.
 
 *Replaced (2026-10-20):* this section used to leave a same-document
 sibling reference implementation-defined -- a reader MAY refuse it, MAY
