@@ -20,6 +20,7 @@ defmodule Dextrin.Schema.TypeExpr do
     Char,
     Duration,
     Keyword,
+    Nanos,
     OrderedMap,
     Rational,
     SortedSet,
@@ -322,7 +323,7 @@ defmodule Dextrin.Schema.TypeExpr do
 
   def conform({:refine, type, constraints}, value, context) do
     with {:ok, conformed} <- conform(type, value, context),
-         true <- satisfies_constraints?(conformed, constraints, context) do
+         true <- satisfies_constraints?(conformed, constraints, type, context) do
       {:ok, conformed}
     else
       _ -> :error
@@ -599,9 +600,26 @@ defmodule Dextrin.Schema.TypeExpr do
 
   # ---- refine constraints -----------------------------------------------------
 
-  defp satisfies_constraints?(value, constraints, context) do
+  # A resolution's unit, in nanoseconds.
+  @resolutions %{
+    "second" => 1_000_000_000,
+    "millisecond" => 1_000_000,
+    "microsecond" => 1_000,
+    "nanosecond" => 1
+  }
+
+  @doc false
+  @spec resolutions() :: [String.t()]
+  def resolutions, do: Map.keys(@resolutions)
+
+  # Every constraint holds. A constraint on a value it does not apply to
+  # -- a length on an integer, a range on a string -- refuses it (DXN.md
+  # §4.2, Jan, 2026-10-20).
+  defp satisfies_constraints?(value, constraints, base, context) do
     Enum.all?(constraints, fn
       {"contains", type} -> contains?(type, constraints, value, context)
+      {"min-length", n} -> within?(length_of(value, base), n, nil)
+      {"max-length", n} -> within?(length_of(value, base), nil, n)
       {key, arg} -> satisfies_constraint?(key, arg, value)
     end)
   end
@@ -615,23 +633,41 @@ defmodule Dextrin.Schema.TypeExpr do
 
       items ->
         count = Enum.count(items, &match?({:ok, _}, conform(type, &1, context)))
-        most = Map.get(constraints, "max-contains")
-        count >= Map.get(constraints, "min-contains", 1) and (most == nil or count <= most)
+
+        within?(
+          count,
+          Map.get(constraints, "min-contains", 1),
+          Map.get(constraints, "max-contains")
+        )
     end
   end
 
+  # Whether `count` lies between `least` and `most`, either `nil` for no
+  # bound; a `nil` count, of a value that has none, never does.
+  defp within?(nil, _least, _most), do: false
+
+  defp within?(count, least, most),
+    do: (least == nil or count >= least) and (most == nil or count <= most)
+
   # NaN lies outside every range, as every IEEE 754 comparison with it is
   # false; the infinities compare as the numbers they are (Jan,
-  # 2026-10-20).
+  # 2026-10-20). Dates, times and durations compare with their own kind.
   defp satisfies_constraint?("min", min, value), do: compare(value, min) in [:gt, :eq]
   defp satisfies_constraint?("max", max, value), do: compare(value, max) in [:lt, :eq]
   defp satisfies_constraint?("exclusive-min", min, value), do: compare(value, min) == :gt
   defp satisfies_constraint?("exclusive-max", max, value), do: compare(value, max) == :lt
 
   defp satisfies_constraint?("finite", true, value),
-    do: value not in [:nan, :positive_infinity, :negative_infinity]
+    do: match?({:number, n} when is_number(n), ordinal(value))
 
-  defp satisfies_constraint?("finite", false, _value), do: true
+  defp satisfies_constraint?("finite", false, value), do: match?({:number, _}, ordinal(value))
+
+  # A float single precision holds exactly; NaN and the infinities it holds.
+  defp satisfies_constraint?("float32", true, value) when is_float(value),
+    do: Dextrin.Binary.Float.single?(value)
+
+  defp satisfies_constraint?("float32", _wanted, value),
+    do: value in [:nan, :positive_infinity, :negative_infinity] or is_float(value)
 
   defp satisfies_constraint?("version", version, %Dextrin.Ip{} = ip),
     do: Dextrin.Ip.version(ip) == version
@@ -641,24 +677,41 @@ defmodule Dextrin.Schema.TypeExpr do
 
   # The datetime's offset is one of these, `Z` or `±HH:MM`.
   defp satisfies_constraint?("offsets", offsets, value) when is_list(offsets) do
-    {_nanos, minutes} = Dextrin.Temporal.datetime_parts(value)
-    Dextrin.Temporal.offset_name(minutes) in offsets
+    case ordinal(value) do
+      {:datetime, _} ->
+        {_nanos, minutes} = Dextrin.Temporal.datetime_parts(value)
+        Dextrin.Temporal.offset_name(minutes) in offsets
+
+      _ ->
+        false
+    end
   end
 
-  defp satisfies_constraint?("multiple-of", n, value),
-    do: rem_zero?(to_number(value), to_number(n))
+  defp satisfies_constraint?("multiple-of", n, value) do
+    case ordinal(value) do
+      {:number, v} when is_number(v) -> rem_zero?(v, to_number(n))
+      _ -> false
+    end
+  end
 
-  defp satisfies_constraint?("min-length", n, value), do: String.length(value) >= n
-  defp satisfies_constraint?("max-length", n, value), do: String.length(value) <= n
-  defp satisfies_constraint?("pattern", %Regex{} = re, value), do: Regex.match?(re, value)
-  defp satisfies_constraint?("min-count", n, value), do: count_of(value) >= n
-  defp satisfies_constraint?("max-count", n, value), do: count_of(value) <= n
+  defp satisfies_constraint?("min-bytes", n, value), do: within?(utf8_size(value), n, nil)
+  defp satisfies_constraint?("max-bytes", n, value), do: within?(utf8_size(value), nil, n)
+
+  defp satisfies_constraint?("pattern", %Regex{} = re, value) do
+    case pattern_text(value, re) do
+      nil -> false
+      text -> Regex.match?(re, text)
+    end
+  end
+
+  defp satisfies_constraint?("min-count", n, value), do: within?(count_of(value), n, nil)
+  defp satisfies_constraint?("max-count", n, value), do: within?(count_of(value), nil, n)
 
   # Counted with `contains`, which reads them.
   defp satisfies_constraint?(key, _n, _value) when key in ["min-contains", "max-contains"],
     do: true
 
-  defp satisfies_constraint?("unique", false, _value), do: true
+  defp satisfies_constraint?("unique", false, value), do: items_of(value) != nil
 
   defp satisfies_constraint?("unique", true, value),
     do: distinct?(items_of(value), &{:ok, identity(&1)})
@@ -667,13 +720,120 @@ defmodule Dextrin.Schema.TypeExpr do
   defp satisfies_constraint?("unique-by", field, value),
     do: distinct?(items_of(value), &field_identity(&1, field))
 
+  # A decimal's precision is its coefficient's digit count, as written
+  # (`1.50M` has three); its exponent the power of ten that scales them.
+  defp satisfies_constraint?("min-precision", n, value), do: within?(precision(value), n, nil)
+  defp satisfies_constraint?("max-precision", n, value), do: within?(precision(value), nil, n)
+  defp satisfies_constraint?("min-exponent", n, value), do: within?(exponent(value), n, nil)
+  defp satisfies_constraint?("max-exponent", n, value), do: within?(exponent(value), nil, n)
+
+  # Only the bits numbered in `allowed` are set (RFC 8610's `.bits`): an
+  # unsigned integer's from its lowest, a byte string's from its first
+  # byte's lowest.
+  defp satisfies_constraint?("bits", allowed, value) when is_integer(value) and value >= 0,
+    do: Bitwise.band(value, Bitwise.bnot(mask(allowed, 0))) == 0
+
+  defp satisfies_constraint?("bits", allowed, %Bytes{data: data}) when is_binary(data) do
+    data
+    |> :binary.bin_to_list()
+    |> Enum.with_index()
+    |> Enum.all?(fn {byte, i} -> Bitwise.band(byte, Bitwise.bnot(mask(allowed, i * 8))) == 0 end)
+  end
+
+  # Against the time of the check.
+  defp satisfies_constraint?("before-now", wanted, value), do: from_now(value, wanted, &(&1 < 0))
+  defp satisfies_constraint?("after-now", wanted, value), do: from_now(value, wanted, &(&1 > 0))
+
+  defp satisfies_constraint?("within", duration, value) do
+    case ordinal(duration) do
+      {:duration, span} -> from_now(value, true, &(abs(&1) <= span))
+      _ -> false
+    end
+  end
+
+  # No part of the value is finer than `unit`.
+  defp satisfies_constraint?("resolution", unit, value) do
+    case nanos_of(value) do
+      nil -> false
+      nanos -> rem(nanos, Map.fetch!(@resolutions, unit)) == 0
+    end
+  end
+
   defp satisfies_constraint?(_key, _arg, _value), do: false
 
-  defp count_of(value) when is_list(value), do: length(value)
-  defp count_of(%MapSet{} = value), do: MapSet.size(value)
-  defp count_of(%Tuple{items: items}), do: length(items)
-  defp count_of(%SortedSet{items: items}), do: length(items)
-  defp count_of(%Array{items: items}), do: tuple_size(items)
+  # A string's, keyword's or symbol's length in codepoints; a byte
+  # string's in bytes, in bits under `:bits`; `nil` for anything else.
+  defp length_of(value, _base) when is_binary(value), do: String.length(value)
+  defp length_of(%Keyword{name: name}, _base), do: String.length(name)
+  defp length_of(%Symbol{name: name}, _base), do: String.length(name)
+  defp length_of(%Bytes{data: data}, {:primitive, "bits"}), do: bit_size(data)
+  defp length_of(%Bytes{data: data}, _base), do: div(bit_size(data) + 7, 8)
+  defp length_of(_value, _base), do: nil
+
+  defp utf8_size(value) when is_binary(value), do: byte_size(value)
+  defp utf8_size(%Keyword{name: name}), do: byte_size(name)
+  defp utf8_size(%Symbol{name: name}), do: byte_size(name)
+  defp utf8_size(_value), do: nil
+
+  # What a pattern matches: a name's text, or a byte string one
+  # character per byte -- its bytes as they are, or, for a pattern with
+  # the `u` flag, as the Latin-1 characters they are.
+  defp pattern_text(value, _re) when is_binary(value), do: value
+  defp pattern_text(%Keyword{name: name}, _re), do: name
+  defp pattern_text(%Symbol{name: name}, _re), do: name
+
+  defp pattern_text(%Bytes{data: data}, re) when is_binary(data) do
+    if :unicode in Regex.opts(re),
+      do: :unicode.characters_to_binary(data, :latin1),
+      else: data
+  end
+
+  defp pattern_text(_value, _re), do: nil
+
+  defp precision(%Decimal{coef: coef}) when is_integer(coef), do: length(Integer.digits(coef))
+  defp precision(_value), do: nil
+  defp exponent(%Decimal{coef: coef, exp: exp}) when is_integer(coef), do: exp
+  defp exponent(_value), do: nil
+
+  # The bits of `allowed` that fall in the byte starting at bit `from`,
+  # shifted down to it; `from` 0 takes them all, for an integer.
+  defp mask(allowed, 0) when is_list(allowed),
+    do: Enum.reduce(allowed, 0, &Bitwise.bor(&2, Bitwise.bsl(1, &1)))
+
+  defp mask(allowed, from) do
+    allowed
+    |> Enum.filter(&(&1 >= from and &1 < from + 8))
+    |> Enum.reduce(0, &Bitwise.bor(&2, Bitwise.bsl(1, &1 - from)))
+  end
+
+  # A datetime's distance from now, in nanoseconds, given to `test`;
+  # `wanted` false asks nothing.
+  defp from_now(_value, false, _test), do: true
+
+  defp from_now(value, true, test) do
+    case ordinal(value) do
+      {:datetime, nanos} -> test.(nanos - System.os_time(:nanosecond))
+      _ -> false
+    end
+  end
+
+  # A time's, datetime's, local date-time's or duration's nanoseconds,
+  # the part a resolution looks at.
+  defp nanos_of(%Dextrin.Duration{nanoseconds: nanos}), do: nanos || 0
+
+  defp nanos_of(value) do
+    case ordinal(value) do
+      {kind, nanos} when kind in [:time, :datetime, :local] -> nanos
+      _ -> nil
+    end
+  end
+
+  defp count_of(value) do
+    case items_of(value) do
+      nil -> nil
+      items -> length(items)
+    end
+  end
 
   # A collection's items, `nil` for a value that is none.
   defp items_of(value) when is_list(value), do: value
@@ -731,8 +891,17 @@ defmodule Dextrin.Schema.TypeExpr do
   defp rem_zero?(a, b) when is_integer(a) and is_integer(b), do: rem(a, b) == 0
   defp rem_zero?(a, b), do: :math.fmod(a, b) == 0.0
 
+  # `:lt`, `:eq` or `:gt`, or `:nan` for two values that do not compare:
+  # NaN with anything, or two values of different kinds.
   defp compare(a, b) do
-    case {extended(a), extended(b)} do
+    case {ordinal(a), ordinal(b)} do
+      {{kind, x}, {kind, y}} -> compare_ordinals(x, y)
+      _ -> :nan
+    end
+  end
+
+  defp compare_ordinals(x, y) do
+    case {x, y} do
       {:nan, _} -> :nan
       {_, :nan} -> :nan
       {x, y} when x == y -> :eq
@@ -745,10 +914,36 @@ defmodule Dextrin.Schema.TypeExpr do
     end
   end
 
-  defp extended(special) when special in [:nan, :positive_infinity, :negative_infinity],
-    do: special
+  # A value as its kind and its place in that kind's order: a number
+  # (NaN and the infinities as their atoms), or a date, time, datetime,
+  # local date-time or duration as a count of days or nanoseconds. A
+  # duration with years or months has no place: their length varies.
+  defp ordinal(special) when special in [:nan, :positive_infinity, :negative_infinity],
+    do: {:number, special}
 
-  defp extended(n), do: to_number(n)
+  defp ordinal(n) when is_number(n), do: {:number, n}
+  defp ordinal(%Decimal{coef: coef} = d) when is_integer(coef), do: {:number, Decimal.to_float(d)}
+  defp ordinal(%Rational{} = r), do: {:number, to_number(r)}
+  defp ordinal(%Date{} = date), do: {:date, Date.to_gregorian_days(date)}
+  defp ordinal(%Time{} = time), do: {:time, Dextrin.Temporal.time_nanos(time)}
+  defp ordinal(%Nanos{value: %Time{}} = time), do: {:time, Dextrin.Temporal.time_nanos(time)}
+  defp ordinal(%DateTime{} = dt), do: {:datetime, elem(Dextrin.Temporal.datetime_parts(dt), 0)}
+
+  defp ordinal(%Nanos{value: %DateTime{}} = dt),
+    do: {:datetime, elem(Dextrin.Temporal.datetime_parts(dt), 0)}
+
+  defp ordinal(%NaiveDateTime{} = n), do: {:local, Dextrin.Temporal.local_nanos(n)}
+  defp ordinal(%Nanos{value: %NaiveDateTime{}} = n), do: {:local, Dextrin.Temporal.local_nanos(n)}
+
+  defp ordinal(%Dextrin.Duration{years: years, months: months} = d)
+       when years in [nil, 0] and months in [nil, 0] do
+    {:duration,
+     (d.weeks || 0) * 604_800_000_000_000 + (d.days || 0) * 86_400_000_000_000 +
+       (d.hours || 0) * 3_600_000_000_000 + (d.minutes || 0) * 60_000_000_000 +
+       (d.nanoseconds || 0)}
+  end
+
+  defp ordinal(_value), do: :none
 
   defp to_number(%Decimal{} = d), do: Decimal.to_float(d)
   defp to_number(%Rational{numerator: n, denominator: d}), do: n / d

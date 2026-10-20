@@ -621,15 +621,17 @@ is why DXNS has no `unevaluatedItems`: a list that may go on ends in
 ### 4.2 `refine` constraints
 
 ```toon
-refine_constraints[19]{key,applies_to,meaning}:
-  min,"integer/float/decimal/rational","value >= given number"
-  max,"integer/float/decimal/rational","value <= given number"
-  exclusive-min,"integer/float/decimal/rational","value > given number"
-  exclusive-max,"integer/float/decimal/rational","value < given number"
+refine_constraints[31]{key,applies_to,meaning}:
+  min,"integer/float/decimal/rational/date/time/datetime/local-datetime/duration","value >= given value of the same kind"
+  max,"integer/float/decimal/rational/date/time/datetime/local-datetime/duration","value <= given value of the same kind"
+  exclusive-min,"integer/float/decimal/rational/date/time/datetime/local-datetime/duration","value > given value of the same kind"
+  exclusive-max,"integer/float/decimal/rational/date/time/datetime/local-datetime/duration","value < given value of the same kind"
   multiple-of,"integer/float/decimal/rational","value is an exact multiple of given number"
-  min-length,string,"codepoint count >= given integer"
-  max-length,string,"codepoint count <= given integer"
-  pattern,string,"value matches given regex (§1.3's regex type)"
+  min-length,"string/keyword/symbol/bytes/bits","length >= given integer: codepoints of a text or a name, bytes of bytes, bits under :bits"
+  max-length,"string/keyword/symbol/bytes/bits","length <= given integer, counted as min-length counts it"
+  min-bytes,"string/keyword/symbol","UTF-8 byte count >= given integer"
+  max-bytes,"string/keyword/symbol","UTF-8 byte count <= given integer"
+  pattern,"string/keyword/symbol/bytes","value matches given regex (§1.3's regex type); bytes one character per byte"
   min-count,"list/set/tuple/sorted-set/array","element count >= given integer"
   max-count,"list/set/tuple/sorted-set/array","element count <= given integer"
   contains,"list/set/tuple/sorted-set/array","at least min-contains (1 when not given) and at most max-contains elements match the given type"
@@ -638,6 +640,16 @@ refine_constraints[19]{key,applies_to,meaning}:
   unique,"list/set/tuple/sorted-set/array","true: no two elements are the same value"
   unique-by,"list/set/tuple/sorted-set/array","no two elements' given field is the same value; an element without it is compared with none"
   finite,float,"true: neither NaN nor an infinity"
+  float32,float,"true: single precision holds the value exactly (NaN and the infinities it holds)"
+  min-precision,decimal,"the coefficient's digit count, as written, >= given integer (1.50M has 3)"
+  max-precision,decimal,"the coefficient's digit count <= given integer"
+  min-exponent,decimal,"the exponent >= given integer (1.50M's is -2)"
+  max-exponent,decimal,"the exponent <= given integer"
+  bits,"integer/bytes","only the bits numbered in the given list are set: a non-negative integer's from its lowest, bytes from the first byte's lowest (RFC 8610's .bits)"
+  before-now,datetime,"true: before the time of the check"
+  after-now,datetime,"true: after the time of the check"
+  within,datetime,"no further from the time of the check than the given duration, either way"
+  resolution,"time/datetime/local-datetime/duration","no part finer than the given unit, :second, :millisecond, :microsecond or :nanosecond"
   offsets,datetime,"the value's offset is one of the given strings, Z or ±HH:MM"
   version,ip,"4 or 6: the value is that family"
   prefix,ip,"true: a prefix; false: an address"
@@ -647,9 +659,27 @@ refine_constraints[19]{key,applies_to,meaning}:
 these keys; a value must satisfy `t` itself *and* every listed
 constraint.
 
+**A constraint refuses a value it does not apply to** (Jan,
+2026-10-20): `min-length` refuses an integer, `min` a string, `bits` a
+negative integer. A constraint never raises, whatever it meets.
+
+**Ranges compare values of one kind**: numbers with numbers, dates with
+dates, times with times, datetimes as the instants they are (whatever
+their offsets), local date-times with local date-times, durations as
+their nanoseconds. A duration with years or months compares with
+nothing, as their lengths vary; nor do two values of different kinds.
+
+**`before-now`, `after-now` and `within` ask the clock**, once per
+check, so the same value can pass one check and fail a later one. The
+grammar-checked strings and named predicates of the other languages
+(CDDL's `.abnf`, protovalidate's CEL) have no refine key: neither is
+portable without a grammar engine or an expression language in every
+implementation.
+
 **Every key is one of these**: an unknown key, a misspelt `min-lenght`,
 is a compile error (`schema/compile`), as are `min-contains` and
-`max-contains` without `contains`.
+`max-contains` without `contains`, a key that is no name, and a
+`unique-by` or `resolution` that is no name or no unit.
 
 **Two values are the same when their canonical forms are** (§1.5), for
 `unique` and `unique-by`: `1` and `1.0` differ, as `%{a: 1}` and
