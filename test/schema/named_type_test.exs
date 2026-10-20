@@ -103,7 +103,11 @@ defmodule Dextrin.Schema.NamedTypeTest do
     assert reason =~ "Broken"
   end
 
-  test "a named type can't reference another named type declared in the same document (v1 boundary)" do
+  # Until 2026-10-20 a sibling was not visible (DXN.md §4.5 left it
+  # implementation-defined, and this implementation refused it, the bare
+  # symbol falling back to a struct reference). Shapes need siblings
+  # (design/shapes-and-case.md), so every named type now sees every other.
+  test "a named type sees another named type declared in the same document" do
     {:ok, doc} =
       Dextrin.decode("""
       %{
@@ -114,11 +118,7 @@ defmodule Dextrin.Schema.NamedTypeTest do
 
     {:ok, registry} = Dextrin.Schema.compile(doc)
 
-    # Base isn't visible while Derived is being compiled (same-document,
-    # no ordering guarantee to resolve it against) — the bare Symbol
-    # falls back to an (opaque) struct-name reference instead, same as
-    # any other unresolved identifier in a type_expr position.
-    assert {:ok, {:list_of, {:reference, "Base"}}} =
+    assert {:ok, {:list_of, {:primitive, "integer"}}} =
              Dextrin.Registry.fetch_type_alias(registry, "Derived")
   end
 

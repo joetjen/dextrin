@@ -87,23 +87,99 @@ defmodule Dextrin.Schema.Compiler do
 
   defp compile_error(message), do: Dextrin.Error.action(message, "schema/compile")
 
+  # Every named type in a document sees every other (design/
+  # shapes-and-case.md, DXN.md §4.5): each is compiled with its siblings
+  # standing as `{:named, name}`, and those are put in place once all
+  # are read -- so the order of a map's entries, which DXN does not
+  # give, never matters. A named type that reaches itself is refused.
   defp compile_aliases(alias_entries, registry) do
-    # `base_aliases` is a frozen snapshot, not the accumulating
-    # `registry` — every alias in *this* document resolves Symbols
-    # against only what base_registry already knew, never against a
-    # sibling compiled earlier in the same reduce. A plain map has no
-    # ordering guarantee (DXN.md), so accumulating as we went would
-    # make cross-alias visibility depend on Elixir's arbitrary map
-    # iteration order instead of being a deterministic yes-or-no.
-    base_aliases = registry.type_aliases
+    siblings = Map.new(alias_entries, fn {name, _} -> {name, {:named, name}} end)
+    scope = Map.merge(registry.type_aliases, siblings)
 
-    Result.reduce_ok(alias_entries, registry, fn {name, raw_value}, registry ->
-      case compile_type_expr(raw_value, base_aliases) do
-        {:ok, type_expr} -> {:ok, Registry.put_type_alias(registry, name, type_expr)}
-        {:error, reason} -> {:error, compile_error("named type #{inspect(name)}: #{reason}")}
-      end
-    end)
+    with {:ok, compiled} <-
+           Result.reduce_ok(alias_entries, %{}, fn {name, raw_value}, acc ->
+             case compile_named(name, raw_value, scope) do
+               {:ok, type_expr} ->
+                 {:ok, Map.put(acc, name, type_expr)}
+
+               {:error, reason} ->
+                 {:error, compile_error("named type #{inspect(name)}: #{reason}")}
+             end
+           end) do
+      Result.reduce_ok(alias_entries, registry, fn {name, _}, registry ->
+        case resolved(Map.fetch!(compiled, name), compiled, [name]) do
+          {:ok, type_expr} -> {:ok, Registry.put_type_alias(registry, name, type_expr)}
+          {:error, reason} -> {:error, compile_error("named type #{inspect(name)}: #{reason}")}
+        end
+      end)
+    end
   end
+
+  # A shape carries its own name; every other named type is its type.
+  defp compile_named(name, raw_value, scope) do
+    case compile_type_expr(raw_value, scope) do
+      {:ok, {:shape, nil, fields}} -> {:ok, {:shape, name, fields}}
+      other -> other
+    end
+  end
+
+  # `type_expr` with every `{:named, name}` replaced by that named type,
+  # `path` the names being resolved, so a cycle is seen.
+  defp resolved({:named, name}, compiled, path) do
+    if name in path do
+      {:error,
+       "refers to itself (#{Enum.join(Enum.reverse([name | path]), " -> ")}); " <>
+         "a named type may not be recursive"}
+    else
+      resolved(Map.fetch!(compiled, name), compiled, [name | path])
+    end
+  end
+
+  defp resolved({:shape, name, fields}, compiled, path) do
+    with {:ok, fields} <-
+           Result.reduce_ok(fields, [], fn field, acc ->
+             with {:ok, type} <- resolved(field.type, compiled, path),
+                  do: {:ok, [%{field | type: type} | acc]}
+           end),
+         do: {:ok, {:shape, name, Enum.reverse(fields)}}
+  end
+
+  defp resolved({:case, field, branches, otherwise}, compiled, path) do
+    with {:ok, branches} <-
+           Result.reduce_ok(branches, [], fn {literal, type}, acc ->
+             with {:ok, type} <- resolved(type, compiled, path),
+                  do: {:ok, [{literal, type} | acc]}
+           end),
+         {:ok, otherwise} <- resolved(otherwise, compiled, path) do
+      {:ok, {:case, field, Enum.reverse(branches), otherwise}}
+    end
+  end
+
+  defp resolved({:refine, type, constraints}, compiled, path) do
+    with {:ok, type} <- resolved(type, compiled, path), do: {:ok, {:refine, type, constraints}}
+  end
+
+  defp resolved({form, types}, compiled, path)
+       when form in [:tuple_of, :one_of, :any_of, :all_of] do
+    with {:ok, types} <-
+           Result.reduce_ok(types, [], fn type, acc ->
+             with {:ok, type} <- resolved(type, compiled, path), do: {:ok, [type | acc]}
+           end),
+         do: {:ok, {form, Enum.reverse(types)}}
+  end
+
+  defp resolved({form, type}, compiled, path)
+       when form in [:list_of, :set_of, :array_of, :sorted_set_of, :not, :nilable] do
+    with {:ok, type} <- resolved(type, compiled, path), do: {:ok, {form, type}}
+  end
+
+  defp resolved({form, key, value}, compiled, path) when form in [:map_of, :ordered_map_of] do
+    with {:ok, key} <- resolved(key, compiled, path),
+         {:ok, value} <- resolved(value, compiled, path),
+         do: {:ok, {form, key, value}}
+  end
+
+  defp resolved(type_expr, _compiled, _path), do: {:ok, type_expr}
 
   defp entry_name(%Keyword{name: name}), do: name
   defp entry_name(%Symbol{name: name}), do: name
@@ -167,7 +243,8 @@ defmodule Dextrin.Schema.Compiler do
   defp compile_entry(%Struct{name: "schema", version: version, fields: {:keyed, pairs}}, aliases) do
     with :ok <- not_format_1_0(pairs),
          {:ok, fields} <- compile_fields(pairs, aliases),
-         :ok <- distinct_names(fields) do
+         :ok <- distinct_names(fields),
+         :ok <- cases_name_fields(pairs, fields) do
       {:ok, %Compiled{version: version || 1, fields: fields}}
     end
   end
@@ -252,7 +329,70 @@ defmodule Dextrin.Schema.Compiler do
     end
   end
 
+  # Every `{:case field ...}` written in `pairs`' field types names one
+  # of `fields` -- told from the source, so a named type the case
+  # reaches through is not looked into.
+  defp cases_name_fields(pairs, fields) do
+    names = MapSet.new(fields, & &1.name)
+
+    case Enum.find(Enum.flat_map(pairs, fn {_k, v} -> case_fields(v) end), &(&1 not in names)) do
+      nil -> :ok
+      missing -> {:error, "{:case #{missing} ...} names no field of its schema or shape"}
+    end
+  end
+
+  defp case_fields(%Tuple{items: [%Keyword{name: "case"}, %Symbol{name: field} | rest]}),
+    do: [field | Enum.flat_map(rest, &case_fields/1)]
+
+  defp case_fields(%Tuple{items: items}), do: Enum.flat_map(items, &case_fields/1)
+  defp case_fields(%Struct{name: "shape"}), do: []
+
+  defp case_fields(%Struct{name: "field", fields: {:keyed, pairs}}),
+    do: case_fields(get(pairs, "type"))
+
+  defp case_fields(map) when is_map(map) and not is_struct(map),
+    do: Enum.flat_map(map, fn {_k, v} -> case_fields(v) end)
+
+  defp case_fields(_other), do: []
+
   # ---- type expressions -------------------------------------------------------
+
+  # `%shape{field: type, ...}` (design/shapes-and-case.md): a plain map's
+  # fields, as a schema's are written; no version, never positional.
+  defp compile_type_expr(%Struct{name: "shape", version: nil, fields: {:keyed, pairs}}, aliases) do
+    with {:ok, fields} <- compile_fields(pairs, aliases),
+         :ok <- distinct_names(fields),
+         :ok <- cases_name_fields(pairs, fields) do
+      {:ok, {:shape, nil, fields}}
+    end
+  end
+
+  defp compile_type_expr(%Struct{name: "shape", fields: {:keyed, _}}, _aliases),
+    do: {:error, "a shape has no version: %shape{field: type, ...}"}
+
+  defp compile_type_expr(%Struct{name: "shape"}, _aliases),
+    do: {:error, "a shape lists its fields by name: %shape{field: type, ...}"}
+
+  # `{:case field %{value => type, ..., :else => type}}`: the type the
+  # sibling `field`'s value chooses.
+  defp compile_type_expr(
+         %Tuple{items: [%Keyword{name: "case"}, %Symbol{name: field}, table]},
+         aliases
+       )
+       when is_map(table) and not is_struct(table) do
+    {otherwise, branches} = Map.pop(table, Keyword.new("else"), :none)
+
+    with {:ok, otherwise} <- maybe_compile(otherwise, aliases),
+         {:ok, branches} <-
+           Result.reduce_ok(Enum.sort(branches), [], fn {literal, type}, acc ->
+             with {:ok, t} <- compile_type_expr(type, aliases), do: {:ok, [{literal, t} | acc]}
+           end) do
+      {:ok, {:case, field, Enum.reverse(branches), otherwise}}
+    end
+  end
+
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "case"} | _]}, _aliases),
+    do: {:error, "a case is {:case field %{value => type, ..., :else => type}}"}
 
   defp compile_type_expr(%Keyword{name: "any"}, _aliases), do: {:ok, :any}
   defp compile_type_expr(%Keyword{name: "never"}, _aliases), do: {:ok, :never}
@@ -348,6 +488,9 @@ defmodule Dextrin.Schema.Compiler do
 
   defp compile_type_expr(other, _aliases),
     do: {:error, "unrecognized type expression: #{inspect(other)}"}
+
+  defp maybe_compile(:none, _aliases), do: {:ok, :none}
+  defp maybe_compile(value, aliases), do: compile_type_expr(value, aliases)
 
   defp map_compile(values, aliases) do
     Result.reduce_ok(values, [], fn v, acc ->

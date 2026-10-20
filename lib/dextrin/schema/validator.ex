@@ -85,7 +85,7 @@ defmodule Dextrin.Schema.Validator do
        ) do
     case Map.fetch(given, name) do
       {:ok, value} ->
-        check_type(name, value, type, registry)
+        check_type(name, value, type, TypeExpr.context(registry, given))
 
       :error when default != :none ->
         {:ok, default}
@@ -98,15 +98,23 @@ defmodule Dextrin.Schema.Validator do
     end
   end
 
-  defp check_type(name, value, type, registry) do
-    if TypeExpr.matches?(type, value, registry) do
+  # Conformed, not only matched: a shape in the field's type comes out
+  # with its defaults filled, and a `{:case}` reads its sibling from the
+  # struct's other fields (`context`).
+  defp check_type(name, value, type, context) do
+    case TypeExpr.conform(type, value, context) do
       # Stripped here, not deferred to the top: `value` is about to be
       # handed to *this* struct's own materializer (decode) or stored
       # as a checked field value (encode) — neither should ever see an
       # internal `Validated` wrapper once it's done its one job.
-      {:ok, Validated.strip(value)}
-    else
-      violation("field #{inspect(name)} does not match its declared type", "schema/type-mismatch")
+      {:ok, conformed} ->
+        {:ok, Validated.strip(conformed)}
+
+      :error ->
+        violation(
+          "field #{inspect(name)} does not match its declared type",
+          "schema/type-mismatch"
+        )
     end
   end
 

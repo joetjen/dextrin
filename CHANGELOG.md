@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A named type sees the named types beside it** (DXN.md §4.5): a
+  reference to a sibling in the same document resolves, in any order,
+  where it used to fall back to a struct reference; a named type that
+  reaches itself is refused (`schema/compile`).
 - **HexDocs shows the README's development warning as a warning box**
   (Jan, 2026-10-20): ExDoc renders no GitHub alert, so `mix docs` gives
   it the README with `> [!WARNING]` turned into ExDoc's own admonition,
@@ -79,6 +83,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`%shape{...}` and `{:case field %{...}}`** (DXN.md §4.4a, Jan,
+  2026-10-20; design/shapes-and-case.md): a shape is a named, unversioned
+  plain-map type with a `%schema` body, which fills its missing fields'
+  defaults when it decodes; a case chooses a field's type by its sibling
+  field's value, anywhere in the field's type. **`Dextrin.Schema.check/3`**
+  answers whether a value matches a schema, shape or named type without
+  changing it, and **`conform/3`** answers it with the defaults filled.
 - **The conformance adapter answers `media-type`, `identify` and
   `identify-binary`** (`DXN.md` §6): the form a media type names, and
   whether a body is worth decoding as text, a schema or binary, so the

@@ -17,7 +17,7 @@ defmodule Dextrin.Schema do
   """
 
   alias Dextrin.Registry
-  alias Dextrin.Schema.Validator
+  alias Dextrin.Schema.{TypeExpr, Validator}
 
   @doc """
   Compiles a decoded `.dxns` document (see `Dextrin.decode/2`) into
@@ -96,6 +96,53 @@ defmodule Dextrin.Schema do
        "expected a Dextrin.Struct named #{inspect(schema_name)}, got #{inspect(value)}",
        "schema/type-mismatch"
      )}
+  end
+
+  @doc """
+  Whether `value` -- data a program already holds -- matches the
+  definition `name` in `registry`: a struct schema, a `%shape` or a
+  named type (design/shapes-and-case.md). Only a check: `value` is
+  never changed. `:ok`, or the error saying why.
+
+      iex> {:ok, doc} = Dextrin.decode("%{Port: {:refine :integer %{min: 1, max: 65535}}}")
+      iex> {:ok, registry} = Dextrin.Schema.compile(doc)
+      iex> Dextrin.Schema.check(8080, registry, "Port")
+      :ok
+      iex> {:error, %Dextrin.Error{category: category}} = Dextrin.Schema.check(0, registry, "Port")
+      iex> category
+      "schema/type-mismatch"
+  """
+  @spec check(term(), Registry.t(), String.t()) :: :ok | {:error, Dextrin.Error.t()}
+  def check(value, %Registry{} = registry, name) do
+    with {:ok, _conformed} <- conform(value, registry, name), do: :ok
+  end
+
+  @doc """
+  `value` checked as `check/3` checks it, answered with every shape's
+  missing defaults filled in, as a decode fills them: `{:ok, value}`, or
+  the error saying why.
+
+      iex> {:ok, doc} = Dextrin.decode(~s|%{Money: %shape{amount: :decimal, currency: %field{type: :string, default: "EUR"}}}|)
+      iex> {:ok, registry} = Dextrin.Schema.compile(doc)
+      iex> Dextrin.Schema.conform(%{amount: Decimal.new("1.50")}, registry, "Money")
+      {:ok, %{:amount => Decimal.new("1.50"), %Dextrin.Keyword{name: "currency"} => "EUR"}}
+  """
+  @spec conform(term(), Registry.t(), String.t()) :: {:ok, term()} | {:error, Dextrin.Error.t()}
+  def conform(value, %Registry{} = registry, name) do
+    case Map.fetch(registry.type_aliases, name) do
+      {:ok, type_expr} ->
+        case TypeExpr.conform(type_expr, value, TypeExpr.context(registry)) do
+          {:ok, _} = ok ->
+            ok
+
+          :error ->
+            {:error,
+             Dextrin.Error.action("value does not match #{inspect(name)}", "schema/type-mismatch")}
+        end
+
+      :error ->
+        with :ok <- validate(value, registry, name), do: {:ok, value}
+    end
   end
 
   @doc """
