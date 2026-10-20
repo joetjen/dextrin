@@ -61,6 +61,10 @@ defmodule Dextrin.Ip do
   @spec format(t()) :: String.t()
   def format(%__MODULE__{address: address, prefix: prefix}) do
     text = address |> tuple_of() |> :inet.ntoa() |> to_string()
+    # Erlang writes a link-local address with a non-zero second group as
+    # BSD's scope form, `fe80::1%01`, which is no RFC 5952 and which no
+    # reader takes back; such an address is written here instead.
+    text = if String.contains?(text, "%"), do: rfc5952(address), else: text
     if prefix, do: text <> "/" <> Integer.to_string(prefix), else: text
   end
 
@@ -69,13 +73,40 @@ defmodule Dextrin.Ip do
   def version(%__MODULE__{address: address}), do: if(byte_size(address) == 4, do: 4, else: 6)
 
   defp address_bytes(text) do
-    # Strict: no IPv4 shorthand ("10.1"), no zone ("%eth0").
-    with {:ok, tuple} <- :inet.parse_strict_address(String.to_charlist(text)),
-         false <- String.contains?(text, "%") do
+    # Strict: no IPv4 shorthand ("10.1"), no zone ("%eth0"), and no sign,
+    # which Erlang's parser takes ("+1.2.3.4") and no address has.
+    with true <- Regex.match?(~r/^[0-9A-Fa-f:.]+$/, text),
+         {:ok, tuple} <- :inet.parse_strict_address(String.to_charlist(text)) do
       {:ok, bytes_of(tuple)}
     else
       _ -> {:error, :invalid_ip}
     end
+  end
+
+  # Groups in lowercase hex without leading zeros, the first longest run
+  # of two or more zero groups as `::` (RFC 5952 §4).
+  defp rfc5952(<<_::128>> = bytes) do
+    groups = for <<g::16 <- bytes>>, do: g
+    hex = Enum.map(groups, &String.downcase(Integer.to_string(&1, 16)))
+
+    case longest_zero_run(groups) do
+      nil ->
+        Enum.join(hex, ":")
+
+      {start, length} ->
+        Enum.join(Enum.take(hex, start), ":") <>
+          "::" <> Enum.join(Enum.drop(hex, start + length), ":")
+    end
+  end
+
+  defp longest_zero_run(groups) do
+    groups
+    |> Enum.with_index()
+    |> Enum.chunk_by(fn {g, _} -> g == 0 end)
+    |> Enum.filter(fn [{g, _} | _] = run -> g == 0 and length(run) >= 2 end)
+    |> Enum.reduce(nil, fn [{_, start} | _] = run, best ->
+      if best == nil or length(run) > elem(best, 1), do: {start, length(run)}, else: best
+    end)
   end
 
   defp bytes_of({a, b, c, d}), do: <<a, b, c, d>>
