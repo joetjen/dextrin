@@ -125,6 +125,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`{:tagged name T}`** (Jan, 2026-10-20; DXN.md §4.1; the superset's
+  group 7): a custom tag of that name whose value is a `T` -- or an
+  application's value its registered tag encoder writes as one.
 - **Encoded content** (Jan, 2026-10-20; DXN.md §4.2): `encoding:` (RFC
   4648's base64, base64url, base32, base16), `media-type:` and
   `content: T` on strings -- the string, decoded, is a DXN document of

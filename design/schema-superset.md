@@ -146,7 +146,12 @@ ISL says it never does.
 
 | Gap | Proposed |
 |---|---|
-| A custom tag by name with a typed value (YAML local tags, MessagePack ext, BSON user binary, CBOR tags, Ion clob, ObjectId) | `{:tagged objectid {:refine :bytes %{min-length: 12, max-length: 12}}}` |
+| A custom tag by name with a typed value (YAML local tags, MessagePack ext, BSON user binary, CBOR tags, Ion clob) | `{:tagged acme.money {:tuple-of :decimal :string}}` |
+
+**Done** (Jan, 2026-10-20; DXN.md §4.1). ObjectId left the row: it is
+a built-in tag now, `:objectid`, and a built-in tag's name is refused
+in `{:tagged}`. An application's value matches as its registered tag
+encoder writes it.
 
 ### 8. Annotations and metadata (J C I P)
 

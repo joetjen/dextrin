@@ -320,6 +320,7 @@ defmodule Dextrin.Schema.Tree do
     Enum.flat_map([type | held], &type_references/1)
   end
 
+  defp type_references({:tagged, _name, type}), do: type_references(type)
   defp type_references({:list_items, particles}), do: Enum.flat_map(particles, &type_references/1)
   defp type_references({:one, type}), do: type_references(type)
 
