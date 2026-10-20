@@ -54,7 +54,7 @@ defmodule Dextrin.FormatTest do
     end
 
     test "after whitespace, commas, comments and a header" do
-      body = "\n  , # a comment\n# another\n@dxn \"1.1\"  # the version\n\n%{a: 1}"
+      body = "\n  , # a comment\n# another\n@dxn \"1.0\"  # the version\n\n%{a: 1}"
       assert Format.identifies?(body, :text)
     end
 

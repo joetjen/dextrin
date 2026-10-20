@@ -46,10 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   round, because a schema `FileResolver` found as `geo/Address` kept the
   name its file gave it, `Address`. Breaking for documents that wrote the
   bare name; write the name the reference uses.
-- **DXN.md is format version 1.1**: 1.1 changed `.dxns` documents (the
-  body lists the fields, `%schema(N)` carries a version) and adds
-  `bits`; every 1.0 document reads unchanged, a reader accepts any `1.x`
-  header, and the `.dxnb` version byte stays `1`.
+- **DXN.md stays format version 1.0** (Jan, 2026-10-20): the version
+  moves past 1.0 only once the libraries reach 1.0.0, so this release's
+  changes to `.dxns` documents (the body lists the fields, `%schema(N)`
+  carries a version) and `bits` keep `1.0`. A reader accepts any `1.x`
+  header; the `.dxnb` version byte is `1`.
 - **DXN.md gains `bits`**, a run of bits that is not whole bytes:
   `@bits {"oA==" 3}` in text, private tag 216 (`T_BITS`) around
   `[bytes, count]` in `.dxnb`, `:bits` in a schema. Bits and bytes are
@@ -59,10 +60,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `document/not-found`, `document/exists`, `document/ambiguous` and
   `document/not-a-collection`, which every implementation raised and the
   conformance suite expects.
-- **A 1.0 schema says it is one**: `fields: @ordered %{...}`,
+- **A 0.1 schema says it is one**: `fields: @ordered %{...}`,
   `closed: true` and `forbidden: [...]` are refused (`schema/compile`)
-  naming DXN 1.0's syntax and what 1.1 writes instead, rather than as a
-  field of no known type.
+  naming Dextrin 0.1's syntax and what a schema is written as now,
+  rather than as a field of no known type.
 
 ### Added
 
@@ -106,7 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   why they cannot be used (`{:error, error}`), which a decode refuses
   with; looking up an exact version consults it too.
 
-- **`bits`**, as DXN.md 1.1 defines it: a bitstring that is not whole
+- **`bits`**, as DXN.md defines it: a bitstring that is not whole
   bytes -- bare, or in a `Dextrin.Bytes` -- is written `@bits {"oA==" 3}`
   and `T_BITS` (216), and reads back; `Dextrin.Bits` holds the rules.
   `:bits` in a schema takes bits and bytes, `:bytes` only whole bytes;
