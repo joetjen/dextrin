@@ -105,6 +105,9 @@ Name                            bare symbol -- a struct name or a named type
 min / max / exclusive-min / exclusive-max / multiple-of   int/float/decimal/rational
 min-length / max-length / pattern                          string
 min-count / max-count                                       list/set/tuple
+finite                                                      float: true refuses NaN and the infinities
+offsets                                                     datetime: ["Z" "+02:00" ...]
+version / prefix                                            ip: 4 or 6; true a prefix, false an address
 ```
 
 ## Struct schema shape
