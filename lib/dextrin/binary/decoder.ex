@@ -547,7 +547,7 @@ defmodule Dextrin.Binary.Decoder do
   # only ever hit if `build_keyword/2` is called some other way.
   defp build_keyword(name, opts) when is_binary(name) do
     case Keyword.get(opts, :registry, Registry.new()) do
-      %Registry{trusted: true} -> {:ok, String.to_atom(name)}
+      %Registry{trusted: true} -> {:ok, Dextrin.Keyword.trusted(name)}
       _ -> {:ok, Dextrin.Keyword.new(name)}
     end
   end

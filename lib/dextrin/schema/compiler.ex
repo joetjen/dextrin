@@ -442,8 +442,11 @@ defmodule Dextrin.Schema.Compiler do
   # data it describes, so this has nothing to do with whether the
   # schema's own source was itself decoded as trusted or not — the
   # compiler needs one canonical internal shape either way.
-  defp atomize_back(atom) when is_atom(atom) and atom not in [nil, true, false],
-    do: Keyword.new(Atom.to_string(atom))
+  # NaN and the infinities are atoms too, and numbers, not keywords.
+  defp atomize_back(atom)
+       when is_atom(atom) and
+              atom not in [nil, true, false, :nan, :positive_infinity, :negative_infinity],
+       do: Keyword.new(Atom.to_string(atom))
 
   defp atomize_back(list) when is_list(list), do: Enum.map(list, &atomize_back/1)
 
@@ -841,7 +844,7 @@ defmodule Dextrin.Schema.Compiler do
        do: {:error, "a #{form} stands only among {:list-items ...}'s items"}
 
   defp compile_type_expr(other, _aliases),
-    do: {:error, "unrecognized type expression: #{inspect(other)}"}
+    do: {:error, "unrecognized type expression: #{shown(other)}"}
 
   # The name a written symbol stands for: itself where it is in scope
   # already (a generic's parameter, a name known so), otherwise the full
@@ -1028,7 +1031,7 @@ defmodule Dextrin.Schema.Compiler do
   defp argument("media-type", arg) do
     if is_binary(arg) and
          Regex.match?(
-           ~r/^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,126}\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,126}$/,
+           ~r/^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,126}\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,126}\z/,
            arg
          ),
        do: :ok,
@@ -1040,7 +1043,7 @@ defmodule Dextrin.Schema.Compiler do
   defp offset?("Z"), do: true
 
   defp offset?(text) when is_binary(text),
-    do: Regex.match?(~r/^[+-](?:[01][0-9]|2[0-3]):[0-5][0-9]$/, text)
+    do: Regex.match?(~r/^[+-](?:[01][0-9]|2[0-3]):[0-5][0-9]\z/, text)
 
   defp offset?(_other), do: false
 

@@ -21,7 +21,7 @@ defmodule Dextrin.Temporal do
   @doc "The date `text` writes, `YYYY-MM-DD`."
   @spec parse_date(String.t()) :: {:ok, Date.t()} | :error
   def parse_date(text) do
-    with true <- Regex.match?(~r/^\d{4}-\d{2}-\d{2}$/, text),
+    with true <- Regex.match?(~r/^\d{4}-\d{2}-\d{2}\z/, text),
          {:ok, date} <- Date.from_iso8601(text) do
       {:ok, date}
     else
@@ -45,7 +45,7 @@ defmodule Dextrin.Temporal do
   @spec parse_datetime(String.t()) :: {:ok, DateTime.t() | Nanos.t()} | :error
   def parse_datetime(text) do
     with [_, date, time, offset] <-
-           Regex.run(~r/^(\d{4}-\d{2}-\d{2})T([^Z+-]+)(Z|[+-]\d{2}:\d{2})$/, text),
+           Regex.run(~r/^(\d{4}-\d{2}-\d{2})T([^Z+-]+)(Z|[+-]\d{2}:\d{2})\z/, text),
          {:ok, minutes} <- offset_minutes(offset),
          {:ok, local} <- local_nanos_of(date, time) do
       {:ok, datetime_from(local - minutes * 60 * 1_000_000_000, minutes)}
@@ -57,7 +57,7 @@ defmodule Dextrin.Temporal do
   @doc "The local date-time `text` writes: a date, `T` and a time, no offset."
   @spec parse_local(String.t()) :: {:ok, NaiveDateTime.t() | Nanos.t()} | :error
   def parse_local(text) do
-    with [_, date, time] <- Regex.run(~r/^(\d{4}-\d{2}-\d{2})T(.+)$/, text),
+    with [_, date, time] <- Regex.run(~r/^(\d{4}-\d{2}-\d{2})T(.+)\z/, text),
          {:ok, nanos} <- local_nanos_of(date, time) do
       {:ok, local_from(nanos)}
     else
@@ -74,7 +74,7 @@ defmodule Dextrin.Temporal do
 
   # Nanoseconds since midnight, from `HH:MM:SS(.f{1,9})`.
   defp clock(text) do
-    with [_ | parts] <- Regex.run(~r/^(\d{2}):(\d{2}):(\d{2})#{@fraction}$/, text),
+    with [_ | parts] <- Regex.run(~r/^(\d{2}):(\d{2}):(\d{2})#{@fraction}\z/, text),
          [h, m, s | rest] = parts,
          {h, m, s} = {String.to_integer(h), String.to_integer(m), String.to_integer(s)},
          true <- h < 24 and m < 60 and s < 60 do
@@ -273,7 +273,7 @@ defmodule Dextrin.Temporal do
   @spec parse_duration(String.t()) :: {:ok, Dextrin.Duration.t()} | :error
   def parse_duration(text) do
     pattern =
-      ~r/^P(?:(-?\d+)Y)?(?:(-?\d+)M)?(?:(-?\d+)W)?(?:(-?\d+)D)?(?:T(?:(-?\d+)H)?(?:(-?\d+)M)?(?:(-?)(\d+)(?:\.(\d{1,9}))?S)?)?$/
+      ~r/^P(?:(-?\d+)Y)?(?:(-?\d+)M)?(?:(-?\d+)W)?(?:(-?\d+)D)?(?:T(?:(-?\d+)H)?(?:(-?\d+)M)?(?:(-?)(\d+)(?:\.(\d{1,9}))?S)?)?\z/
 
     case Regex.run(pattern, text) do
       nil ->

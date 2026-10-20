@@ -13,4 +13,23 @@ defmodule Dextrin.Keyword do
 
   @spec new(String.t()) :: t()
   def new(name) when is_binary(name), do: %__MODULE__{name: name}
+
+  # The names whose atoms are already values: NaN and the infinities,
+  # nil and the booleans.
+  @taken ~w(nan positive_infinity negative_infinity nil true false)
+
+  @doc """
+  The keyword `name` as a trusted decode reads it: its atom, but a
+  `Dextrin.Keyword` still for a name whose atom is already a value --
+  `:nan`, `:positive_infinity`, `:negative_infinity`, `:nil`, `:true`,
+  `:false` -- so the keyword stays a keyword (Jan, 2026-10-20).
+
+      iex> Dextrin.Keyword.trusted("ok")
+      :ok
+      iex> Dextrin.Keyword.trusted("nan")
+      %Dextrin.Keyword{name: "nan"}
+  """
+  @spec trusted(String.t()) :: atom() | t()
+  def trusted(name) when name in @taken, do: new(name)
+  def trusted(name) when is_binary(name), do: String.to_atom(name)
 end
