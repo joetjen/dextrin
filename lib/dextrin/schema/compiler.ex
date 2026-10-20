@@ -179,11 +179,13 @@ defmodule Dextrin.Schema.Compiler do
     {:error, "expected a %schema(N){...} entry, got #{inspect(other)}"}
   end
 
-  # A schema written in DXN 1.0's syntax -- `fields: @ordered %{...}`,
-  # `closed: true`, `forbidden: [...]` -- says so, and what 1.1 writes
-  # instead (DXN.md §4.4), rather than that a field has no known type.
-  # Only those shapes: in 1.1 `fields`, `closed` and `forbidden` are
-  # ordinary field names, whose values are type expressions.
+  # A schema written in Dextrin 0.1's syntax -- `fields: @ordered %{...}`,
+  # `closed: true`, `forbidden: [...]` -- says so, and what a schema is
+  # written as now (DXN.md §4.4), rather than that a field has no known
+  # type. Only those shapes: now `fields`, `closed` and `forbidden` are
+  # ordinary field names, whose values are type expressions. The format
+  # itself stays 1.0 until 1.0.0 (Jan, 2026-10-20), so the old syntax is
+  # named by the release that had it.
   defp not_format_1_0(pairs) do
     old? =
       Enum.any?(pairs, fn
@@ -196,7 +198,7 @@ defmodule Dextrin.Schema.Compiler do
     if old?,
       do:
         {:error,
-         "this is DXN 1.0's schema syntax (fields:, closed:, forbidden:); DXN 1.1 lists the fields " <>
+         "this is Dextrin 0.1's schema syntax (fields:, closed:, forbidden:); a schema lists its fields " <>
            "directly, %schema(N){field: type, ...}, and refuses undeclared fields with strict: true (DXN.md §4.4)"},
       else: :ok
   end

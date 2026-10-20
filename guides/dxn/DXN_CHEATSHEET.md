@@ -46,7 +46,7 @@ regex        ~r/pattern/flags                          flags: i m s u x f r
 custom-tag   @tag value                                open extension point
 ```
 
-Plus one meta form: `@dxn "1.1"` — an optional header, first thing in
+Plus one meta form: `@dxn "1.0"` — an optional header, first thing in
 the document only.
 
 ## Struct forms

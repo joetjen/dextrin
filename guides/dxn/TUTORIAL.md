@@ -157,14 +157,14 @@ no binary encoding at all.
 
 ```
 # this is a comment, running to end of line
-@dxn "1.1"
+@dxn "1.0"
 %{ x: 1 }
 ```
 
 `#` starts a comment that runs to the end of the line; comments are
 fully insignificant, exactly like whitespace, and are gone by the time
 a value exists — no reader can recover them after parsing. `@dxn
-"1.1"` is an optional header, allowed only as the very first thing in
+"1.0"` is an optional header, allowed only as the very first thing in
 a document, naming the format version.
 
 ## 10. A complete, functional example
@@ -173,7 +173,7 @@ Putting all of the above together — a single, realistic document
 using nearly every type at once:
 
 ```
-@dxn "1.1"
+@dxn "1.0"
 %{
   id:      @uuid "550e8400-e29b-41d4-a716-446655440000"
   name:    "Ada Lovelace"

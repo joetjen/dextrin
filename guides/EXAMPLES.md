@@ -9,7 +9,7 @@ Elixir-API-level) examples.
 
 ```
 # config.dxn
-@dxn "1.1"
+@dxn "1.0"
 %{
   env:      :production
   debug:    false
