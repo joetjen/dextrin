@@ -91,7 +91,9 @@ defmodule Dextrin.Schema.Compiler do
   # shapes-and-case.md, DXN.md §4.5): each is compiled with its siblings
   # standing as `{:named, name}`, and those are put in place once all
   # are read -- so the order of a map's entries, which DXN does not
-  # give, never matters. A named type that reaches itself is refused.
+  # give, never matters. A named type may reach itself only through a
+  # guard -- a field, or a collection's elements (Jan, 2026-10-20) --
+  # and there the reference stays by name, looked up when it is checked.
   defp compile_aliases(alias_entries, registry) do
     siblings = Map.new(alias_entries, fn {name, _} -> {name, {:named, name}} end)
     scope = Map.merge(registry.type_aliases, siblings)
@@ -105,7 +107,8 @@ defmodule Dextrin.Schema.Compiler do
                {:error, reason} ->
                  {:error, compile_error("named type #{inspect(name)}: #{reason}")}
              end
-           end) do
+           end),
+         :ok <- guarded(compiled) do
       Result.reduce_ok(alias_entries, registry, fn {name, _}, registry ->
         case resolved(Map.fetch!(compiled, name), compiled, [name]) do
           {:ok, type_expr} -> {:ok, Registry.put_type_alias(registry, name, type_expr)}
@@ -114,6 +117,55 @@ defmodule Dextrin.Schema.Compiler do
       end)
     end
   end
+
+  # Every cycle among `compiled`'s named types passes a guard: a field
+  # of a shape, or a collection's elements, so that each step of a
+  # check reads a smaller part of the value. A cycle with none --
+  # `A: {:nilable A}` -- describes no value and would never finish.
+  defp guarded(compiled) do
+    edges = Map.new(compiled, fn {name, type} -> {name, unguarded_names(type)} end)
+
+    case Enum.find_value(Enum.sort(Map.keys(edges)), &unguarded_cycle(&1, edges, [])) do
+      nil ->
+        :ok
+
+      cycle ->
+        {:error,
+         compile_error(
+           "named type #{inspect(hd(cycle))}: reaches itself with no field or collection " <>
+             "between (#{Enum.join(cycle, " -> ")}); it describes no value"
+         )}
+    end
+  end
+
+  # The cycle back to the first of `path` through unguarded references,
+  # or nil.
+  defp unguarded_cycle(name, edges, path) do
+    cond do
+      path != [] and name == List.last(path) ->
+        Enum.reverse([name | path])
+
+      name in path ->
+        nil
+
+      true ->
+        Enum.find_value(Map.get(edges, name, []), &unguarded_cycle(&1, edges, [name | path]))
+    end
+  end
+
+  # The named types `type` refers to without a guard on the way.
+  defp unguarded_names({:named, name}), do: [name]
+
+  defp unguarded_names({form, types}) when form in [:one_of, :any_of, :all_of],
+    do: Enum.flat_map(types, &unguarded_names/1)
+
+  defp unguarded_names({form, type}) when form in [:not, :nilable], do: unguarded_names(type)
+  defp unguarded_names({:refine, type, _}), do: unguarded_names(type)
+
+  defp unguarded_names({:case, _field, branches, otherwise}),
+    do: Enum.flat_map([otherwise | Enum.map(branches, &elem(&1, 1))], &unguarded_names/1)
+
+  defp unguarded_names(_guarded_or_leaf), do: []
 
   # A shape carries its own name; every other named type is its type.
   defp compile_named(name, raw_value, scope) do
@@ -125,14 +177,12 @@ defmodule Dextrin.Schema.Compiler do
 
   # `type_expr` with every `{:named, name}` replaced by that named type,
   # `path` the names being resolved, so a cycle is seen.
-  defp resolved({:named, name}, compiled, path) do
-    if name in path do
-      {:error,
-       "refers to itself (#{Enum.join(Enum.reverse([name | path]), " -> ")}); " <>
-         "a named type may not be recursive"}
-    else
-      resolved(Map.fetch!(compiled, name), compiled, [name | path])
-    end
+  # A reference back to a type being resolved closes a cycle, which
+  # `guarded/1` has passed: it stays a reference by name.
+  defp resolved({:named, name} = reference, compiled, path) do
+    if name in path,
+      do: {:ok, reference},
+      else: resolved(Map.fetch!(compiled, name), compiled, [name | path])
   end
 
   defp resolved({:shape, name, fields}, compiled, path) do

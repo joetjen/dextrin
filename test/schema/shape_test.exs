@@ -174,8 +174,61 @@ defmodule Dextrin.Schema.ShapeTest do
       assert {:ok, _} = compiled("%{A: {:list-of B}, B: {:list-of C}, C: :integer}")
     end
 
-    test "a named type that refers to itself is refused" do
-      assert category(compiled("%{A: {:list-of B}, B: {:nilable A}}")) == "schema/compile"
+    # Guarded recursion (Jan, 2026-10-20): a cycle must pass a field or
+    # a collection's elements, so every step reads a smaller part of the
+    # value.
+    test "a named type may refer to itself through a field or a collection" do
+      assert {:ok, _} = compiled("%{A: {:list-of B}, B: {:nilable A}}")
+      assert {:ok, _} = compiled("%{Comment: %shape{text: :string, replies: {:list-of Comment}}}")
+    end
+
+    test "a named type that reaches itself unguarded is refused" do
+      assert category(compiled("%{A: {:nilable A}}")) == "schema/compile"
+      assert category(compiled("%{A: {:any-of B :integer}, B: {:not A}}")) == "schema/compile"
+    end
+  end
+
+  describe "recursive types" do
+    @recursive """
+    %{
+      Thread: %schema{root: Comment, value: JsonValue}
+      Comment: %shape{
+        text: :string
+        likes: %field{type: :integer, default: 0}
+        replies?: {:list-of Comment}
+      }
+      JsonValue: {:any-of :nil :boolean :integer :float :string
+                          {:list-of JsonValue} {:map-of :string JsonValue}}
+    }
+    """
+
+    test "check every level, and fill defaults at every level" do
+      r = registry(@recursive)
+
+      assert {:ok, thread} =
+               Dextrin.decode(
+                 ~s|%Thread{root: %{text: "a", replies: [%{text: "b", replies: [%{text: "c"}]}]}, value: 1}|,
+                 registry: r
+               )
+
+      %Dextrin.Struct{fields: {:keyed, pairs}} = thread
+      root = named(Map.new(pairs)["root"])
+
+      assert %{"likes" => 0, "replies" => [%{"likes" => 0, "replies" => [%{"likes" => 0}]}]} =
+               root
+
+      assert category(
+               Dextrin.decode(
+                 ~s|%Thread{root: %{text: "a", replies: [%{text: 1}]}, value: 1}|,
+                 registry: r
+               )
+             ) == "schema/type-mismatch"
+    end
+
+    test "a JSON-like value type, nested" do
+      r = registry(@recursive)
+      assert :ok = Schema.check(%{"a" => [1, %{"b" => nil}]}, r, "JsonValue")
+      assert {:error, _} = Schema.check(%{"a" => [1, %{"b" => :x}]}, r, "JsonValue")
     end
   end
 
