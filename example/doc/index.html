@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Acme schemas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site">
+  <div class="site-inner">
+    <a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true">%{}</span>Acme schemas</a>
+    <nav aria-label="Namespaces"><ul><li><a href="global.html">No namespace</a></li><li><a href="acme.common.html">acme.common</a></li><li><a href="acme.events.html">acme.events</a></li><li><a href="acme.shop.html">acme.shop</a></li></ul></nav>
+  </div>
+</header>
+<main>
+<div class="page">
+  <section class="intro">
+    <p class="eyebrow">Schema reference</p>
+    <h1>Acme schemas</h1>
+    <p class="lede">Every struct schema, shape and named type, by namespace. A name links to its definition wherever it appears.</p>
+  </section>
+  <section aria-labelledby="ns-heading">
+    <h2 id="ns-heading">Namespaces</h2>
+    <ul class="ns-list"><li class="ns-card">
+  <h3><a href="global.html">No namespace</a></h3>
+  <p class="counts">1 schema</p>
+  
+</li>
+<li class="ns-card">
+  <h3><a href="acme.common.html">acme.common</a></h3>
+  <p class="counts">2 schemas · 8 types</p>
+  <p>Types every Acme service shares.</p>
+</li>
+<li class="ns-card">
+  <h3><a href="acme.events.html">acme.events</a></h3>
+  <p class="counts">1 schema · 3 shapes · 3 types</p>
+  <p>The events Acme's services publish on RabbitMQ.</p>
+</li>
+<li class="ns-card">
+  <h3><a href="acme.shop.html">acme.shop</a></h3>
+  <p class="counts">3 schemas</p>
+  
+</li>
+</ul>
+  </section>
+  <section aria-labelledby="az-heading">
+    <h2 id="az-heading">All definitions</h2>
+    <ul class="az"><li><a href="acme.common.html#Address"><code>Address</code></a> <span class="chip chip-schema">struct schema</span><span class="ns">acme.common</span></li><li><a href="acme.events.html#CancelReason"><code>CancelReason</code></a> <span class="chip chip-type">type</span><span class="ns">acme.events</span></li><li><a href="acme.common.html#CountryCode"><code>CountryCode</code></a> <span class="chip chip-type">type</span><span class="ns">acme.common</span></li><li><a href="acme.common.html#CurrencyCode"><code>CurrencyCode</code></a> <span class="chip chip-type">type</span><span class="ns">acme.common</span></li><li><a href="acme.shop.html#Customer"><code>Customer</code></a> <span class="chip chip-schema">struct schema</span><span class="ns">acme.shop</span></li><li><a href="acme.events.html#CustomerRegistered"><code>CustomerRegistered</code></a> <span class="chip chip-shape">shape</span><span class="ns">acme.events</span></li><li><a href="acme.common.html#Email"><code>Email</code></a> <span class="chip chip-type">type</span><span class="ns">acme.common</span></li><li><a href="acme.events.html#Envelope"><code>Envelope</code></a> <span class="chip chip-schema">struct schema</span><span class="ns">acme.events</span></li><li><a href="acme.events.html#EventTag"><code>EventTag</code></a> <span class="chip chip-type">type</span><span class="ns">acme.events</span></li><li><a href="acme.events.html#EventType"><code>EventType</code></a> <span class="chip chip-type">type</span><span class="ns">acme.events</span></li><li><a href="global.html#HealthCheck"><code>HealthCheck</code></a> <span class="chip chip-schema">struct schema</span><span class="ns">No namespace</span></li><li><a href="acme.common.html#Metadata"><code>Metadata</code></a> <span class="chip chip-type">type</span><span class="ns">acme.common</span></li><li><a href="acme.common.html#Money"><code>Money</code></a> <span class="chip chip-schema">struct schema</span><span class="ns">acme.common</span></li><li><a href="acme.common.html#NonEmptyString"><code>NonEmptyString</code></a> <span class="chip chip-type">type</span><span class="ns">acme.common</span></li><li><a href="acme.shop.html#Order"><code>Order</code></a> <span class="chip chip-schema">struct schema</span><span class="ns">acme.shop</span></li><li><a href="acme.events.html#OrderCancelled"><code>OrderCancelled</code></a> <span class="chip chip-shape">shape</span><span class="ns">acme.events</span></li><li><a href="acme.events.html#OrderPlaced"><code>OrderPlaced</code></a> <span class="chip chip-shape">shape</span><span class="ns">acme.events</span></li><li><a href="acme.common.html#Percentage"><code>Percentage</code></a> <span class="chip chip-type">type</span><span class="ns">acme.common</span></li><li><a href="acme.common.html#PhoneNumber"><code>PhoneNumber</code></a> <span class="chip chip-type">type</span><span class="ns">acme.common</span></li><li><a href="acme.shop.html#Product"><code>Product</code></a> <span class="chip chip-schema">struct schema</span><span class="ns">acme.shop</span></li><li><a href="acme.common.html#Tags"><code>Tags</code></a> <span class="chip chip-type">type</span><span class="ns">acme.common</span></li></ul>
+  </section>
+</div>
+
+</main>
+<footer class="site-foot"><p>Generated from the <code>.dxns</code> sources by Dextrin. Positions are the order of a struct's fields in its binary form.</p></footer>
+</body>
+</html>
