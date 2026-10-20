@@ -178,6 +178,11 @@ field's type, one place for every annotation.
 `{:const v}`, `{:if I T E}`. Built-in named types and forms; nothing
 they say is new.
 
+**Done** (Jan, 2026-10-20; DXN.md §4.1), with `:float32` beside the
+integers for protobuf's `float`, and `{:if I T}` leaving out the else.
+With it every group Jan accepted is in; group 3 was declined, and
+closing a type is not supported.
+
 ## Data model: DXN itself, not DXNS
 
 These need a DXN type, or a rule, before a schema can say anything

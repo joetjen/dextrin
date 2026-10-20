@@ -43,6 +43,14 @@ defmodule Dextrin.Schema.Compiler do
   # its base is.
   @type_keys ~w(contains content encodes encodes-seq)
 
+  # The sized integers' ranges.
+  @sized %{
+    "int32" => {-2_147_483_648, 2_147_483_647},
+    "int64" => {-9_223_372_036_854_775_808, 9_223_372_036_854_775_807},
+    "uint32" => {0, 4_294_967_295},
+    "uint64" => {0, 18_446_744_073_709_551_615}
+  }
+
   @primitives ~w(nil boolean integer float decimal rational string char symbol keyword
                  list tuple map ordered-map set sorted-set array
                  date time datetime local-datetime duration uuid objectid ip uri bytes bits regex)
@@ -187,6 +195,9 @@ defmodule Dextrin.Schema.Compiler do
   defp unguarded_names({form, type}) when form in [:not, :nilable], do: unguarded_names(type)
   defp unguarded_names({:refine, type, _}), do: unguarded_names(type)
   defp unguarded_names({:doc, type, _}), do: unguarded_names(type)
+
+  defp unguarded_names({:if, test, then, otherwise}),
+    do: Enum.flat_map([test, then, otherwise], &unguarded_names/1)
 
   defp unguarded_names({:case, _field, branches, otherwise}),
     do: Enum.flat_map([otherwise | Enum.map(branches, &elem(&1, 1))], &unguarded_names/1)
@@ -339,6 +350,13 @@ defmodule Dextrin.Schema.Compiler do
     with {:ok, type} <- resolved(type, compiled, path),
          {:ok, constraints} <- resolved_types(constraints, compiled, path),
          do: {:ok, {:refine, type, constraints}}
+  end
+
+  defp resolved({:if, test, then, otherwise}, compiled, path) do
+    with {:ok, test} <- resolved(test, compiled, path),
+         {:ok, then} <- resolved(then, compiled, path),
+         {:ok, otherwise} <- resolved(otherwise, compiled, path),
+         do: {:ok, {:if, test, then, otherwise}}
   end
 
   defp resolved({:doc, type, notes}, compiled, path) do
@@ -633,6 +651,21 @@ defmodule Dextrin.Schema.Compiler do
   defp compile_type_expr(%Keyword{name: name}, _aliases) when name in @primitives,
     do: {:ok, {:primitive, name}}
 
+  # Sugar (DXN.md §4.1, Jan, 2026-10-20): protobuf's and MongoDB's sized
+  # numbers as their ranges, `:float32` as single precision, `:number` as
+  # every kind of number.
+  defp compile_type_expr(%Keyword{name: name}, _aliases) when is_map_key(@sized, name) do
+    {least, most} = Map.fetch!(@sized, name)
+    {:ok, {:refine, {:primitive, "integer"}, %{"min" => least, "max" => most}}}
+  end
+
+  defp compile_type_expr(%Keyword{name: "float32"}, _aliases),
+    do: {:ok, {:refine, {:primitive, "float"}, %{"float32" => true}}}
+
+  defp compile_type_expr(%Keyword{name: "number"}, _aliases) do
+    {:ok, {:any_of, Enum.map(~w(integer float decimal rational), &{:primitive, &1})}}
+  end
+
   # DXN 0.2's timestamp type, now a datetime in UTC (DXN.md §4.2, Jan,
   # 2026-10-20): a schema naming it keeps its meaning.
   defp compile_type_expr(%Keyword{name: "timestamp"}, _aliases),
@@ -754,6 +787,26 @@ defmodule Dextrin.Schema.Compiler do
   defp compile_type_expr(%Tuple{items: [%Keyword{name: "tuple-of-all"}, elem]}, aliases) do
     with {:ok, t} <- compile_type_expr(elem, aliases), do: {:ok, {:tuple_of_all, t}}
   end
+
+  # `{:const v}`: the one value `v`, `{:enum v}`.
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "const"}, literal]}, _aliases),
+    do: {:ok, {:enum, [literal]}}
+
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "const"} | _]}, _aliases),
+    do: {:error, "a const is {:const value}"}
+
+  # `{:if I T E}`: JSON Schema's if, then and else; `E` is `:any` when
+  # not given.
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "if"}, test, then | rest]}, aliases)
+       when length(rest) <= 1 do
+    with {:ok, test} <- compile_type_expr(test, aliases),
+         {:ok, then} <- compile_type_expr(then, aliases),
+         {:ok, otherwise} <- compile_type_expr(List.first(rest, Keyword.new("any")), aliases),
+         do: {:ok, {:if, test, then, otherwise}}
+  end
+
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "if"} | _]}, _aliases),
+    do: {:error, "an if is {:if test then else}, else :any when left out"}
 
   # `{:doc type %{...}}`: the type, annotated (DXN.md §4.1b).
   defp compile_type_expr(%Tuple{items: [%Keyword{name: "doc"}, inner, raw]}, aliases) do
