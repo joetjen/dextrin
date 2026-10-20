@@ -320,7 +320,7 @@ cbor_map[30]{type,cbor_major_or_tag,payload,integrity_note}:
   boolean,"simple(20/21)","","false/true"
   integer,"major0/1; tag2/3","two's complement bignum bytes past 64-bit","arbitrary precision preserved exactly"
   float,"major7","IEEE 754 double","NaN/Infinity encode natively, no tag needed"
-  decimal,"tag4","[exponent,mantissa]",""
+  decimal,"tag4","[exponent,mantissa]","a negative zero has no mantissa of its own: `-0.0M` is written as `0.0M`, the one value `.dxnb` does not keep (text does, §1.5)"
   rational,"tag30","[numerator,denominator]",""
   string,"major3 (untagged)","UTF-8 bytes","default/untagged case"
   char,"tag T_CHAR","major0 codepoint",""
@@ -471,7 +471,9 @@ with any tag number cited normatively here.
 Every construct above is fully specified by §1.2 + §1.3; every field
 round-trips through §2 without loss (§2.2's `integrity_note` column
 records the two places — bignum and timestamp precision — where that
-took a specific encoding choice to guarantee).
+took a specific encoding choice to guarantee, and the one value that
+does not: a negative-zero decimal, which `.dxnb` writes as positive
+zero).
 
 ---
 
