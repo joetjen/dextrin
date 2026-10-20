@@ -71,9 +71,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `T_BITS` (216), and reads back; `Dextrin.Bits` holds the rules.
   `:bits` in a schema takes bits and bytes, `:bytes` only whole bytes;
   bits are no map key.
+- Takes `ichor_runtime` 0.5 and `ichor` 0.6 (was 0.4 and 0.5), for the
+  action errors below; the DXN parser is regenerated with `ichor` 0.6.
 
 ### Fixed
 
+- **An error found while parsing text says where it is**: a map key
+  that is not allowed, a value that is not one, a schema violation now
+  carry the line and column of what they are about, and
+  `Dextrin.Error.format/1` shows them. 0.2.0 said they did; they had
+  neither, because Ichor placed no error an action returned.
 - `Dextrin.Schema.compile/2` crashed (`Protocol.UndefinedError`) on a
   document whose top level is a struct or a tuple -- maps to `is_map/1`
   -- instead of refusing it; it refuses every document that is not a
