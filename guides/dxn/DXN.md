@@ -8,12 +8,14 @@ implement a conforming parser, encoder, or decoder — see the
 [cheatsheet](DXN_CHEATSHEET.md) for a gentler introduction, and
 `dextrin`'s own module docs for one particular implementation's choices.
 
-This is **format version 1.1**. 1.1 changed `.dxns` documents (§4.4:
-the body lists the fields, `%schema(N)` carries a version) and added
-`bits` (§1.3); every 1.0 text and binary document reads unchanged. The
-`@dxn` header's version is informational: a reader MUST accept any
-`1.x` and MAY refuse another major version. The `.dxnb` envelope's
-version byte (§2.1) counts major versions and stays `1`.
+This is **format version 1.0**, and it stays 1.0 until the libraries
+that implement it reach 1.0.0. Until then the format changes between
+releases without a new version number -- Dextrin 0.3 changed `.dxns`
+documents (§4.4: the body lists the fields, `%schema(N)` carries a
+version) and added `bits` (§1.3). The `@dxn` header's version is
+informational: a reader MUST accept any `1.x` and MAY refuse another
+major version. The `.dxnb` envelope's version byte (§2.1) counts major
+versions and is `1`.
 
 Grammar is ISO/IEC 14977 EBNF. Reference tables are [TOON](https://toon.sh)
 (`name[N]{fields}:` header, one comma-separated row per record) for
@@ -144,7 +146,7 @@ types[31]{type,category,dxn_syntax,notes}:
   bits,extended,"@bits {""..."" n}","base64 and a bit count: a run of bits that is not whole bytes"
   regex,extended,"~r/pattern/flags","PCRE-style via Erlang :re"
   custom-tag,extended,"@tag value","open extension point, any unrecognized tag name"
-  header,meta,"@dxn ""1.1""","optional, first form only; the format version (see the introduction)"
+  header,meta,"@dxn ""1.0""","optional, first form only; the format version (see the introduction)"
 ```
 
 ### 1.4 Semantic notes not expressible in grammar alone
@@ -454,7 +456,7 @@ with any tag number cited normatively here.
 ## 3. Worked example
 
 ```
-@dxn "1.1"
+@dxn "1.0"
 %{
   id:      @uuid "550e8400-e29b-41d4-a716-446655440000"
   name:    "Ada Lovelace"

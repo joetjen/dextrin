@@ -55,9 +55,9 @@ defmodule Dextrin.Schema.VersionedSchemaTest do
                compile("%{P: %schema{fields: @ordered %{x: :integer}}}")
     end
 
-    # Format 1.1 (DXN.md's introduction): a 1.0 schema says what changed,
-    # rather than that a field has no known type.
-    test "says a 1.0 schema is one, and what 1.1 writes instead" do
+    # A schema in Dextrin 0.1's syntax says what changed, rather than that
+    # a field has no known type.
+    test "says a 0.1 schema is one, and what a schema is written as now" do
       for old <- [
             "%{P: %schema{fields: @ordered %{x: :integer}}}",
             "%{P: %schema{closed: true, x: :integer}}",
@@ -66,12 +66,12 @@ defmodule Dextrin.Schema.VersionedSchemaTest do
         assert {:error, %Dextrin.Error{category: "schema/compile", message: message}} =
                  compile(old)
 
-        assert message =~ "DXN 1.0"
+        assert message =~ "Dextrin 0.1"
         assert message =~ "%schema(N){field: type, ...}"
       end
     end
 
-    test "and a 1.1 schema may still have fields so named" do
+    test "and a schema may still have fields so named" do
       assert {:ok, _} =
                compile(
                  "%{P: %schema{fields: {:list-of :string}, closed: :boolean, forbidden?: :string}}"
