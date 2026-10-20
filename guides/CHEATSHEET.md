@@ -152,8 +152,10 @@ Dextrin.Schema.validate_encode_tree(value, registry)                # automatic 
 :integer / :string / ...       one keyword per DXN.md §1.3 type name
 Address                        bare symbol — a struct name or a named type
 {:list-of T}                   list whose every element matches T
+{:list-items A {:repeat B 0 nil}}  a list's items in order; {:repeat {:group A B} 1 nil}
 {:set-of T}                    set whose every element matches T
 {:tuple-of A B C}              fixed-arity positional tuple
+{:tuple-of-all T}              tuple of any length, every element a T
 {:map-of K V}                  every key matches K, every value matches V
 {:array-of T}                  array whose every element matches T
 {:ordered-map-of K V}          ordered map: keys match K, values match V
@@ -178,7 +180,9 @@ Address                        bare symbol — a struct name or a named type
 ```text
 min / max / exclusive-min / exclusive-max / multiple-of   -- integer/float/decimal/rational
 min-length / max-length / pattern                          -- string
-min-count / max-count                                      -- list/set/tuple
+min-count / max-count                                      -- list/set/tuple/sorted-set/array
+contains / min-contains / max-contains                     -- how many elements are a given type
+unique / unique-by                                         -- no two elements, or their field, the same
 finite                                                     -- float: true refuses NaN and the infinities
 offsets                                                    -- datetime: ["Z" "+02:00" ...]
 version / prefix                                           -- ip: 4 or 6; true a prefix, false an address

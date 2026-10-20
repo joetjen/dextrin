@@ -65,7 +65,7 @@ Protobuf, I is Ion Schema, and Y is YAML, TOML or MessagePack.
 |---|---|
 | Closing one type (additionalProperties false, ISL closed, CDDL default) | `%shape{..., :closed => true}`, written as a keyword key in the body, so it can't be a field |
 | Typed extras beside the fields (additionalProperties as a schema, CDDL `* tstr => int`) | `:rest => {:map-of K V}` in the body |
-| Keys by pattern (patternProperties, CDDL computed keys) | `:rest => {:map-of {:refine :string %{pattern: ~r/^x-/}} T}`; several patterns with `{:all-of}` |
+| Keys by pattern (patternProperties, CDDL computed keys) | `:rest => {:map-of {:refine :string %{pattern: @regex "^x-"}} T}`; several patterns with `{:all-of}` |
 | Number of entries (min/maxProperties, ISL container_length, protovalidate min/max_pairs) | `min-count`/`max-count` extended to map, ordered-map, sorted-set and array |
 | Key type of a shape (propertyNames) | `:keys => T` in the body |
 | Dependencies (dependentRequired, dependentSchemas) | refine `requires: %{"a" => ["b"]}`, `when-present: %{"a" => T}` |
@@ -84,6 +84,14 @@ Protobuf, I is Ion Schema, and Y is YAML, TOML or MessagePack.
 | A removed field keeping its position (protobuf `reserved`) | `old_email: %field{type: :never, reserved: true}`. Its position stays, written as `nil`, and the version check refuses reusing the name or the slot. **This is the most important Protobuf gap**: without it, removing a field moves every later field in `.dxnb`, and older readers misread them. |
 
 ### 4. Lists and sequences (J C I Y)
+
+**Done** (Jan, 2026-10-20; DXN.md §4.1a, §4.2), as proposed below except
+`unevaluated`: `{:list-items}` closes a list already, every item taken
+by one of its parts, so `unevaluatedItems: false` is the list-items
+itself and an open list ends in `{:repeat :any 0 nil}`. What was wrong
+with proposing it: it carried JSON Schema's way of closing a *composed*
+list over, where DXNS writes the items in one form instead. Unknown
+refine keys became a compile error on the way.
 
 | Gap | Proposed |
 |---|---|

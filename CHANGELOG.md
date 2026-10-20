@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **An unknown refine key is a compile error** (`schema/compile`), as
+  are `min-contains:` and `max-contains:` without `contains:`. A misspelt
+  key (`min-lenght:`) refused every value before, silently.
 - **`.dxnb` writes the smallest form of a float, a UTC datetime and a
   regex without flags** (Jan, 2026-10-20; DXN.md §2.2): a float in the
   shortest of CBOR's half, single and double precision that holds it
@@ -111,6 +114,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A list's items in order, and lists' refine keys** (Jan, 2026-10-20;
+  DXN.md §4.1a, §4.2; the superset's group 4). `{:list-items :string
+  {:repeat :integer 0 nil}}` is a list item by item: a type for one item,
+  `{:repeat p min max}` for several (`max` `nil` for no bound), and
+  `{:repeat {:group a b} min max}` for several together; a repeat takes
+  as many items as it can and gives them back one at a time.
+  `{:tuple-of-all T}` is a tuple of any length. The refine keys
+  `contains:`, `min-contains:`, `max-contains:`, `unique:` and
+  `unique-by:` count and compare a collection's elements, two values the
+  same when their canonical forms are; `min-count:`/`max-count:` count an
+  array's too.
 - **`@objectid` and `@ip` are built in** (Jan, 2026-10-20; DXN.md §1.3),
   like `@uuid`: readable in text, their raw bytes in `.dxnb`.
   `@objectid "507f1f77bcf86cd799439011"` is BSON's 12-byte ObjectId

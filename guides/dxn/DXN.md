@@ -551,14 +551,16 @@ schema of their own, which would be circular.
 ### 4.1 `type_expr` forms
 
 ```toon
-type_expr[23]{form,dxn_shape,meaning}:
+type_expr[25]{form,dxn_shape,meaning}:
   any,":any","matches any value at all"
   never,":never","matches no value at all (JSON Schema's false)"
   primitive,":integer / :string / ...","one keyword per §1.3 type name; :bits matches bits and bytes alike, :bytes only whole bytes"
   reference,"bare symbol, e.g. Address","names a struct schema or a named type in this document (or Ns/Name, §4.6)"
   list-of,"{:list-of elem}","list whose every element matches elem"
+  list-items,"{:list-items a {:repeat b 0 nil}}","a list's items in order: a type for one item, a repeat for several, §4.1a"
   set-of,"{:set-of elem}","set whose every element matches elem"
   tuple-of,"{:tuple-of a b c}","fixed-arity positional tuple, one type_expr per slot"
+  tuple-of-all,"{:tuple-of-all elem}","tuple of any length whose every element matches elem"
   map-of,"{:map-of key-type val-type}","every key matches key-type, every value matches val-type"
   array-of,"{:array-of elem}","array whose every element matches elem"
   ordered-map-of,"{:ordered-map-of key-type val-type}","ordered map: every key matches key-type, every value matches val-type"
@@ -581,10 +583,45 @@ A bare `type_expr` (no wrapping tuple/struct) is always a `primitive`
 or a `reference` — the tuple form is only needed once a constructor
 takes arguments.
 
+### 4.1a A list's items (`{:list-items}`)
+
+`{:list-items p ...}` describes a list item by item, in order (Jan,
+2026-10-20; JSON Schema's `prefixItems` and `items`, CDDL's arrays, Ion
+Schema's `ordered_elements`). Each `p` is one of:
+
+- a `type_expr`: exactly one item, of that type;
+- `{:repeat p min max}`: between `min` and `max` items of the type `p`,
+  `max` `nil` for no upper bound, `0 <= min <= max`;
+- `{:repeat {:group p ...} min max}`: the group's items, together, that
+  many times; a group's items are again types and repeats.
+
+The list matches when its items are all taken, none left over:
+
+```dxn
+%{
+  Command: {:list-items :string {:repeat :string 0 nil}}   # a name, then arguments
+  Pairs:   {:list-items {:repeat {:group :string :integer} 1 nil}}
+  Point:   {:list-items {:repeat :float 2 3}}              # 2D or 3D
+}
+```
+
+**A repeat takes as many items as it can, then gives them back one at a
+time** until the rest of the items match, so `{:list-items {:repeat
+:any 0 nil} :string}` takes any list that ends in a string. Every
+implementation tries the same choices in the same order, so a shape's
+defaults (§4.4a) are filled the same way in each. A repetition that
+takes no item is the last: each further one would take none either.
+`{:repeat}` and `{:group}` stand only among a `{:list-items}`'s items;
+anywhere else they are a compile error (`schema/compile`).
+
+`list-items` closes the list (an item no `p` takes is a refusal), which
+is why DXNS has no `unevaluatedItems`: a list that may go on ends in
+`{:repeat :any 0 nil}`.
+
 ### 4.2 `refine` constraints
 
 ```toon
-refine_constraints[14]{key,applies_to,meaning}:
+refine_constraints[19]{key,applies_to,meaning}:
   min,"integer/float/decimal/rational","value >= given number"
   max,"integer/float/decimal/rational","value <= given number"
   exclusive-min,"integer/float/decimal/rational","value > given number"
@@ -593,8 +630,13 @@ refine_constraints[14]{key,applies_to,meaning}:
   min-length,string,"codepoint count >= given integer"
   max-length,string,"codepoint count <= given integer"
   pattern,string,"value matches given regex (§1.3's regex type)"
-  min-count,"list/set/tuple","element count >= given integer"
-  max-count,"list/set/tuple","element count <= given integer"
+  min-count,"list/set/tuple/sorted-set/array","element count >= given integer"
+  max-count,"list/set/tuple/sorted-set/array","element count <= given integer"
+  contains,"list/set/tuple/sorted-set/array","at least min-contains (1 when not given) and at most max-contains elements match the given type"
+  min-contains,"with contains","how many elements must match contains, at least"
+  max-contains,"with contains","how many elements may match contains, at most"
+  unique,"list/set/tuple/sorted-set/array","true: no two elements are the same value"
+  unique-by,"list/set/tuple/sorted-set/array","no two elements' given field is the same value; an element without it is compared with none"
   finite,float,"true: neither NaN nor an infinity"
   offsets,datetime,"the value's offset is one of the given strings, Z or ±HH:MM"
   version,ip,"4 or 6: the value is that family"
@@ -604,6 +646,14 @@ refine_constraints[14]{key,applies_to,meaning}:
 `{:refine t %{k: v, ...}}`'s constraint map may combine any number of
 these keys; a value must satisfy `t` itself *and* every listed
 constraint.
+
+**Every key is one of these**: an unknown key, a misspelt `min-lenght`,
+is a compile error (`schema/compile`), as are `min-contains` and
+`max-contains` without `contains`.
+
+**Two values are the same when their canonical forms are** (§1.5), for
+`unique` and `unique-by`: `1` and `1.0` differ, as `%{a: 1}` and
+`%{"a" => 1}` do.
 
 **NaN lies outside every range** (Jan, 2026-10-20): `min`, `max` and
 both `exclusive-` bounds refuse it, as every IEEE 754 comparison with NaN
@@ -720,8 +770,9 @@ does not give) never matters.
 **A named type may refer to itself**, directly or through others
 (Jan, 2026-10-20), when every such cycle passes a **guard**: a field of
 a `%shape` or `%schema`, or the elements of a collection (`list-of`,
-`set-of`, `map-of`, `tuple-of`, `array-of`, `ordered-map-of`,
-`sorted-set-of`). `nilable`, `any-of`, `one-of`, `all-of`, `not`,
+`list-items`, `set-of`, `map-of`, `tuple-of`, `tuple-of-all`,
+`array-of`, `ordered-map-of`, `sorted-set-of`, and a refine's
+`contains`). `nilable`, `any-of`, `one-of`, `all-of`, `not`,
 `refine` and `case` check the same value again, so they are no guard:
 `A: {:nilable A}` describes no value and is a compile error
 (`schema/compile`). A guarded check always ends, since a DXN value is

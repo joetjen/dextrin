@@ -314,7 +314,14 @@ defmodule Dextrin.Schema.Compiler do
   end
 
   defp resolved({:refine, type, constraints}, compiled, path) do
-    with {:ok, type} <- resolved(type, compiled, path), do: {:ok, {:refine, type, constraints}}
+    with {:ok, type} <- resolved(type, compiled, path),
+         {:ok, constraints} <- resolved_contains(constraints, compiled, path),
+         do: {:ok, {:refine, type, constraints}}
+  end
+
+  defp resolved({:list_items, particles}, compiled, path) do
+    with {:ok, particles} <- resolved_particles(particles, compiled, path),
+         do: {:ok, {:list_items, particles}}
   end
 
   defp resolved({form, types}, compiled, path)
@@ -327,7 +334,7 @@ defmodule Dextrin.Schema.Compiler do
   end
 
   defp resolved({form, type}, compiled, path)
-       when form in [:list_of, :set_of, :array_of, :sorted_set_of, :not, :nilable] do
+       when form in [:list_of, :set_of, :array_of, :sorted_set_of, :tuple_of_all, :not, :nilable] do
     with {:ok, type} <- resolved(type, compiled, path), do: {:ok, {form, type}}
   end
 
@@ -338,6 +345,28 @@ defmodule Dextrin.Schema.Compiler do
   end
 
   defp resolved(type_expr, _compiled, _path), do: {:ok, type_expr}
+
+  defp resolved_contains(%{"contains" => type} = constraints, compiled, path) do
+    with {:ok, type} <- resolved(type, compiled, path),
+         do: {:ok, %{constraints | "contains" => type}}
+  end
+
+  defp resolved_contains(constraints, _compiled, _path), do: {:ok, constraints}
+
+  defp resolved_particles(particles, compiled, path) do
+    Result.reduce_ok(particles, [], fn
+      {:one, type}, acc ->
+        with {:ok, type} <- resolved(type, compiled, path), do: {:ok, [{:one, type} | acc]}
+
+      {:repeat, group, least, most}, acc ->
+        with {:ok, group} <- resolved_particles(group, compiled, path),
+             do: {:ok, [{:repeat, group, least, most} | acc]}
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      {:error, _} = err -> err
+    end
+  end
 
   defp entry_name(%Keyword{name: name}), do: name
   defp entry_name(%Symbol{name: name}), do: name
@@ -666,10 +695,24 @@ defmodule Dextrin.Schema.Compiler do
 
   defp compile_type_expr(%Tuple{items: [%Keyword{name: "refine"}, elem, constraints]}, aliases)
        when is_map(constraints) do
-    with {:ok, t} <- compile_type_expr(elem, aliases) do
-      {:ok, {:refine, t, Map.new(constraints, fn {%Keyword{name: k}, v} -> {k, v} end)}}
-    end
+    with {:ok, t} <- compile_type_expr(elem, aliases),
+         {:ok, constraints} <- refine_constraints(constraints, aliases),
+         do: {:ok, {:refine, t, constraints}}
   end
+
+  # `{:list-items p ...}`: a list's items in order, each `p` a type for
+  # one item or a `{:repeat ...}` (DXN.md §4.1a).
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "list-items"} | particles]}, aliases) do
+    with {:ok, ps} <- particles(particles, aliases), do: {:ok, {:list_items, ps}}
+  end
+
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "tuple-of-all"}, elem]}, aliases) do
+    with {:ok, t} <- compile_type_expr(elem, aliases), do: {:ok, {:tuple_of_all, t}}
+  end
+
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: form} | _]}, _aliases)
+       when form in ["repeat", "group"],
+       do: {:error, "a #{form} stands only among {:list-items ...}'s items"}
 
   defp compile_type_expr(other, _aliases),
     do: {:error, "unrecognized type expression: #{inspect(other)}"}
@@ -682,6 +725,76 @@ defmodule Dextrin.Schema.Compiler do
       do: written,
       else: Map.get(Map.get(aliases, @names, %{}), written, written)
   end
+
+  # A `{:list-items}`'s or a group's items: `{:one, type}` for a type,
+  # `{:repeat, particles, least, most}` for a repeat, `most` nil when
+  # there is no upper bound.
+  defp particles(values, aliases) do
+    Result.reduce_ok(values, [], fn value, acc ->
+      with {:ok, p} <- particle(value, aliases), do: {:ok, [p | acc]}
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      {:error, _} = err -> err
+    end
+  end
+
+  defp particle(%Tuple{items: [%Keyword{name: "repeat"}, inner, least, most]}, aliases)
+       when is_integer(least) and least >= 0 and
+              (is_nil(most) or (is_integer(most) and most >= least)) do
+    group =
+      case inner do
+        %Tuple{items: [%Keyword{name: "group"} | items]} -> items
+        single -> [single]
+      end
+
+    with {:ok, ps} <- particles(group, aliases), do: {:ok, {:repeat, ps, least, most}}
+  end
+
+  defp particle(%Tuple{items: [%Keyword{name: "repeat"} | _]}, _aliases),
+    do: {:error, "a repeat is {:repeat type min max}: 0 <= min <= max, max nil for no bound"}
+
+  defp particle(%Tuple{items: [%Keyword{name: "group"} | _]}, _aliases),
+    do: {:error, "a group stands only in a repeat, {:repeat {:group a b ...} min max}"}
+
+  defp particle(value, aliases) do
+    with {:ok, t} <- compile_type_expr(value, aliases), do: {:ok, {:one, t}}
+  end
+
+  @refine_keys ~w(min max exclusive-min exclusive-max multiple-of min-length max-length
+                  pattern min-count max-count finite offsets version prefix contains
+                  min-contains max-contains unique unique-by)
+
+  # A refine's constraints by name, every key one DXN.md §4.2 knows:
+  # a misspelt key would otherwise refuse every value, silently.
+  # `contains` holds a type, compiled here; `unique-by` a field's name.
+  defp refine_constraints(constraints, aliases) do
+    named = Map.new(constraints, fn {k, v} -> {literal_name(k), v} end)
+
+    cond do
+      key = Enum.find(Enum.sort(Map.keys(named)), &(&1 not in @refine_keys)) ->
+        {:error, "#{key} is no refine constraint (DXN.md §4.2)"}
+
+      not Map.has_key?(named, "contains") and
+          (Map.has_key?(named, "min-contains") or Map.has_key?(named, "max-contains")) ->
+        {:error, "min-contains and max-contains count the items a contains matches"}
+
+      true ->
+        with {:ok, named} <- contains_type(named, aliases) do
+          {:ok,
+           if(Map.has_key?(named, "unique-by"),
+             do: %{named | "unique-by" => literal_name(named["unique-by"])},
+             else: named
+           )}
+        end
+    end
+  end
+
+  defp contains_type(%{"contains" => type} = named, aliases) do
+    with {:ok, t} <- compile_type_expr(type, aliases), do: {:ok, %{named | "contains" => t}}
+  end
+
+  defp contains_type(named, _aliases), do: {:ok, named}
 
   defp maybe_compile(:none, _aliases), do: {:ok, :none}
   defp maybe_compile(value, aliases), do: compile_type_expr(value, aliases)

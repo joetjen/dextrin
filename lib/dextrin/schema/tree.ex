@@ -312,7 +312,16 @@ defmodule Dextrin.Schema.Tree do
 
   defp type_references({:generic, _params, body}), do: type_references(body)
   defp type_references({:apply, _name, args}), do: Enum.flat_map(args, &type_references/1)
+
+  defp type_references({:refine, type, %{"contains" => contains}}),
+    do: type_references(type) ++ type_references(contains)
+
   defp type_references({:refine, type, _}), do: type_references(type)
+  defp type_references({:list_items, particles}), do: Enum.flat_map(particles, &type_references/1)
+  defp type_references({:one, type}), do: type_references(type)
+
+  defp type_references({:repeat, group, _least, _most}),
+    do: Enum.flat_map(group, &type_references/1)
 
   defp type_references({form, types}) when is_list(types) and form != :enum,
     do: Enum.flat_map(types, &type_references/1)
