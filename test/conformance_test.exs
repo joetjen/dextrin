@@ -36,6 +36,29 @@ defmodule Dextrin.ConformanceTest do
 
   @user "%{User: %schema(2){name: :string}}"
 
+  test "a media type answers the form it names, or none" do
+    assert answer([
+             %{
+               "id" => "a",
+               "operation" => "media-type",
+               "media-type" => "application/vnd.acme.x+dxn"
+             },
+             %{"id" => "b", "operation" => "media-type", "media-type" => "application/json"}
+           ]) == [%{"id" => "a", "form" => "text"}, %{"id" => "b", "form" => "none"}]
+  end
+
+  test "a body answers whether it is worth decoding as its form" do
+    assert answer([
+             %{"id" => "a", "operation" => "identify", "form" => "schema", "text" => "# s\n%{}"},
+             %{"id" => "b", "operation" => "identify", "form" => "text", "text" => "[1]"},
+             %{"id" => "c", "operation" => "identify-binary", "binary" => "RFgB"}
+           ]) == [
+             %{"id" => "a", "identified" => "true"},
+             %{"id" => "b", "identified" => "false"},
+             %{"id" => "c", "identified" => "true"}
+           ]
+  end
+
   test "a case's schemas are loaded before it runs" do
     assert answer([
              %{
