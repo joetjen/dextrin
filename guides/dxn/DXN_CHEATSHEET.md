@@ -79,10 +79,16 @@ Name                            bare symbol -- a struct name or a named type
 {:set-of T}                     set, every element matches T
 {:tuple-of A B C}                fixed-arity positional tuple
 {:map-of K V}                   every key matches K, every value matches V
+{:array-of T}                   array, every element matches T
+{:ordered-map-of K V}           ordered map, keys match K, values match V
+{:sorted-set-of T}              sorted set, every element matches T
 {:enum lit lit ...}              value equals one of the literals
-{:one-of T U}                    union
+{:one-of T U}                    exactly one matches
+{:any-of T U}                    union: one or more match
 {:all-of T U}                    intersection
-{:nilable T}                     sugar for {:one-of :nil T}
+{:not T}                         matches what T refuses
+:never                           matches nothing
+{:nilable T}                     sugar for {:any-of :nil T}
 {:refine T %{constraints}}       base type + constraints, see below
 %schema{}    struct/record shape
 ```

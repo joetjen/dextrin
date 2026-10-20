@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`{:one-of ...}` means exactly one variant matches** (Jan,
+  2026-10-20; JSON Schema's `oneOf`), and **`{:any-of ...}`** is the new
+  "one or more" (`anyOf`) -- what `one-of` meant before. Breaking: a
+  schema whose `one-of` variants overlap now refuses a value two of them
+  match; write `any-of` to keep the old meaning. `{:nilable t}` is sugar
+  for `{:any-of :nil t}`.
 - **DXN.md says `.dxnb` writes `-0.0M` as `0.0M`** (Jan, 2026-10-20):
   CBOR's decimal (tag 4) has no negative zero, so it is the one value
   the binary form does not keep; text keeps the sign (§1.5, §2.2).
@@ -56,6 +62,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **New type forms** (DXN.md §4.1): `{:not t}`, `:never` (JSON
+  Schema's `false`), and element types for the collections that had
+  none: `{:array-of t}`, `{:ordered-map-of k v}`, `{:sorted-set-of t}`.
 - **`Dextrin.Format`** (DXN.md §6, ASCO's proposal): `media_type/1`,
   `extension/1`, `form/1` -- the three media types, and any `+dxn`
   suffix as text -- and `identifies?/2`, a cheap prefix test of whether

@@ -1,9 +1,10 @@
 defmodule Dextrin.Schema.TypeExpr do
   @moduledoc """
   Internal, compiled representation of a `.dxns` type expression — the
-  13-form vocabulary (`any`, `primitive`, `reference`, `list-of`,
-  `set-of`, `tuple-of`, `map-of`, `enum`, `one-of`, `all-of`,
-  `nilable`, `refine`, `struct`) `Dextrin.Schema.Compiler` turns a
+  vocabulary of DXN.md §4.1 (`any`, `never`, `primitive`, `reference`,
+  `list-of`, `set-of`, `tuple-of`, `map-of`, `array-of`,
+  `ordered-map-of`, `sorted-set-of`, `enum`, `one-of`, `any-of`,
+  `all-of`, `not`, `nilable`, `refine`, `struct`) `Dextrin.Schema.Compiler` turns a
   parsed `.dxns` value into, and what `matches?/2` below checks a
   decoded value against. This vocabulary is fixed, not extensible from
   outside an actual library change — what schema *authors* extend
@@ -31,15 +32,21 @@ defmodule Dextrin.Schema.TypeExpr do
 
   @type t ::
           :any
+          | :never
           | {:primitive, String.t()}
           | {:reference, String.t()}
           | {:list_of, t()}
           | {:set_of, t()}
           | {:tuple_of, [t()]}
           | {:map_of, t(), t()}
+          | {:array_of, t()}
+          | {:ordered_map_of, t(), t()}
+          | {:sorted_set_of, t()}
           | {:enum, [term()]}
           | {:one_of, [t()]}
+          | {:any_of, [t()]}
           | {:all_of, [t()]}
+          | {:not, t()}
           | {:nilable, t()}
           | {:refine, t(), %{optional(String.t()) => term()}}
 
@@ -74,6 +81,7 @@ defmodule Dextrin.Schema.TypeExpr do
   def matches?(type, value, registry \\ nil)
 
   def matches?(:any, _value, _registry), do: true
+  def matches?(:never, _value, _registry), do: false
 
   def matches?({:reference, name}, %Dextrin.Struct{name: struct_name}, _registry),
     do: struct_name == name
@@ -126,6 +134,24 @@ defmodule Dextrin.Schema.TypeExpr do
 
   def matches?({:map_of, _, _}, _value, _registry), do: false
 
+  def matches?({:array_of, elem_type}, %Array{items: items}, registry),
+    do: Enum.all?(Elixir.Tuple.to_list(items), &matches?(elem_type, &1, registry))
+
+  def matches?({:array_of, _}, _value, _registry), do: false
+
+  def matches?({:ordered_map_of, key_type, val_type}, %OrderedMap{pairs: pairs}, registry) do
+    Enum.all?(pairs, fn {k, v} ->
+      matches?(key_type, k, registry) and matches?(val_type, v, registry)
+    end)
+  end
+
+  def matches?({:ordered_map_of, _, _}, _value, _registry), do: false
+
+  def matches?({:sorted_set_of, elem_type}, %SortedSet{items: items}, registry),
+    do: Enum.all?(items, &matches?(elem_type, &1, registry))
+
+  def matches?({:sorted_set_of, _}, _value, _registry), do: false
+
   # A schema's `enum` literals always come from `.dxns` *compilation*
   # (`Dextrin.Schema.Compiler`'s `atomize_back/1` normalizes them to
   # `Dextrin.Keyword`, regardless of how the schema *source* was
@@ -135,8 +161,23 @@ defmodule Dextrin.Schema.TypeExpr do
   def matches?({:enum, literals}, value, _registry),
     do: Enum.any?(literals, &keyword_aware_eq?(&1, value))
 
-  def matches?({:one_of, types}, value, registry),
+  # Exactly one variant matches (JSON Schema's oneOf; Jan, 2026-10-20):
+  # every variant is tried, stopping at a second match.
+  def matches?({:one_of, types}, value, registry) do
+    Enum.reduce_while(types, 0, fn type, found ->
+      cond do
+        not matches?(type, value, registry) -> {:cont, found}
+        found == 1 -> {:halt, 2}
+        true -> {:cont, 1}
+      end
+    end) == 1
+  end
+
+  # One or more match (JSON Schema's anyOf).
+  def matches?({:any_of, types}, value, registry),
     do: Enum.any?(types, &matches?(&1, value, registry))
+
+  def matches?({:not, type}, value, registry), do: not matches?(type, value, registry)
 
   def matches?({:all_of, types}, value, registry),
     do: Enum.all?(types, &matches?(&1, value, registry))

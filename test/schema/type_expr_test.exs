@@ -1,6 +1,6 @@
 defmodule Dextrin.Schema.TypeExprTest do
   @moduledoc """
-  Exercises all 13 `type_expr` forms and all 10 `refine` constraints,
+  Exercises every `type_expr` form and all 10 `refine` constraints,
   each with a passing and a failing value — coverage implemented in
   `Dextrin.Schema.TypeExpr`/`Compiler` but never actually exercised by
   a test until now.
@@ -94,6 +94,60 @@ defmodule Dextrin.Schema.TypeExprTest do
       assert {:ok, %{"v" => 1}} = field(r, "1")
       assert {:ok, %{"v" => "x"}} = field(r, ~s("x"))
       assert {:error, %Dextrin.Error{}} = field(r, "true")
+    end
+
+    # Jan, 2026-10-20: one-of means exactly one variant matches (JSON
+    # Schema's oneOf); any-of, one or more (anyOf).
+    test "{:one-of type...} refuses a value two variants match" do
+      r = registry_for("{:one-of :integer {:refine :integer %{min: 0}}}")
+      assert {:ok, %{"v" => -1}} = field(r, "-1")
+      assert {:error, %Dextrin.Error{}} = field(r, "5")
+    end
+
+    test "{:any-of type...} takes a value one or more variants match" do
+      r = registry_for("{:any-of :integer {:refine :integer %{min: 0}}}")
+      assert {:ok, %{"v" => -1}} = field(r, "-1")
+      assert {:ok, %{"v" => 5}} = field(r, "5")
+      assert {:error, %Dextrin.Error{}} = field(r, ~s("x"))
+    end
+
+    test "{:not type} takes what the type refuses" do
+      r = registry_for("{:not :string}")
+      assert {:ok, %{"v" => 1}} = field(r, "1")
+      assert {:error, %Dextrin.Error{}} = field(r, ~s("x"))
+    end
+
+    test ":never takes nothing at all" do
+      r = registry_for(":never")
+      assert {:error, %Dextrin.Error{}} = field(r, "1")
+      assert {:error, %Dextrin.Error{}} = field(r, "nil")
+    end
+
+    test "they nest in each other and as element types" do
+      r = registry_for("{:list-of {:one-of :string {:any-of :integer :decimal}}}")
+      assert {:ok, %{"v" => ["a", 1]}} = field(r, ~s(["a" 1]))
+      assert {:error, %Dextrin.Error{}} = field(r, "[true]")
+    end
+
+    test "{:array-of type}" do
+      r = registry_for("{:array-of :integer}")
+      assert {:ok, %{"v" => %Dextrin.Array{}}} = field(r, "@array[1 2]")
+      assert {:error, %Dextrin.Error{}} = field(r, ~s(@array[1 "x"]))
+      assert {:error, %Dextrin.Error{}} = field(r, "[1 2]")
+    end
+
+    test "{:ordered-map-of key value}" do
+      r = registry_for("{:ordered-map-of :keyword :integer}")
+      assert {:ok, %{"v" => %Dextrin.OrderedMap{}}} = field(r, "@ordered %{a: 1 b: 2}")
+      assert {:error, %Dextrin.Error{}} = field(r, ~s(@ordered %{a: "x"}))
+      assert {:error, %Dextrin.Error{}} = field(r, "%{a: 1}")
+    end
+
+    test "{:sorted-set-of type}" do
+      r = registry_for("{:sorted-set-of :integer}")
+      assert {:ok, %{"v" => %Dextrin.SortedSet{}}} = field(r, "@sorted-set @{2 1}")
+      assert {:error, %Dextrin.Error{}} = field(r, ~s(@sorted-set @{1 "x"}))
+      assert {:error, %Dextrin.Error{}} = field(r, "@{1 2}")
     end
 
     test "{:all-of type...}" do

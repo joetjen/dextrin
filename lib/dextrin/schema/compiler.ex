@@ -253,6 +253,7 @@ defmodule Dextrin.Schema.Compiler do
   # ---- type expressions -------------------------------------------------------
 
   defp compile_type_expr(%Keyword{name: "any"}, _aliases), do: {:ok, :any}
+  defp compile_type_expr(%Keyword{name: "never"}, _aliases), do: {:ok, :never}
   defp compile_type_expr(:any_keyword, _aliases), do: {:ok, :any}
 
   defp compile_type_expr(%Keyword{name: name}, _aliases) when name in @primitives,
@@ -298,8 +299,34 @@ defmodule Dextrin.Schema.Compiler do
   defp compile_type_expr(%Tuple{items: [%Keyword{name: "enum"} | literals]}, _aliases),
     do: {:ok, {:enum, literals}}
 
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "array-of"}, elem]}, aliases) do
+    with {:ok, t} <- compile_type_expr(elem, aliases), do: {:ok, {:array_of, t}}
+  end
+
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "sorted-set-of"}, elem]}, aliases) do
+    with {:ok, t} <- compile_type_expr(elem, aliases), do: {:ok, {:sorted_set_of, t}}
+  end
+
+  defp compile_type_expr(
+         %Tuple{items: [%Keyword{name: "ordered-map-of"}, key_type, val_type]},
+         aliases
+       ) do
+    with {:ok, kt} <- compile_type_expr(key_type, aliases),
+         {:ok, vt} <- compile_type_expr(val_type, aliases) do
+      {:ok, {:ordered_map_of, kt, vt}}
+    end
+  end
+
   defp compile_type_expr(%Tuple{items: [%Keyword{name: "one-of"} | elems]}, aliases) do
     with {:ok, ts} <- map_compile(elems, aliases), do: {:ok, {:one_of, ts}}
+  end
+
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "any-of"} | elems]}, aliases) do
+    with {:ok, ts} <- map_compile(elems, aliases), do: {:ok, {:any_of, ts}}
+  end
+
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "not"}, elem]}, aliases) do
+    with {:ok, t} <- compile_type_expr(elem, aliases), do: {:ok, {:not, t}}
   end
 
   defp compile_type_expr(%Tuple{items: [%Keyword{name: "all-of"} | elems]}, aliases) do

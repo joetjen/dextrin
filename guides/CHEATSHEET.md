@@ -153,10 +153,16 @@ Address                        bare symbol — a struct name or a named type
 {:set-of T}                    set whose every element matches T
 {:tuple-of A B C}              fixed-arity positional tuple
 {:map-of K V}                  every key matches K, every value matches V
+{:array-of T}                  array whose every element matches T
+{:ordered-map-of K V}          ordered map: keys match K, values match V
+{:sorted-set-of T}             sorted set whose every element matches T
 {:enum :a :b :c}                value must equal one of the given literals
-{:one-of A B}                  union — matches at least one
+{:one-of A B}                  exactly one matches (JSON Schema's oneOf)
+{:any-of A B}                  union — matches one or more (anyOf)
 {:all-of A B}                  intersection — matches all
-{:nilable T}                   sugar for {:one-of :nil T}
+{:not T}                       matches what T refuses
+:never                         matches nothing
+{:nilable T}                   sugar for {:any-of :nil T}
 {:refine T %{constraints}}     base type + refine constraints (below)
 %schema{}  struct/record shape
 ```
