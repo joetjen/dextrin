@@ -268,6 +268,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A trusted decode keeps `:nan`, `:positive_infinity`,
+  `:negative_infinity`, `:nil`, `:true` and `:false` keywords**
+  (`Dextrin.Keyword.trusted/1`): their atoms are already NaN, the
+  infinities, nil and the booleans, so a trusted round trip turned the
+  keyword into that value.
+- **NaN and the infinities are numbers in a schema**: `min: -Infinity`,
+  `max: Infinity`, `{:enum NaN}` compiled them as keywords.
+- **A final newline is no part of a format, a date or a time**: the
+  grammars' `$` matched before one (PCRE's `D` flag now), and
+  `@time`, `@datetime`, `@local-datetime` and `@duration` read one;
+  `host-port` raised on `"a:80\n"`.
+- **A hostname's 253 are codepoints**, not graphemes; an unknown type's
+  compile error writes it in DXN.
+
 - **A string's length counts codepoints**, as DXN.md §4.2 says, not
   graphemes: `"e\u0301"` is two long, as in every other implementation.
 - **A `.dxnb` document read inside another keeps the outer one's state**:

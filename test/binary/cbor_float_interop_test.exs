@@ -44,7 +44,7 @@ defmodule Dextrin.Binary.CborFloatInteropTest do
   # reads every width (DXN.md §2.2, Jan, 2026-10-20).
   test "half-precision floats are read, specials and subnormals included" do
     half = fn bits -> Dextrin.decode_binary("DX" <> <<1, 7::3, 25::5, bits::16>>) end
-    assert {:ok, 0.0} = half.(0x0000)
+    assert {:ok, +0.0} = half.(0x0000)
     assert {:ok, -2.0} = half.(0xC000)
     assert {:ok, 65_504.0} = half.(0x7BFF)
     assert {:ok, 5.960464477539063e-8} = half.(0x0001)

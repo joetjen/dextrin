@@ -101,9 +101,9 @@ defmodule Dextrin.Schema.Format do
   defp check("ipv4", text), do: address?(text, 4)
   defp check("ipv6", text), do: address?(text, 6)
 
-  # RFC 1123's labels, the whole at most 253 characters.
+  # RFC 1123's labels, the whole at most 253 codepoints.
   defp check(name, text) when name in ["hostname", "idn-hostname"],
-    do: String.length(text) <= 253 and matches?(name, text)
+    do: length(String.to_charlist(text)) <= 253 and matches?(name, text)
 
   defp check("email", text), do: email?(text, @local, "hostname")
   defp check("idn-email", text), do: email?(text, @idn_local, "idn-hostname")
@@ -142,7 +142,9 @@ defmodule Dextrin.Schema.Format do
 
     case :persistent_term.get(key, nil) do
       nil ->
-        re = Regex.compile!(source, "u")
+        # `$` is the string's end, PCRE's D flag (JavaScript's `$`
+        # already is): a final newline is no part of a format.
+        re = Regex.compile!(source, [:unicode, :ucp, :dollar_endonly])
         :persistent_term.put(key, re)
         re
 

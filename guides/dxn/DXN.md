@@ -780,7 +780,11 @@ compile error (`schema/compile`). Every implementation checks a format
 the same way: a format DXN has a tag for is read by that tag's reader,
 so `format: :date` takes exactly the strings `@date "..."` takes; every
 other format is the grammar below, a regular expression that PCRE,
-JavaScript (with the `u` flag) and PHP read alike.
+JavaScript (with the `u` flag) and PHP read alike. **`$` is the
+string's end**: PCRE and PHP compile the grammars with the `D` flag
+(`PCRE2_DOLLAR_ENDONLY`), which JavaScript's `$` is already, so a final
+newline is no part of a hostname. The tags' readers end there too:
+`@time "12:00:00\n"` is `syntax`.
 
 ```toon
 formats[22]{name,checked_as}:
@@ -792,8 +796,8 @@ formats[22]{name,checked_as}:
   uuid,"@uuid's reader: 8-4-4-4-12 hex digits, either case"
   ipv4,"@ip's reader: an IPv4 address, no prefix"
   ipv6,"@ip's reader: an IPv6 address, no prefix, no zone"
-  hostname,"labels LABEL joined by dots, 253 characters at most"
-  idn-hostname,"labels U-LABEL joined by dots, 253 characters at most"
+  hostname,"labels LABEL joined by dots, 253 codepoints at most"
+  idn-hostname,"labels U-LABEL joined by dots, 253 codepoints at most"
   email,"LOCAL @ DOMAIN, split at the last @: LOCAL at most 64 bytes, DOMAIN a hostname, [IPv4] or [IPv6:address]"
   idn-email,"as email, with IDN-LOCAL and an idn-hostname"
   uri,"RFC 3986's URI, from the parts below"

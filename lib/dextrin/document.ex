@@ -217,7 +217,10 @@ defmodule Dextrin.Document do
     do: {:insert, {given(path), given(where), given(value)}}
 
   defp given(%Dextrin.Keyword{name: name} = keyword) do
-    String.to_existing_atom(name)
+    case Dextrin.Keyword.trusted(name) do
+      %Dextrin.Keyword{} -> keyword
+      _atom -> String.to_existing_atom(name)
+    end
   rescue
     ArgumentError -> keyword
   end

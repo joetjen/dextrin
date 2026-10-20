@@ -544,7 +544,7 @@ defmodule Dextrin.Text.Actions do
   # trusted decodes a real atom, `DXN.md` §1.3's own natural mapping;
   # untrusted (the default) wraps in `Dextrin.Keyword` instead. `symbol`
   # deliberately has no equivalent — see that doc.
-  defp keyword_value(name, %Registry{trusted: true}), do: String.to_atom(name)
+  defp keyword_value(name, %Registry{trusted: true}), do: Keyword.trusted(name)
   defp keyword_value(name, _ctx), do: Keyword.new(name)
 
   # DXN.md §1.6: an arrow entry's key must be one of the eight allowed

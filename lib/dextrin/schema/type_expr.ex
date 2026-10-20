@@ -567,7 +567,7 @@ defmodule Dextrin.Schema.TypeExpr do
   defp shape_field(%{required: true}, :error, _context), do: :error
   defp shape_field(_field, :error, _context), do: :absent
 
-  defp default_key(name, %{registry: %Dextrin.Registry{trusted: true}}), do: String.to_atom(name)
+  defp default_key(name, %{registry: %Dextrin.Registry{trusted: true}}), do: Keyword.trusted(name)
   defp default_key(name, _context), do: Keyword.new(name)
 
   defp extras(fields, map, %{registry: %Dextrin.Registry{strict: true}}) do
