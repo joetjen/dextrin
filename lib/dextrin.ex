@@ -47,6 +47,7 @@ defmodule Dextrin do
           validate: boolean(),
           pretty: boolean(),
           indent: non_neg_integer(),
+          width: pos_integer(),
           trusted: boolean()
         ]
 
@@ -78,10 +79,13 @@ defmodule Dextrin do
   Single-line, minimal-whitespace by default — the smallest text this
   value can round-trip through, with no line-wrapping or indentation
   at all (`Dextrin.Text.Printer`). Pass `pretty: true` for multi-line,
-  indented output instead (`Dextrin.Text.Formatter`) — `indent:` then
-  sets the number of spaces per nesting level (default 2). Both
-  produce the exact same value on the way back through `decode/2`;
-  `pretty`/`indent` are a rendering choice, never a semantic one.
+  indented output instead (`Dextrin.Text.Formatter`): the top-level
+  collection one entry per line, a nested one on one line when it fits.
+  `indent:` then sets the number of spaces per nesting level (default 2),
+  and `width:` the columns a nested collection's one line must fit in
+  (default 80). Both produce the exact same value on the way back through
+  `decode/2`; `pretty`/`indent`/`width` are a rendering choice, never a
+  semantic one.
 
       {:ok, value} = Dextrin.decode("%{x: 1, y: 2}")
 

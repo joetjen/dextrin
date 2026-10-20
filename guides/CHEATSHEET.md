@@ -19,8 +19,11 @@ Dextrin.encode_binary(value, opts \\ [])    #=> {:ok, bytes} | {:error, %Dextrin
 named schema), `validate:` (encode only, default `true` — set `false`
 to skip the automatic whole-tree schema check), `pretty:` (`encode/2`
 only, default `false` — multi-line, indented output instead of
-single-line/compact), `indent:` (`encode/2` only, meaningful with
-`pretty: true` — spaces per nesting level, default 2), `trusted:`
+single-line/compact: the top-level collection one entry per line, a
+nested one on one line when it fits), `indent:` (`encode/2` only,
+meaningful with `pretty: true` — spaces per nesting level, default 2),
+`width:` (`encode/2` only, meaningful with `pretty: true` — the columns
+a nested collection's one line must fit in, default 80), `trusted:`
 (decode only, default `false` — `keyword` decodes as
 `Dextrin.Keyword.t()`, so `String.to_atom/1` is never reachable from
 the input; `true`, for a source you control, decodes it as a real

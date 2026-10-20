@@ -40,7 +40,7 @@ defmodule Mix.Tasks.Dextrin.FormatTest do
     output = capture_io(fn -> Format.run([path]) end)
 
     assert output ==
-             "# the config\n%{\n  name: \"acme\"  # the name\n  deps: [\n    \"a\"\n  ]\n}\n"
+             "# the config\n%{\n  name: \"acme\"  # the name\n  deps: [\"a\"]\n}\n"
   end
 
   @tag :tmp_dir

@@ -117,7 +117,8 @@ defmodule Dextrin.Document do
   `doc` laid out the way the pretty printer lays out a value, with every
   comment kept beside the entry it belongs to (`Dextrin.Document.Formatter`).
   Layout only: every token is written as it was. `:indent` is the spaces
-  per level (2).
+  per level (2), `:width` the columns a nested collection's one line must
+  fit in (80).
   """
   @spec format(t(), keyword()) :: String.t()
   def format(%__MODULE__{tree: tree}, opts \\ []),
