@@ -271,6 +271,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A generic checked by its own name refuses the value**
+  (`schema/type-mismatch`), where `Dextrin.Schema.check/3` raised: a
+  generic takes no value until `{:of Name ...}` gives its arguments.
+
 - **An enum's literal is the value itself**: `{:enum 1}` took `1.0`,
   which Elixir's `==` calls equal and DXN does not (§1.5).
 - **`bits` is a built-in tag** for `{:tagged}`, which took it as custom.
