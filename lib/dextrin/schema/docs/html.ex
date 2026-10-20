@@ -16,25 +16,89 @@ defmodule Dextrin.Schema.Docs.Html do
   @spec pages(String.t(), [map()]) :: [Docs.page()]
   def pages(title, definitions) do
     known = Map.new(definitions, &{&1.name, &1})
-    used_by = used_by(definitions)
-    namespaces = definitions |> Enum.group_by(& &1.namespace) |> Enum.sort_by(&elem(&1, 0))
+    by_namespace = Enum.group_by(definitions, & &1.namespace)
+    named = by_namespace |> Map.keys() |> Enum.reject(&(&1 == ""))
+    all = named |> Enum.flat_map(&prefixes/1) |> Enum.uniq() |> Enum.sort()
 
     ctx = %{
       known: known,
-      used_by: used_by,
+      used_by: used_by(definitions),
       title: title,
-      namespaces: Enum.map(namespaces, &elem(&1, 0))
+      by_namespace: by_namespace,
+      all: all,
+      notes: notes(definitions)
     }
 
-    [{"style.css", stylesheet()}, {"index.html", index(namespaces, ctx)}] ++
-      for {namespace, defs} <- namespaces,
-          do: {page_of(namespace), namespace_page(namespace, defs, ctx)}
+    [{"style.css", stylesheet()}, {"index.html", namespace_page(nil, ctx)}] ++
+      for(namespace <- all, do: {page_of(namespace), namespace_page(namespace, ctx)})
+  end
+
+  # ---- the namespace tree ------------------------------------------------------
+
+  # `acme.shop` and every namespace above it: `acme`, `acme.shop`.
+  defp prefixes(namespace) do
+    segments = String.split(namespace, ".")
+    for n <- 1..length(segments), do: segments |> Enum.take(n) |> Enum.join(".")
+  end
+
+  # The namespaces directly below `parent` (nil: the roots), in order.
+  defp children(nil, ctx), do: Enum.filter(ctx.all, &(not String.contains?(&1, ".")))
+
+  defp children(parent, ctx) do
+    depth = length(String.split(parent, "."))
+
+    Enum.filter(ctx.all, fn namespace ->
+      String.starts_with?(namespace, parent <> ".") and
+        length(String.split(namespace, ".")) == depth + 1
+    end)
+  end
+
+  # The public definitions of `namespace`, in order, and the internal ones
+  # by owner.
+  defp own(namespace, ctx) do
+    defs = Map.get(ctx.by_namespace, namespace || "", [])
+
+    public =
+      defs |> Enum.filter(&is_nil(&1.internal_to)) |> Enum.sort_by(&String.downcase(&1.short))
+
+    {public, Enum.group_by(Enum.reject(defs, &is_nil(&1.internal_to)), & &1.internal_to)}
+  end
+
+  defp internals_of(definition, internal),
+    do: internal |> Map.get(definition.name, []) |> Enum.sort_by(&String.downcase(&1.short))
+
+  # What a namespace file says about each namespace.
+  defp notes(definitions) do
+    definitions
+    |> Enum.filter(&(&1.namespace_note not in [nil, ""]))
+    |> Map.new(&{&1.namespace, &1.namespace_note})
+  end
+
+  # Every public definition in `namespace` and below it.
+  defp total(namespace, ctx) do
+    ctx.by_namespace
+    |> Enum.filter(fn {ns, _} -> ns == namespace or String.starts_with?(ns, namespace <> ".") end)
+    |> Enum.flat_map(&elem(&1, 1))
+    |> Enum.count(&is_nil(&1.internal_to))
   end
 
   # ---- addresses -------------------------------------------------------------
 
-  defp page_of(""), do: "global.html"
-  defp page_of(namespace), do: namespace <> ".html"
+  # A namespace is a directory, its page the directory's `index.html`:
+  # `acme.shop` is `acme/shop/index.html` (Jan, 2026-10-20). The top -- the
+  # index, and the names with no namespace -- is `index.html`. Every link
+  # is written from the site's root here, and made relative to the page
+  # it is on when the page is put together (`relative/2`).
+  defp page_of(nil), do: "index.html"
+  defp page_of(""), do: "index.html"
+  defp page_of(namespace), do: (namespace |> String.split(".") |> Enum.join("/")) <> "/index.html"
+
+  # Every link in `html` that names a page or file of the site, from the
+  # site's root, made relative to the page at `path`.
+  defp relative(html, path) do
+    base = String.duplicate("../", length(String.split(path, "/")) - 1)
+    Regex.replace(~r/(href)="(?!https?:|#|mailto:)([^"]*)"/, html, "\\1=\"#{base}\\2\"")
+  end
 
   defp anchor(%{internal_to: nil, short: short}), do: short
   defp anchor(%{internal_to: owner, short: short}), do: short_of(owner) <> "." <> short
@@ -44,8 +108,7 @@ defmodule Dextrin.Schema.Docs.Html do
   defp href(%{namespace: namespace} = definition),
     do: page_of(namespace) <> "#" <> anchor(definition)
 
-  defp label_of(""), do: "No namespace"
-  defp label_of(namespace), do: namespace
+  defp last_segment(namespace), do: namespace |> String.split(".") |> List.last()
 
   # Who refers to whom: for each name, the definitions whose types name it.
   defp used_by(definitions) do
@@ -63,21 +126,17 @@ defmodule Dextrin.Schema.Docs.Html do
   end
 
   defp types_of(%{kind: :type, versions: versions}), do: Enum.map(versions, & &1.value)
+  defp types_of(%{versions: versions}), do: for(v <- versions, f <- v.fields, do: f.type)
 
-  defp types_of(%{versions: versions}),
-    do: for(v <- versions, f <- v.fields, do: f.type)
-
-  # ---- the frame -------------------------------------------------------------
+  # ---- the frame: the sidebar, then the page ----------------------------------
 
   defp frame(title, current, ctx, body) do
-    nav =
-      Enum.map_join(ctx.namespaces, "", fn namespace ->
-        current? = namespace == current
+    current
+    |> page_of()
+    |> then(&relative(page(title, current, ctx, body), &1))
+  end
 
-        ~s(<li><a href="#{page_of(namespace)}"#{if current?, do: ~s( aria-current="page"), else: ""}>) <>
-          escape(label_of(namespace)) <> "</a></li>"
-      end)
-
+  defp page(title, current, ctx, body) do
     """
     <!doctype html>
     <html lang="en">
@@ -90,135 +149,207 @@ defmodule Dextrin.Schema.Docs.Html do
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
     <link rel="stylesheet" href="style.css">
+    <script>#{theme_early()}</script>
     </head>
     <body>
-    <header class="site">
-      <div class="site-inner">
-        <a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true">%{}</span>#{escape(ctx.title)}</a>
-        <nav aria-label="Namespaces"><ul>#{nav}</ul></nav>
-      </div>
-    </header>
-    <main>
-    #{body}
-    </main>
-    <footer class="site-foot"><p>Generated from the <code>.dxns</code> sources by Dextrin. Positions are the order of a struct's fields in its binary form.</p></footer>
+    <div class="layout">
+      <nav class="sidebar" aria-label="All namespaces and definitions">
+        <div class="sidebar-head">
+          <a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true">%{}</span>#{escape(ctx.title)}</a>
+          <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Switch between light and dark">Dark</button>
+        </div>
+        <details class="sidebar-toggle" open>
+          <summary>Browse</summary>
+          #{sidebar(current, ctx)}
+        </details>
+      </nav>
+      <main class="main">
+        #{body}
+        <footer class="site-foot"><p>Generated from the <code>.dxns</code> sources by Dextrin. A field's # is its position in the binary form.</p></footer>
+      </main>
+    </div>
+    <script>#{theme_switch()}</script>
     </body>
     </html>
     """
   end
 
-  # ---- the index ---------------------------------------------------------------
+  # ---- light and dark ---------------------------------------------------------
 
-  defp index(namespaces, ctx) do
-    rows =
-      Enum.map_join(namespaces, "", fn {namespace, defs} ->
-        public = Enum.filter(defs, &is_nil(&1.internal_to))
-        note = defs |> Enum.find_value(& &1.namespace_note) |> first_paragraph()
+  # Light or dark, as the reader chose it (Jan, 2026-10-20): the choice is
+  # kept in localStorage under one key, and with none the page follows the
+  # system. The first script runs before the page is drawn, so a stored
+  # choice never flashes the other theme; storage that refuses -- a
+  # private window -- leaves the page working, only forgetful.
 
-        """
-        <li class="ns-card">
-          <h3><a href="#{page_of(namespace)}">#{escape(label_of(namespace))}</a></h3>
-          <p class="counts">#{counts(public)}</p>
-          #{if note, do: Markdown.to_html(note, fn _ -> nil end), else: ""}
-        </li>
-        """
+  defp theme_early do
+    ~s|try { var t = localStorage.getItem("dextrin-docs-theme"); | <>
+      ~s|if (t === "light" \|\| t === "dark") document.documentElement.setAttribute("data-theme", t); } catch (e) {}|
+  end
+
+  defp theme_switch do
+    """
+    (function () {
+      var root = document.documentElement, button = document.getElementById("theme-toggle");
+      function current() {
+        var t = root.getAttribute("data-theme");
+        if (t) return t;
+        return window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      function label() {
+        var next = current() === "dark" ? "light" : "dark";
+        button.textContent = next === "dark" ? "Dark" : "Light";
+        button.setAttribute("aria-label", "Switch to " + next);
+      }
+      button.addEventListener("click", function () {
+        var next = current() === "dark" ? "light" : "dark";
+        root.setAttribute("data-theme", next);
+        try { localStorage.setItem("dextrin-docs-theme", next); } catch (e) {}
+        label();
+      });
+      label();
+    })();
+    """
+  end
+
+  # The tree of every namespace and definition, the branch of `current`
+  # (a namespace, "" for the names with none, nil for the index) open.
+  defp sidebar(current, ctx) do
+    roots = children(nil, ctx) |> Enum.map_join("", &tree_node(&1, current, ctx))
+
+    global =
+      case own("", ctx) do
+        {[], _} ->
+          ""
+
+        {public, internal} ->
+          open = if current == nil, do: " open", else: ""
+
+          ~s(<li><details#{open}><summary><a href="#{page_of(nil)}">No namespace</a></summary><ul>) <>
+            Enum.map_join(public, "", &tree_definition(&1, internal)) <> "</ul></details></li>"
+      end
+
+    ~s(<ul class="tree">) <> roots <> global <> "</ul>"
+  end
+
+  defp tree_node(namespace, current, ctx) do
+    on_path? =
+      current not in [nil, ""] and
+        (current == namespace or String.starts_with?(current, namespace <> "."))
+
+    {public, internal} = own(namespace, ctx)
+
+    inner =
+      Enum.map_join(children(namespace, ctx), "", &tree_node(&1, current, ctx)) <>
+        Enum.map_join(public, "", &tree_definition(&1, internal))
+
+    ~s(<li><details#{if on_path?, do: " open", else: ""}><summary><a href="#{page_of(namespace)}"#{aria(current == namespace)}>) <>
+      escape(last_segment(namespace)) <> ~s(</a></summary><ul>) <> inner <> "</ul></details></li>"
+  end
+
+  defp tree_definition(d, internal) do
+    inner =
+      case internals_of(d, internal) do
+        [] -> ""
+        list -> "<ul>" <> Enum.map_join(list, "", &tree_definition(&1, %{})) <> "</ul>"
+      end
+
+    ~s(<li class="def-leaf"><a href="#{href(d)}"><span class="dot dot-#{d.kind}" aria-hidden="true"></span>#{escape(d.short)}</a>#{inner}</li>)
+  end
+
+  defp aria(true), do: ~s( aria-current="page")
+  defp aria(false), do: ""
+
+  # ---- a namespace's page, and the index ---------------------------------------
+
+  # One design for both (Jan, 2026-10-20): the index is the page of the
+  # level above the roots. A section for each namespace directly below,
+  # listing its own namespaces and definitions; then this namespace's own
+  # definitions in full.
+  defp namespace_page(namespace, ctx) do
+    {public, internal} = own(namespace, ctx)
+    below = children(namespace, ctx)
+    sections = Enum.map_join(below, "", &child_section(&1, ctx))
+
+    note = if namespace, do: Map.get(ctx.notes, namespace), else: nil
+
+    # The top's own definitions are the names with no namespace.
+    cards =
+      Enum.map_join(public, "", fn d ->
+        definition(d, ctx) <> Enum.map_join(internals_of(d, internal), "", &definition(&1, ctx))
       end)
 
-    all =
-      namespaces
-      |> Enum.flat_map(&elem(&1, 1))
-      |> Enum.filter(&is_nil(&1.internal_to))
-      |> Enum.sort_by(&String.downcase(&1.short))
-      |> Enum.map_join("", fn d ->
-        ~s(<li><a href="#{href(d)}"><code>#{escape(d.short)}</code></a> ) <>
-          kind_chip(d) <> ~s(<span class="ns">#{escape(label_of(d.namespace))}</span></li>)
-      end)
+    own_heading =
+      cond do
+        cards == "" or below == [] -> ""
+        namespace == nil -> ~s(<h2 class="own-heading">Names with no namespace</h2>)
+        true -> ~s(<h2 class="own-heading">Definitions in <code>#{escape(namespace)}</code></h2>)
+      end
 
-    frame(ctx.title, nil, ctx, """
+    {eyebrow, heading, title} =
+      case namespace do
+        nil -> {"Schema reference", escape(ctx.title), ctx.title}
+        ns -> {"Namespace", "<code>" <> escape(ns) <> "</code>", ns <> " · " <> ctx.title}
+      end
+
+    frame(title, namespace, ctx, """
     <div class="page">
-      <section class="intro">
-        <p class="eyebrow">Schema reference</p>
-        <h1>#{escape(ctx.title)}</h1>
-        <p class="lede">Every struct schema, shape and named type, by namespace. A name links to its definition wherever it appears.</p>
-      </section>
-      <section aria-labelledby="ns-heading">
-        <h2 id="ns-heading">Namespaces</h2>
-        <ul class="ns-list">#{rows}</ul>
-      </section>
-      <section aria-labelledby="az-heading">
-        <h2 id="az-heading">All definitions</h2>
-        <ul class="az">#{all}</ul>
-      </section>
+      <header class="intro">
+        #{crumbs(namespace)}
+        <p class="eyebrow">#{eyebrow}</p>
+        <h1>#{heading}</h1>
+        #{if namespace == nil, do: ~s(<p class="lede">Every struct schema, shape and named type, by namespace. A name links to its definition wherever it appears.</p>), else: ""}
+        #{if note, do: ~s(<div class="prose">) <> Markdown.to_html(note, linker(%{scope: %{}}, ctx)) <> "</div>", else: ""}
+      </header>
+      #{if sections == "", do: "", else: ~s(<div class="sections">) <> sections <> "</div>"}
+      #{own_heading}
+      #{cards}
     </div>
     """)
   end
 
-  defp counts(defs) do
-    by_kind = Enum.frequencies_by(defs, & &1.kind)
+  defp crumbs(nil), do: ""
 
-    [{:schema, "schema", "schemas"}, {:shape, "shape", "shapes"}, {:type, "type", "types"}]
-    |> Enum.flat_map(fn {kind, one, many} ->
-      case Map.get(by_kind, kind, 0) do
-        0 -> []
-        1 -> ["1 #{one}"]
-        n -> ["#{n} #{many}"]
-      end
-    end)
-    |> Enum.join(" · ")
+  defp crumbs(namespace) do
+    parents = namespace |> prefixes() |> Enum.drop(-1)
+
+    links =
+      [~s(<a href="index.html">All namespaces</a>)] ++
+        Enum.map(parents, &~s(<a href="#{page_of(&1)}">#{escape(last_segment(&1))}</a>))
+
+    ~s(<p class="crumbs">) <>
+      Enum.join(links, " › ") <> " › <b>" <> escape(last_segment(namespace)) <> "</b></p>"
   end
+
+  # A namespace directly below the page's: a link to it, its own
+  # namespaces and its definitions.
+  defp child_section(namespace, ctx) do
+    {public, _internal} = own(namespace, ctx)
+    note = ctx.notes |> Map.get(namespace) |> first_paragraph()
+
+    subs =
+      Enum.map_join(children(namespace, ctx), "", fn sub ->
+        ~s(<li><a class="ns-link" href="#{page_of(sub)}"><code>#{escape(last_segment(sub))}</code></a><span class="count">#{total(sub, ctx)}</span></li>)
+      end)
+
+    defs = Enum.map_join(public, "", &def_link/1)
+
+    """
+    <section class="ns-section">
+      <h2><a href="#{page_of(namespace)}"><code>#{escape(namespace)}</code></a></h2>
+      #{if note, do: ~s(<div class="prose summary">) <> Markdown.to_html(note, fn _ -> nil end) <> "</div>", else: ""}
+      #{if subs == "", do: "", else: ~s(<div class="group"><p class="label">Namespaces</p><ul class="links">) <> subs <> "</ul></div>"}
+      #{if defs == "", do: "", else: ~s(<div class="group"><p class="label">Definitions</p><ul class="links">) <> defs <> "</ul></div>"}
+    </section>
+    """
+  end
+
+  defp def_link(d),
+    do: ~s(<li><a href="#{href(d)}"><code>#{escape(d.short)}</code></a>#{kind_chip(d)}</li>)
 
   defp first_paragraph(nil), do: nil
   defp first_paragraph(""), do: nil
   defp first_paragraph(text), do: text |> String.split(~r/\n\s*\n/) |> hd()
-
-  # ---- a namespace's page ------------------------------------------------------
-
-  defp namespace_page(namespace, defs, ctx) do
-    public =
-      defs |> Enum.filter(&is_nil(&1.internal_to)) |> Enum.sort_by(&String.downcase(&1.short))
-
-    internal = Enum.group_by(Enum.reject(defs, &is_nil(&1.internal_to)), & &1.internal_to)
-
-    toc =
-      Enum.map_join(public, "", fn d ->
-        inner =
-          internal
-          |> Map.get(d.name, [])
-          |> Enum.sort_by(&String.downcase(&1.short))
-          |> Enum.map_join("", &~s(<li><a href="##{anchor(&1)}">#{escape(&1.short)}</a></li>))
-
-        ~s(<li><a href="##{anchor(d)}">#{escape(d.short)}</a>) <>
-          if(inner == "", do: "", else: ~s(<ul>#{inner}</ul>)) <> "</li>"
-      end)
-
-    note = Enum.find_value(defs, & &1.namespace_note)
-
-    body =
-      Enum.map_join(public, "", fn d ->
-        definition(d, ctx) <>
-          (internal
-           |> Map.get(d.name, [])
-           |> Enum.sort_by(&String.downcase(&1.short))
-           |> Enum.map_join("", &definition(&1, ctx)))
-      end)
-
-    frame("#{label_of(namespace)} · #{ctx.title}", namespace, ctx, """
-    <div class="page with-toc">
-      <aside class="toc" aria-label="On this page">
-        <p class="toc-title">On this page</p>
-        <ul>#{toc}</ul>
-      </aside>
-      <div class="content">
-        <section class="intro">
-          <p class="eyebrow">Namespace</p>
-          <h1><code>#{escape(label_of(namespace))}</code></h1>
-          #{if note && note != "", do: ~s(<div class="prose">) <> Markdown.to_html(note, linker(%{scope: %{}}, ctx)) <> "</div>", else: ""}
-        </section>
-        #{body}
-      </div>
-    </div>
-    """)
-  end
 
   # ---- one definition ----------------------------------------------------------
 
@@ -504,46 +635,66 @@ defmodule Dextrin.Schema.Docs.Html do
     a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
     h1, h2, h3 { text-wrap: balance; line-height: 1.25; margin: 0; }
 
-    .site { background: var(--surface); border-bottom: 1px solid var(--rule); }
-    .site-inner, main, .site-foot {
-      max-width: 72rem; margin: 0 auto;
-      padding-left: max(16px, env(safe-area-inset-left, 0px));
-      padding-right: max(16px, env(safe-area-inset-right, 0px));
+    /* The sidebar holds the far left edge on every page and scrolls on its
+       own; the page beside it. Below 52rem it moves on top, folded. */
+    .layout { display: grid; grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr); min-height: 100vh; }
+    .sidebar {
+      position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+      background: var(--surface); border-right: 1px solid var(--rule);
+      padding-block: calc(1rem + env(safe-area-inset-top, 0px)) 2rem;
+      padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: 1rem;
+      display: grid; align-content: start; gap: 1rem; font-size: 0.9rem;
     }
-    .site-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 2rem; padding-block: 0.75rem; }
-    .brand { display: inline-flex; align-items: center; gap: 0.6rem; font-weight: 700; color: var(--ink); text-decoration: none; }
+    .sidebar-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+    .brand { display: inline-flex; align-items: center; gap: 0.6rem; font-weight: 700; color: var(--ink); text-decoration: none; min-width: 0; }
+    .theme-toggle {
+      font: inherit; font-size: 0.75rem; letter-spacing: 0.04em; color: var(--muted); background: transparent;
+      border: 1px solid var(--rule); border-radius: 999px; padding: 0.15rem 0.65rem; cursor: pointer; flex: none;
+    }
+    .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+    .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .brand-mark { font-family: var(--font-code); font-size: 0.85rem; color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 0.15rem 0.4rem; }
-    .site nav ul { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; list-style: none; margin: 0; padding: 0; }
-    .site nav a { font-family: var(--font-code); font-size: var(--step--1); color: var(--muted); text-decoration: none; }
-    .site nav a[aria-current="page"], .site nav a:hover { color: var(--accent); }
+    .sidebar-toggle > summary { display: none; }
+    .tree, .tree ul { list-style: none; margin: 0; padding: 0; }
+    .tree ul { padding-left: 0.85rem; margin-left: 0.3rem; border-left: 1px solid var(--rule); }
+    .tree li { padding: 0.08rem 0; }
+    .tree summary { cursor: pointer; font-family: var(--font-code); font-size: 0.85rem; padding: 0.1rem 0; }
+    .tree summary::marker { color: var(--muted); }
+    .tree a { color: var(--ink); text-decoration: none; font-family: var(--font-code); font-size: 0.85rem; }
+    .tree a:hover { color: var(--accent); }
+    .tree a[aria-current="page"] { color: var(--accent); font-weight: 600; }
+    .def-leaf > a { display: inline-flex; align-items: center; gap: 0.4rem; }
+    .dot { width: 0.45rem; height: 0.45rem; border-radius: 50%; flex: none; }
+    .dot-schema { background: var(--accent); }
+    .dot-shape { background: var(--shape); }
+    .dot-type { background: var(--type); }
 
-    main { padding-block: 2rem 3rem; }
-    .page { display: grid; gap: 2.5rem; }
-    .page.with-toc { grid-template-columns: minmax(0, 13rem) minmax(0, 1fr); align-items: start; }
-    .content { display: grid; gap: 1.5rem; min-width: 0; }
+    .main {
+      min-width: 0; padding-block: 2rem 0;
+      padding-left: max(16px, 2.5rem); padding-right: max(16px, env(safe-area-inset-right, 0px), 2.5rem);
+    }
+    .page { display: grid; gap: 1.5rem; max-width: 64rem; }
     .eyebrow { margin: 0 0 0.35rem; font-size: var(--step--1); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
     h1 { font-size: var(--step-3); }
     h1 code { font-size: 0.85em; }
     .lede { color: var(--muted); max-width: 40rem; margin: 0.75rem 0 0; }
     .intro .prose { margin-top: 1rem; }
-    section > h2 { font-size: var(--step-1); margin-bottom: 1rem; }
+    .crumbs { margin: 0 0 0.75rem; font-family: var(--font-code); font-size: var(--step--1); color: var(--muted); }
+    .crumbs a { text-decoration: none; }
+    .crumbs b { color: var(--ink); font-weight: 600; }
 
-    .toc { position: sticky; top: 1rem; font-size: var(--step--1); }
-    .toc-title { margin: 0 0 0.5rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
-    .toc ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.2rem; }
-    .toc ul ul { padding-left: 0.9rem; margin-top: 0.2rem; border-left: 1px solid var(--rule); }
-    .toc a { font-family: var(--font-code); color: var(--ink); text-decoration: none; }
-    .toc a:hover { color: var(--accent); }
-
-    .ns-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); }
-    .ns-card { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 1rem 1.1rem; min-width: 0; }
-    .ns-card h3 { font-family: var(--font-code); font-size: var(--step-0); }
-    .ns-card h3 a { text-decoration: none; }
-    .ns-card p { margin: 0.4rem 0 0; color: var(--muted); font-size: 0.95rem; }
-    .ns-card .counts { font-size: var(--step--1); }
-    .az { list-style: none; margin: 0; padding: 0; columns: 18rem auto; column-gap: 2rem; }
-    .az li { break-inside: avoid; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem; padding: 0.2rem 0; }
-    .az .ns { font-family: var(--font-code); font-size: var(--step--1); color: var(--muted); }
+    .sections { display: grid; gap: 1rem; }
+    .ns-section { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 1.1rem 1.3rem; display: grid; gap: 0.75rem; min-width: 0; }
+    .ns-section h2 { font-size: var(--step-1); }
+    .ns-section h2 a { text-decoration: none; }
+    .ns-section .summary { color: var(--muted); font-size: 0.95rem; }
+    .group { display: grid; gap: 0.35rem; }
+    .group .label { margin: 0; }
+    .links { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem 1.25rem; }
+    .links li { display: inline-flex; align-items: baseline; gap: 0.4rem; }
+    .links a { text-decoration: none; }
+    .count { font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .own-heading { font-size: var(--step-1); margin-top: 0.5rem; }
 
     .def { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 1.25rem 1.4rem; display: grid; gap: 0.9rem; min-width: 0; scroll-margin-top: 1rem; }
     .def-head { display: grid; gap: 0.35rem; }
@@ -600,13 +751,13 @@ defmodule Dextrin.Schema.Docs.Html do
     details.older[open] > *:not(summary) { margin-top: 0.75rem; }
     .used-by { margin: 0; font-size: 0.95rem; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: baseline; }
 
-    .site-foot { padding-block: 1.5rem 2.5rem; color: var(--muted); font-size: var(--step--1); border-top: 1px solid var(--rule); }
+    .site-foot { margin-top: 3rem; padding-block: 1.5rem 2.5rem; color: var(--muted); font-size: var(--step--1); border-top: 1px solid var(--rule); max-width: 64rem; }
 
     @media (max-width: 52rem) {
-      .page.with-toc { grid-template-columns: minmax(0, 1fr); }
-      .toc { position: static; }
-      .toc > ul { display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; }
-      .toc ul ul { display: none; }
+      .layout { grid-template-columns: minmax(0, 1fr); }
+      .sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--rule); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+      .sidebar-toggle > summary { display: list-item; cursor: pointer; color: var(--muted); }
+      .main { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
       .def { padding: 1rem; }
     }
     @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }

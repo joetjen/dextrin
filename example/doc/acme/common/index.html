@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>acme.common · Acme schemas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../style.css">
+<script>try { var t = localStorage.getItem("dextrin-docs-theme"); if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); } catch (e) {}</script>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" aria-label="All namespaces and definitions">
+    <div class="sidebar-head">
+      <a class="brand" href="../../index.html"><span class="brand-mark" aria-hidden="true">%{}</span>Acme schemas</a>
+      <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Switch between light and dark">Dark</button>
+    </div>
+    <details class="sidebar-toggle" open>
+      <summary>Browse</summary>
+      <ul class="tree"><li><details open><summary><a href="../../acme/index.html">acme</a></summary><ul><li><details open><summary><a href="../../acme/common/index.html" aria-current="page">common</a></summary><ul><li class="def-leaf"><a href="../../acme/common/index.html#Address"><span class="dot dot-schema" aria-hidden="true"></span>Address</a></li><li class="def-leaf"><a href="../../acme/common/index.html#CountryCode"><span class="dot dot-type" aria-hidden="true"></span>CountryCode</a></li><li class="def-leaf"><a href="../../acme/common/index.html#CurrencyCode"><span class="dot dot-type" aria-hidden="true"></span>CurrencyCode</a></li><li class="def-leaf"><a href="../../acme/common/index.html#Email"><span class="dot dot-type" aria-hidden="true"></span>Email</a></li><li class="def-leaf"><a href="../../acme/common/index.html#Metadata"><span class="dot dot-type" aria-hidden="true"></span>Metadata</a></li><li class="def-leaf"><a href="../../acme/common/index.html#Money"><span class="dot dot-schema" aria-hidden="true"></span>Money</a></li><li class="def-leaf"><a href="../../acme/common/index.html#NonEmptyString"><span class="dot dot-type" aria-hidden="true"></span>NonEmptyString</a></li><li class="def-leaf"><a href="../../acme/common/index.html#Percentage"><span class="dot dot-type" aria-hidden="true"></span>Percentage</a></li><li class="def-leaf"><a href="../../acme/common/index.html#PhoneNumber"><span class="dot dot-type" aria-hidden="true"></span>PhoneNumber</a></li><li class="def-leaf"><a href="../../acme/common/index.html#Tags"><span class="dot dot-type" aria-hidden="true"></span>Tags</a></li></ul></details></li><li><details><summary><a href="../../acme/events/index.html">events</a></summary><ul><li class="def-leaf"><a href="../../acme/events/index.html#CancelReason"><span class="dot dot-type" aria-hidden="true"></span>CancelReason</a></li><li class="def-leaf"><a href="../../acme/events/index.html#CustomerRegistered"><span class="dot dot-shape" aria-hidden="true"></span>CustomerRegistered</a></li><li class="def-leaf"><a href="../../acme/events/index.html#Envelope"><span class="dot dot-schema" aria-hidden="true"></span>Envelope</a></li><li class="def-leaf"><a href="../../acme/events/index.html#EventTag"><span class="dot dot-type" aria-hidden="true"></span>EventTag</a></li><li class="def-leaf"><a href="../../acme/events/index.html#EventType"><span class="dot dot-type" aria-hidden="true"></span>EventType</a></li><li class="def-leaf"><a href="../../acme/events/index.html#OrderCancelled"><span class="dot dot-shape" aria-hidden="true"></span>OrderCancelled</a></li><li class="def-leaf"><a href="../../acme/events/index.html#OrderPlaced"><span class="dot dot-shape" aria-hidden="true"></span>OrderPlaced</a></li></ul></details></li><li><details><summary><a href="../../acme/shop/index.html">shop</a></summary><ul><li class="def-leaf"><a href="../../acme/shop/index.html#Customer"><span class="dot dot-schema" aria-hidden="true"></span>Customer</a></li><li class="def-leaf"><a href="../../acme/shop/index.html#Order"><span class="dot dot-schema" aria-hidden="true"></span>Order</a><ul><li class="def-leaf"><a href="../../acme/shop/index.html#Order.OrderLine"><span class="dot dot-schema" aria-hidden="true"></span>OrderLine</a></li><li class="def-leaf"><a href="../../acme/shop/index.html#Order.Quantity"><span class="dot dot-type" aria-hidden="true"></span>Quantity</a></li><li class="def-leaf"><a href="../../acme/shop/index.html#Order.Status"><span class="dot dot-type" aria-hidden="true"></span>Status</a></li></ul></li><li class="def-leaf"><a href="../../acme/shop/index.html#Product"><span class="dot dot-schema" aria-hidden="true"></span>Product</a><ul><li class="def-leaf"><a href="../../acme/shop/index.html#Product.Variant"><span class="dot dot-schema" aria-hidden="true"></span>Variant</a></li></ul></li></ul></details></li></ul></details></li><li><details><summary><a href="../../index.html">No namespace</a></summary><ul><li class="def-leaf"><a href="../../index.html#HealthCheck"><span class="dot dot-schema" aria-hidden="true"></span>HealthCheck</a></li></ul></details></li></ul>
+    </details>
+  </nav>
+  <main class="main">
+    <div class="page">
+  <header class="intro">
+    <p class="crumbs"><a href="../../index.html">All namespaces</a> › <a href="../../acme/index.html">acme</a> › <b>common</b></p>
+    <p class="eyebrow">Namespace</p>
+    <h1><code>acme.common</code></h1>
+    
+    <div class="prose"><p>Types every Acme service shares.</p>
+<p>This is a <em>namespace file</em>: each entry is <code>acme.common/&lt;Name&gt;</code>, and any other schema refers to one by that full name, for example <a class="ref" href="../../acme/common/index.html#Money"><code>acme.common/Money</code></a>. Keep this file small and stable -- a change here reaches every service at once.</p></div>
+  </header>
+  
+  
+  <article class="def kind-schema" id="Address">
+  <header class="def-head">
+    <h2><a class="self" href="#Address"><code>Address</code></a></h2>
+    <div class="chips"><span class="chip chip-schema">struct schema</span><span class="chip chip-version">v1</span></div>
+    <p class="full-name"><code>acme.common/Address</code></p>
+  </header>
+  <div class="prose"><p>A postal address.</p>
+<ul><li><code>lines</code> holds the street and house number, one per line, at most three.</li><li><code>country</code> decides how the rest is read: a <code>postcode</code> is required for most countries but not all, so it is optional here.</li></ul></div>
+  
+<div class="table-wrap">
+  <table class="fields">
+    <thead><tr><th scope="col" class="pos" title="Position in the binary form">#</th><th scope="col">Field</th><th scope="col">Type</th><th scope="col">Notes</th></tr></thead>
+    <tbody><tr>
+  <td class="pos">1</td>
+  <th scope="row" class="field"><code>lines</code></th>
+  <td class="type"><code>{<span class="kw">:refine</span> {<span class="kw">:list-of</span> <a class="ref" href="../../acme/common/index.html#NonEmptyString">NonEmptyString</a>} %{min-count: 1 max-count: 3}}</code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">2</td>
+  <th scope="row" class="field"><code>city</code></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#NonEmptyString">NonEmptyString</a></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">3</td>
+  <th scope="row" class="field"><code>postcode</code><span class="opt">optional</span></th>
+  <td class="type"><code><span class="kw">:string</span></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">4</td>
+  <th scope="row" class="field"><code>country</code></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#CountryCode">CountryCode</a></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">5</td>
+  <th scope="row" class="field"><code>kind</code></th>
+  <td class="type"><code>{<span class="kw">:enum</span> <span class="kw">:home</span> <span class="kw">:work</span> <span class="kw">:billing</span> <span class="kw">:shipping</span>}</code><div class="default"><span class="label">default</span> <code><span class="kw">:home</span></code></div></td>
+  <td class="notes"><p>What the address is used for.</p></td>
+</tr>
+</tbody>
+  </table>
+</div>
+<p class="file">acme.common.dxns</p>
+
+  
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/shop/index.html#Customer"><code>acme.shop/Customer</code></a>, <a href="../../acme/shop/index.html#Order"><code>acme.shop/Order</code></a></p>
+</article>
+<article class="def kind-type" id="CountryCode">
+  <header class="def-head">
+    <h2><a class="self" href="#CountryCode"><code>CountryCode</code></a></h2>
+    <div class="chips"><span class="chip chip-type">type</span></div>
+    <p class="full-name"><code>acme.common/CountryCode</code></p>
+  </header>
+  <div class="prose"><p>An ISO 3166-1 alpha-2 country code, upper case: <code>DE</code>, <code>US</code>.</p></div>
+  <div class="type-def">
+  <p class="label">Definition</p>
+  <pre class="expr"><code>{<span class="kw">:refine</span> <span class="kw">:string</span> %{pattern: ~r/^[A-Z]{2}$/}}</code></pre>
+  <p class="file">acme.common.dxns</p>
+</div>
+
+  
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/common/index.html#Address"><code>acme.common/Address</code></a>, <a href="../../acme/events/index.html#CustomerRegistered"><code>acme.events/CustomerRegistered</code></a></p>
+</article>
+<article class="def kind-type" id="CurrencyCode">
+  <header class="def-head">
+    <h2><a class="self" href="#CurrencyCode"><code>CurrencyCode</code></a></h2>
+    <div class="chips"><span class="chip chip-type">type</span></div>
+    <p class="full-name"><code>acme.common/CurrencyCode</code></p>
+  </header>
+  <div class="prose"><p>The ISO 4217 codes Acme invoices in.</p></div>
+  <div class="type-def">
+  <p class="label">Definition</p>
+  <pre class="expr"><code>{<span class="kw">:enum</span> <span class="kw">:eur</span> <span class="kw">:usd</span> <span class="kw">:gbp</span> <span class="kw">:chf</span>}</code></pre>
+  <p class="file">acme.common.dxns</p>
+</div>
+
+  
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/common/index.html#Money"><code>acme.common/Money</code></a></p>
+</article>
+<article class="def kind-type" id="Email">
+  <header class="def-head">
+    <h2><a class="self" href="#Email"><code>Email</code></a></h2>
+    <div class="chips"><span class="chip chip-type">type</span></div>
+    <p class="full-name"><code>acme.common/Email</code></p>
+  </header>
+  <div class="prose"><p>An e-mail address, checked only roughly; the address is confirmed by sending mail to it, not by this pattern.</p></div>
+  <div class="type-def">
+  <p class="label">Definition</p>
+  <pre class="expr"><code>{<span class="kw">:refine</span> <span class="kw">:string</span> %{pattern: ~r/^[^@\s]+@[^@\s]+\.[^@\s]+$/ max-length: 254}}</code></pre>
+  <p class="file">acme.common.dxns</p>
+</div>
+
+  
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/shop/index.html#Customer"><code>acme.shop/Customer</code></a></p>
+</article>
+<article class="def kind-type" id="Metadata">
+  <header class="def-head">
+    <h2><a class="self" href="#Metadata"><code>Metadata</code></a></h2>
+    <div class="chips"><span class="chip chip-type">type</span></div>
+    <p class="full-name"><code>acme.common/Metadata</code></p>
+  </header>
+  <div class="prose"><p>Free-form key/value data a client may attach. Values are any DXN value; nothing in Acme reads them.</p></div>
+  <div class="type-def">
+  <p class="label">Definition</p>
+  <pre class="expr"><code>{<span class="kw">:map-of</span> <span class="kw">:string</span> <span class="kw">:any</span>}</code></pre>
+  <p class="file">acme.common.dxns</p>
+</div>
+
+  
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/shop/index.html#Customer"><code>acme.shop/Customer</code></a></p>
+</article>
+<article class="def kind-schema" id="Money">
+  <header class="def-head">
+    <h2><a class="self" href="#Money"><code>Money</code></a></h2>
+    <div class="chips"><span class="chip chip-schema">struct schema</span><span class="chip chip-version">v1</span></div>
+    <p class="full-name"><code>acme.common/Money</code></p>
+  </header>
+  <div class="prose"><p>An amount of money in one currency.</p>
+<p>The amount is exact: always write it as a decimal (<code>19.99M</code>), never as a float. Two amounts are only comparable in the same <code>currency</code>.</p></div>
+  
+<div class="table-wrap">
+  <table class="fields">
+    <thead><tr><th scope="col" class="pos" title="Position in the binary form">#</th><th scope="col">Field</th><th scope="col">Type</th><th scope="col">Notes</th></tr></thead>
+    <tbody><tr>
+  <td class="pos">1</td>
+  <th scope="row" class="field"><code>amount</code></th>
+  <td class="type"><code><span class="kw">:decimal</span></code></td>
+  <td class="notes"><p>never a float</p></td>
+</tr>
+<tr>
+  <td class="pos">2</td>
+  <th scope="row" class="field"><code>currency</code></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#CurrencyCode">CurrencyCode</a></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">3</td>
+  <th scope="row" class="field"><code>exchange_rate</code><span class="opt">optional</span></th>
+  <td class="type"><code><span class="kw">:rational</span></code></td>
+  <td class="notes"><p>The rate used when the amount was converted from another currency, as an exact ratio: <code>1095/1000</code> for 1.095.</p></td>
+</tr>
+</tbody>
+  </table>
+</div>
+<p class="file">acme.common.dxns</p>
+
+  
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/events/index.html#OrderPlaced"><code>acme.events/OrderPlaced</code></a>, <a href="../../acme/shop/index.html#Order.OrderLine"><code>Order › OrderLine</code></a>, <a href="../../acme/shop/index.html#Product.Variant"><code>Product › Variant</code></a>, <a href="../../acme/shop/index.html#Order"><code>acme.shop/Order</code></a>, <a href="../../acme/shop/index.html#Product"><code>acme.shop/Product</code></a></p>
+</article>
+<article class="def kind-type" id="NonEmptyString">
+  <header class="def-head">
+    <h2><a class="self" href="#NonEmptyString"><code>NonEmptyString</code></a></h2>
+    <div class="chips"><span class="chip chip-type">type</span></div>
+    <p class="full-name"><code>acme.common/NonEmptyString</code></p>
+  </header>
+  <div class="prose"><p>A string with at least one character in it.</p></div>
+  <div class="type-def">
+  <p class="label">Definition</p>
+  <pre class="expr"><code>{<span class="kw">:refine</span> <span class="kw">:string</span> %{min-length: 1}}</code></pre>
+  <p class="file">acme.common.dxns</p>
+</div>
+
+  
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/common/index.html#Address"><code>acme.common/Address</code></a>, <a href="../../acme/common/index.html#Tags"><code>acme.common/Tags</code></a>, <a href="../../acme/events/index.html#OrderCancelled"><code>acme.events/OrderCancelled</code></a>, <a href="../../acme/shop/index.html#Product.Variant"><code>Product › Variant</code></a>, <a href="../../acme/shop/index.html#Customer"><code>acme.shop/Customer</code></a>, <a href="../../acme/shop/index.html#Product"><code>acme.shop/Product</code></a></p>
+</article>
+<article class="def kind-type" id="Percentage">
+  <header class="def-head">
+    <h2><a class="self" href="#Percentage"><code>Percentage</code></a></h2>
+    <div class="chips"><span class="chip chip-type">type</span></div>
+    <p class="full-name"><code>acme.common/Percentage</code></p>
+  </header>
+  <div class="prose"><p>A share from 0 to 100, both included.</p></div>
+  <div class="type-def">
+  <p class="label">Definition</p>
+  <pre class="expr"><code>{<span class="kw">:refine</span> <span class="kw">:decimal</span> %{min: 0M max: 100M}}</code></pre>
+  <p class="file">acme.common.dxns</p>
+</div>
+
+  
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/shop/index.html#Order"><code>acme.shop/Order</code></a></p>
+</article>
+<article class="def kind-type" id="PhoneNumber">
+  <header class="def-head">
+    <h2><a class="self" href="#PhoneNumber"><code>PhoneNumber</code></a></h2>
+    <div class="chips"><span class="chip chip-type">type</span></div>
+    <p class="full-name"><code>acme.common/PhoneNumber</code></p>
+  </header>
+  <div class="prose"><p>A phone number in E.164 form: a plus, then up to 15 digits.</p></div>
+  <div class="type-def">
+  <p class="label">Definition</p>
+  <pre class="expr"><code>{<span class="kw">:refine</span> <span class="kw">:string</span> %{pattern: ~r/^\+[1-9][0-9]{1,14}$/}}</code></pre>
+  <p class="file">acme.common.dxns</p>
+</div>
+
+  
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/shop/index.html#Customer"><code>acme.shop/Customer</code></a></p>
+</article>
+<article class="def kind-type" id="Tags">
+  <header class="def-head">
+    <h2><a class="self" href="#Tags"><code>Tags</code></a></h2>
+    <div class="chips"><span class="chip chip-type">type</span></div>
+    <p class="full-name"><code>acme.common/Tags</code></p>
+  </header>
+  <div class="prose"><p>Labels to filter by. Kept sorted, so two lists of the same tags are the same value.</p></div>
+  <div class="type-def">
+  <p class="label">Definition</p>
+  <pre class="expr"><code>{<span class="kw">:sorted-set-of</span> <a class="ref" href="../../acme/common/index.html#NonEmptyString">NonEmptyString</a>}</code></pre>
+  <p class="file">acme.common.dxns</p>
+</div>
+
+  
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/shop/index.html#Customer"><code>acme.shop/Customer</code></a>, <a href="../../acme/shop/index.html#Product"><code>acme.shop/Product</code></a></p>
+</article>
+
+</div>
+
+    <footer class="site-foot"><p>Generated from the <code>.dxns</code> sources by Dextrin. A field's # is its position in the binary form.</p></footer>
+  </main>
+</div>
+<script>(function () {
+  var root = document.documentElement, button = document.getElementById("theme-toggle");
+  function current() {
+    var t = root.getAttribute("data-theme");
+    if (t) return t;
+    return window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  function label() {
+    var next = current() === "dark" ? "light" : "dark";
+    button.textContent = next === "dark" ? "Dark" : "Light";
+    button.setAttribute("aria-label", "Switch to " + next);
+  }
+  button.addEventListener("click", function () {
+    var next = current() === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem("dextrin-docs-theme", next); } catch (e) {}
+    label();
+  });
+  label();
+})();
+</script>
+</body>
+</html>

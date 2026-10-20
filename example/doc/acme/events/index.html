@@ -8,31 +8,36 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../style.css">
+<script>try { var t = localStorage.getItem("dextrin-docs-theme"); if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); } catch (e) {}</script>
 </head>
 <body>
-<header class="site">
-  <div class="site-inner">
-    <a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true">%{}</span>Acme schemas</a>
-    <nav aria-label="Namespaces"><ul><li><a href="global.html">No namespace</a></li><li><a href="acme.common.html">acme.common</a></li><li><a href="acme.events.html" aria-current="page">acme.events</a></li><li><a href="acme.shop.html">acme.shop</a></li></ul></nav>
-  </div>
-</header>
-<main>
-<div class="page with-toc">
-  <aside class="toc" aria-label="On this page">
-    <p class="toc-title">On this page</p>
-    <ul><li><a href="#CancelReason">CancelReason</a></li><li><a href="#CustomerRegistered">CustomerRegistered</a></li><li><a href="#Envelope">Envelope</a></li><li><a href="#EventTag">EventTag</a></li><li><a href="#EventType">EventType</a></li><li><a href="#OrderCancelled">OrderCancelled</a></li><li><a href="#OrderPlaced">OrderPlaced</a></li></ul>
-  </aside>
-  <div class="content">
-    <section class="intro">
-      <p class="eyebrow">Namespace</p>
-      <h1><code>acme.events</code></h1>
-      <div class="prose"><p>The events Acme's services publish on RabbitMQ.</p>
+<div class="layout">
+  <nav class="sidebar" aria-label="All namespaces and definitions">
+    <div class="sidebar-head">
+      <a class="brand" href="../../index.html"><span class="brand-mark" aria-hidden="true">%{}</span>Acme schemas</a>
+      <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Switch between light and dark">Dark</button>
+    </div>
+    <details class="sidebar-toggle" open>
+      <summary>Browse</summary>
+      <ul class="tree"><li><details open><summary><a href="../../acme/index.html">acme</a></summary><ul><li><details><summary><a href="../../acme/common/index.html">common</a></summary><ul><li class="def-leaf"><a href="../../acme/common/index.html#Address"><span class="dot dot-schema" aria-hidden="true"></span>Address</a></li><li class="def-leaf"><a href="../../acme/common/index.html#CountryCode"><span class="dot dot-type" aria-hidden="true"></span>CountryCode</a></li><li class="def-leaf"><a href="../../acme/common/index.html#CurrencyCode"><span class="dot dot-type" aria-hidden="true"></span>CurrencyCode</a></li><li class="def-leaf"><a href="../../acme/common/index.html#Email"><span class="dot dot-type" aria-hidden="true"></span>Email</a></li><li class="def-leaf"><a href="../../acme/common/index.html#Metadata"><span class="dot dot-type" aria-hidden="true"></span>Metadata</a></li><li class="def-leaf"><a href="../../acme/common/index.html#Money"><span class="dot dot-schema" aria-hidden="true"></span>Money</a></li><li class="def-leaf"><a href="../../acme/common/index.html#NonEmptyString"><span class="dot dot-type" aria-hidden="true"></span>NonEmptyString</a></li><li class="def-leaf"><a href="../../acme/common/index.html#Percentage"><span class="dot dot-type" aria-hidden="true"></span>Percentage</a></li><li class="def-leaf"><a href="../../acme/common/index.html#PhoneNumber"><span class="dot dot-type" aria-hidden="true"></span>PhoneNumber</a></li><li class="def-leaf"><a href="../../acme/common/index.html#Tags"><span class="dot dot-type" aria-hidden="true"></span>Tags</a></li></ul></details></li><li><details open><summary><a href="../../acme/events/index.html" aria-current="page">events</a></summary><ul><li class="def-leaf"><a href="../../acme/events/index.html#CancelReason"><span class="dot dot-type" aria-hidden="true"></span>CancelReason</a></li><li class="def-leaf"><a href="../../acme/events/index.html#CustomerRegistered"><span class="dot dot-shape" aria-hidden="true"></span>CustomerRegistered</a></li><li class="def-leaf"><a href="../../acme/events/index.html#Envelope"><span class="dot dot-schema" aria-hidden="true"></span>Envelope</a></li><li class="def-leaf"><a href="../../acme/events/index.html#EventTag"><span class="dot dot-type" aria-hidden="true"></span>EventTag</a></li><li class="def-leaf"><a href="../../acme/events/index.html#EventType"><span class="dot dot-type" aria-hidden="true"></span>EventType</a></li><li class="def-leaf"><a href="../../acme/events/index.html#OrderCancelled"><span class="dot dot-shape" aria-hidden="true"></span>OrderCancelled</a></li><li class="def-leaf"><a href="../../acme/events/index.html#OrderPlaced"><span class="dot dot-shape" aria-hidden="true"></span>OrderPlaced</a></li></ul></details></li><li><details><summary><a href="../../acme/shop/index.html">shop</a></summary><ul><li class="def-leaf"><a href="../../acme/shop/index.html#Customer"><span class="dot dot-schema" aria-hidden="true"></span>Customer</a></li><li class="def-leaf"><a href="../../acme/shop/index.html#Order"><span class="dot dot-schema" aria-hidden="true"></span>Order</a><ul><li class="def-leaf"><a href="../../acme/shop/index.html#Order.OrderLine"><span class="dot dot-schema" aria-hidden="true"></span>OrderLine</a></li><li class="def-leaf"><a href="../../acme/shop/index.html#Order.Quantity"><span class="dot dot-type" aria-hidden="true"></span>Quantity</a></li><li class="def-leaf"><a href="../../acme/shop/index.html#Order.Status"><span class="dot dot-type" aria-hidden="true"></span>Status</a></li></ul></li><li class="def-leaf"><a href="../../acme/shop/index.html#Product"><span class="dot dot-schema" aria-hidden="true"></span>Product</a><ul><li class="def-leaf"><a href="../../acme/shop/index.html#Product.Variant"><span class="dot dot-schema" aria-hidden="true"></span>Variant</a></li></ul></li></ul></details></li></ul></details></li><li><details><summary><a href="../../index.html">No namespace</a></summary><ul><li class="def-leaf"><a href="../../index.html#HealthCheck"><span class="dot dot-schema" aria-hidden="true"></span>HealthCheck</a></li></ul></details></li></ul>
+    </details>
+  </nav>
+  <main class="main">
+    <div class="page">
+  <header class="intro">
+    <p class="crumbs"><a href="../../index.html">All namespaces</a> › <a href="../../acme/index.html">acme</a> › <b>events</b></p>
+    <p class="eyebrow">Namespace</p>
+    <h1><code>acme.events</code></h1>
+    
+    <div class="prose"><p>The events Acme's services publish on RabbitMQ.</p>
 <p>Every message is an <code>Envelope</code>. Its <code>type</code> names the event, and the event decides what the <code>payload</code> looks like: the payload types below are shapes -- plain maps with known keys -- not structs, so a consumer in any language reads them as maps.</p>
 <p>To add an event:</p>
 <ol><li>Add a shape for its payload here.</li><li>Add its type to <code>EventType</code> and to the <code>payload</code> case in <code>Envelope</code>.</li><li>Publish it; a consumer that does not know the type skips it.</li></ol></div>
-    </section>
-    <article class="def kind-type" id="CancelReason">
+  </header>
+  
+  
+  <article class="def kind-type" id="CancelReason">
   <header class="def-head">
     <h2><a class="self" href="#CancelReason"><code>CancelReason</code></a></h2>
     <div class="chips"><span class="chip chip-type">type</span></div>
@@ -46,7 +51,7 @@
 </div>
 
   
-  <p class="used-by"><span class="label">Used by</span> <a href="acme.events.html#OrderCancelled"><code>acme.events/OrderCancelled</code></a></p>
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/events/index.html#OrderCancelled"><code>acme.events/OrderCancelled</code></a></p>
 </article>
 <article class="def kind-shape" id="CustomerRegistered">
   <header class="def-head">
@@ -55,7 +60,7 @@
     <p class="full-name"><code>acme.events/CustomerRegistered</code></p>
   </header>
   <div class="prose"><p>A customer registered.</p>
-<p>The payload carries the id and the country only: an event is no place for personal data (see <a class="ref" href="acme.shop.html#Customer"><code>acme.shop/Customer</code></a>).</p></div>
+<p>The payload carries the id and the country only: an event is no place for personal data (see <a class="ref" href="../../acme/shop/index.html#Customer"><code>acme.shop/Customer</code></a>).</p></div>
   
 <div class="table-wrap">
   <table class="fields">
@@ -69,7 +74,7 @@
 <tr>
   
   <th scope="row" class="field"><code>country</code></th>
-  <td class="type"><code><a class="ref" href="acme.common.html#CountryCode">acme.common/CountryCode</a></code></td>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#CountryCode">acme.common/CountryCode</a></code></td>
   <td class="notes"></td>
 </tr>
 <tr>
@@ -84,7 +89,7 @@
 <p class="file">acme.events.dxns</p>
 
   
-  <p class="used-by"><span class="label">Used by</span> <a href="acme.events.html#Envelope"><code>acme.events/Envelope</code></a></p>
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/events/index.html#Envelope"><code>acme.events/Envelope</code></a></p>
 </article>
 <article class="def kind-schema" id="Envelope">
   <header class="def-head">
@@ -106,7 +111,7 @@
 <tr>
   <td class="pos">2</td>
   <th scope="row" class="field"><code>type</code></th>
-  <td class="type"><code><a class="ref" href="acme.events.html#EventType">EventType</a></code></td>
+  <td class="type"><code><a class="ref" href="../../acme/events/index.html#EventType">EventType</a></code></td>
   <td class="notes"></td>
 </tr>
 <tr>
@@ -124,7 +129,7 @@
 <tr>
   <td class="pos">5</td>
   <th scope="row" class="field"><code>payload</code></th>
-  <td class="type"><code><span class="case">by <span class="case-field">type</span><span class="case-table"><span class="case-rows"><table><tbody><tr><td><span class="str">&quot;acme.shop.order.placed&quot;</span></td><td><a class="ref" href="acme.events.html#OrderPlaced">OrderPlaced</a></td></tr><tr><td><span class="str">&quot;acme.shop.order.cancelled&quot;</span></td><td><a class="ref" href="acme.events.html#OrderCancelled">OrderCancelled</a></td></tr><tr><td><span class="str">&quot;acme.shop.customer.registered&quot;</span></td><td><a class="ref" href="acme.events.html#CustomerRegistered">CustomerRegistered</a></td></tr><tr><td><span class="kw">:else</span></td><td><span class="kw">:any</span></td></tr></tbody></table></span></span></span></code></td>
+  <td class="type"><code><span class="case">by <span class="case-field">type</span><span class="case-table"><span class="case-rows"><table><tbody><tr><td><span class="str">&quot;acme.shop.order.placed&quot;</span></td><td><a class="ref" href="../../acme/events/index.html#OrderPlaced">OrderPlaced</a></td></tr><tr><td><span class="str">&quot;acme.shop.order.cancelled&quot;</span></td><td><a class="ref" href="../../acme/events/index.html#OrderCancelled">OrderCancelled</a></td></tr><tr><td><span class="str">&quot;acme.shop.customer.registered&quot;</span></td><td><a class="ref" href="../../acme/events/index.html#CustomerRegistered">CustomerRegistered</a></td></tr><tr><td><span class="kw">:else</span></td><td><span class="kw">:any</span></td></tr></tbody></table></span></span></span></code></td>
   <td class="notes"><p>What happened. Which shape it has is decided by <code>type</code>.</p></td>
 </tr>
 <tr>
@@ -171,7 +176,7 @@
 </div>
 
   
-  <p class="used-by"><span class="label">Used by</span> <a href="acme.events.html#Envelope"><code>acme.events/Envelope</code></a></p>
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/events/index.html#Envelope"><code>acme.events/Envelope</code></a></p>
 </article>
 <article class="def kind-shape" id="OrderCancelled">
   <header class="def-head">
@@ -193,13 +198,13 @@
 <tr>
   
   <th scope="row" class="field"><code>reason</code></th>
-  <td class="type"><code><a class="ref" href="acme.events.html#CancelReason">CancelReason</a></code></td>
+  <td class="type"><code><a class="ref" href="../../acme/events/index.html#CancelReason">CancelReason</a></code></td>
   <td class="notes"></td>
 </tr>
 <tr>
   
   <th scope="row" class="field"><code>comment</code><span class="opt">optional</span></th>
-  <td class="type"><code><a class="ref" href="acme.common.html#NonEmptyString">acme.common/NonEmptyString</a></code></td>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#NonEmptyString">acme.common/NonEmptyString</a></code></td>
   <td class="notes"><p>Only when <code>reason</code> is free text.</p></td>
 </tr>
 </tbody>
@@ -208,7 +213,7 @@
 <p class="file">acme.events.dxns</p>
 
   
-  <p class="used-by"><span class="label">Used by</span> <a href="acme.events.html#Envelope"><code>acme.events/Envelope</code></a></p>
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/events/index.html#Envelope"><code>acme.events/Envelope</code></a></p>
 </article>
 <article class="def kind-shape" id="OrderPlaced">
   <header class="def-head">
@@ -236,7 +241,7 @@
 <tr>
   
   <th scope="row" class="field"><code>total</code></th>
-  <td class="type"><code><a class="ref" href="acme.common.html#Money">acme.common/Money</a></code></td>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#Money">acme.common/Money</a></code></td>
   <td class="notes"></td>
 </tr>
 <tr>
@@ -251,13 +256,34 @@
 <p class="file">acme.events.dxns</p>
 
   
-  <p class="used-by"><span class="label">Used by</span> <a href="acme.events.html#Envelope"><code>acme.events/Envelope</code></a></p>
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/events/index.html#Envelope"><code>acme.events/Envelope</code></a></p>
 </article>
 
-  </div>
 </div>
 
-</main>
-<footer class="site-foot"><p>Generated from the <code>.dxns</code> sources by Dextrin. Positions are the order of a struct's fields in its binary form.</p></footer>
+    <footer class="site-foot"><p>Generated from the <code>.dxns</code> sources by Dextrin. A field's # is its position in the binary form.</p></footer>
+  </main>
+</div>
+<script>(function () {
+  var root = document.documentElement, button = document.getElementById("theme-toggle");
+  function current() {
+    var t = root.getAttribute("data-theme");
+    if (t) return t;
+    return window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  function label() {
+    var next = current() === "dark" ? "light" : "dark";
+    button.textContent = next === "dark" ? "Dark" : "Light";
+    button.setAttribute("aria-label", "Switch to " + next);
+  }
+  button.addEventListener("click", function () {
+    var next = current() === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem("dextrin-docs-theme", next); } catch (e) {}
+    label();
+  });
+  label();
+})();
+</script>
 </body>
 </html>
