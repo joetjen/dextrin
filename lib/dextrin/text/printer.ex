@@ -163,6 +163,13 @@ defmodule Dextrin.Text.Printer do
   end
 
   def print(%Uuid{} = uuid, _opts), do: {:ok, tag_form("uuid", quote_string(Uuid.format(uuid)))}
+
+  def print(%Dextrin.ObjectId{} = id, _opts),
+    do: {:ok, tag_form("objectid", quote_string(Dextrin.ObjectId.format(id)))}
+
+  def print(%Dextrin.Ip{} = ip, _opts),
+    do: {:ok, tag_form("ip", quote_string(Dextrin.Ip.format(ip)))}
+
   def print(%Uri{value: value}, _opts), do: {:ok, tag_form("uri", quote_string(value))}
 
   # `@regex "pattern"`, its flags in a header when it has any (DXN.md §1.2).

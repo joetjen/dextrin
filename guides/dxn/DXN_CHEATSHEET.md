@@ -39,6 +39,8 @@ datetime     @datetime "YYYY-MM-DDTHH:MM:SS(Z|±HH:MM)"  an instant with its off
 local-dt     @local-datetime "YYYY-MM-DDTHH:MM:SS"    no offset
 duration     @duration "P..."                         ISO 8601 duration
 uuid         @uuid "..."                              RFC 4122
+objectid     @objectid "<24 hex>"                     BSON's ObjectId, 12 bytes
+ip           @ip "192.0.2.1" | "2001:db8::/32"        an address or a prefix
 uri          @uri "..."                               RFC 3986
 bytes        @bytes "..."                             base64 in text
 bits         @bits {"..." n}                          base64 and a bit count; whole bytes are bytes

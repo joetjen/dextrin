@@ -342,6 +342,15 @@ defmodule Dextrin.Binary.Decoder do
       tag == Tags.t_uuid() ->
         build_uuid(value)
 
+      tag == Tags.t_objectid() ->
+        build_objectid(value)
+
+      tag == Tags.t_ipv4() ->
+        build_ip(value, 4)
+
+      tag == Tags.t_ipv6() ->
+        build_ip(value, 16)
+
       tag == Tags.t_char() ->
         build_char(value)
 
@@ -462,6 +471,35 @@ defmodule Dextrin.Binary.Decoder do
 
   defp build_uuid(%Bytes{data: raw}) when byte_size(raw) == 16, do: {:ok, Uuid.new(raw)}
   defp build_uuid(_), do: {:error, Dextrin.Error.binary("malformed uuid (tag 37) payload")}
+
+  defp build_objectid(%Bytes{data: raw}) when byte_size(raw) == 12,
+    do: {:ok, Dextrin.ObjectId.new(raw)}
+
+  defp build_objectid(_),
+    do: {:error, Dextrin.Error.binary("malformed objectid (tag #{Tags.t_objectid()}) payload")}
+
+  # RFC 9164: an address is its raw bytes; a prefix is its length and the
+  # bytes with trailing zero bytes left off, put back here.
+  defp build_ip(%Bytes{data: raw}, size) when byte_size(raw) == size, do: ip(raw, nil)
+
+  defp build_ip([length, %Bytes{data: raw}], size)
+       when is_integer(length) and byte_size(raw) <= size,
+       do: ip(raw <> :binary.copy(<<0>>, size - byte_size(raw)), length)
+
+  defp build_ip(_, size),
+    do:
+      {:error,
+       Dextrin.Error.binary("malformed ip (tag #{if size == 4, do: 52, else: 54}) payload")}
+
+  defp ip(address, prefix) do
+    case Dextrin.Ip.new(address, prefix) do
+      {:ok, ip} ->
+        {:ok, ip}
+
+      {:error, _} ->
+        {:error, Dextrin.Error.binary("invalid ip prefix: its host bits are not zero")}
+    end
+  end
 
   defp build_char(cp) when is_integer(cp) and cp in 0..0x10FFFF and cp not in 0xD800..0xDFFF do
     {:ok, Dextrin.Char.new(cp)}
