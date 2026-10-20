@@ -694,6 +694,10 @@ defmodule Dextrin.Schema.TypeExpr do
     end
   end
 
+  # One of DXN.md §4.2a's formats, checked as `Dextrin.Schema.Format` says.
+  defp satisfies_constraint?("format", name, value) when is_binary(value),
+    do: Dextrin.Schema.Format.valid?(name, value)
+
   defp satisfies_constraint?("min-bytes", n, value), do: within?(utf8_size(value), n, nil)
   defp satisfies_constraint?("max-bytes", n, value), do: within?(utf8_size(value), nil, n)
 

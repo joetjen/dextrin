@@ -765,7 +765,7 @@ defmodule Dextrin.Schema.Compiler do
                   min-bytes max-bytes pattern min-count max-count finite float32 offsets
                   version prefix contains min-contains max-contains unique unique-by
                   min-precision max-precision min-exponent max-exponent bits before-now
-                  after-now within resolution)
+                  after-now within resolution format)
 
   # A refine's constraints by name, every key one DXN.md §4.2 knows:
   # a misspelt key would otherwise refuse every value, silently.
@@ -784,6 +784,7 @@ defmodule Dextrin.Schema.Compiler do
         true ->
           with {:ok, named} <- contains_type(named, aliases),
                {:ok, named} <- named_arg(named, "unique-by", nil),
+               {:ok, named} <- named_arg(named, "format", Dextrin.Schema.Format.names()),
                do: named_arg(named, "resolution", TypeExpr.resolutions())
       end
     end

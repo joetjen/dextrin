@@ -621,7 +621,7 @@ is why DXNS has no `unevaluatedItems`: a list that may go on ends in
 ### 4.2 `refine` constraints
 
 ```toon
-refine_constraints[31]{key,applies_to,meaning}:
+refine_constraints[32]{key,applies_to,meaning}:
   min,"integer/float/decimal/rational/date/time/datetime/local-datetime/duration","value >= given value of the same kind"
   max,"integer/float/decimal/rational/date/time/datetime/local-datetime/duration","value <= given value of the same kind"
   exclusive-min,"integer/float/decimal/rational/date/time/datetime/local-datetime/duration","value > given value of the same kind"
@@ -632,6 +632,7 @@ refine_constraints[31]{key,applies_to,meaning}:
   min-bytes,"string/keyword/symbol","UTF-8 byte count >= given integer"
   max-bytes,"string/keyword/symbol","UTF-8 byte count <= given integer"
   pattern,"string/keyword/symbol/bytes","value matches given regex (§1.3's regex type); bytes one character per byte"
+  format,string,"the string is in the format named, one of §4.2a's"
   min-count,"list/set/tuple/sorted-set/array","element count >= given integer"
   max-count,"list/set/tuple/sorted-set/array","element count <= given integer"
   contains,"list/set/tuple/sorted-set/array","at least min-contains (1 when not given) and at most max-contains elements match the given type"
@@ -693,6 +694,88 @@ is false; `Infinity` and `-Infinity` compare as the numbers they are.
 **`:timestamp` is sugar for a datetime in UTC**, `{:refine :datetime
 %{offsets: ["Z"]}}`: DXN 0.2 had a timestamp type of its own, and a
 schema naming it keeps its meaning (§1.2).
+
+### 4.2a Formats (`format:`)
+
+`{:refine :string %{format: :email}}` takes a string in that format
+(Jan, 2026-10-20; JSON Schema's `format`, with Ion Schema's and
+protovalidate's string rules). The set is closed: any other name is a
+compile error (`schema/compile`). Every implementation checks a format
+the same way: a format DXN has a tag for is read by that tag's reader,
+so `format: :date` takes exactly the strings `@date "..."` takes; every
+other format is the grammar below, a regular expression that PCRE,
+JavaScript (with the `u` flag) and PHP read alike.
+
+```toon
+formats[22]{name,checked_as}:
+  date,"@date's reader (§1.2)"
+  time,"@time's reader"
+  datetime,"@datetime's reader: an offset, Z or ±HH:MM, is required"
+  local-datetime,"@local-datetime's reader: no offset"
+  duration,"@duration's reader"
+  uuid,"@uuid's reader: 8-4-4-4-12 hex digits, either case"
+  ipv4,"@ip's reader: an IPv4 address, no prefix"
+  ipv6,"@ip's reader: an IPv6 address, no prefix, no zone"
+  hostname,"labels LABEL joined by dots, 253 characters at most"
+  idn-hostname,"labels U-LABEL joined by dots, 253 characters at most"
+  email,"LOCAL @ DOMAIN, split at the last @: LOCAL at most 64 bytes, DOMAIN a hostname, [IPv4] or [IPv6:address]"
+  idn-email,"as email, with IDN-LOCAL and an idn-hostname"
+  uri,"RFC 3986's URI, from the parts below"
+  uri-reference,"a uri, or RFC 3986's relative-ref"
+  iri,"a uri that may hold any character past ASCII where it holds an unreserved one"
+  iri-reference,"an iri, or a relative-ref that may"
+  uri-template,"RFC 6570's URI-Template, below"
+  json-pointer,"RFC 6901, below"
+  relative-json-pointer,"draft-handrews-relative-json-pointer, below"
+  semver,"Semantic Versioning 2.0.0, below"
+  mac,"six or eight pairs of hex digits, one separator, : or -, throughout"
+  host-port,"HOST:PORT, split at the last colon: HOST a hostname, an IPv4 address or [IPv6], PORT 0 to 65535 without leading zeros"
+```
+
+The grammars:
+
+```text
+LABEL      [A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?
+U-LABEL    [\p{L}\p{N}](?:[\p{L}\p{N}\p{M}-]{0,61}[\p{L}\p{N}\p{M}])?
+ATEXT      [\-A-Za-z0-9!#$%&'*+/=?^_`{|}~]
+QUOTED     "(?:[\x20\x21\x23-\x5B\x5D-\x7E]|\\[\x20-\x7E])*"
+LOCAL      ^(?:ATEXT+(?:\.ATEXT+)*|QUOTED)$
+IDN-LOCAL  as LOCAL, each ATEXT (?:ATEXT|[^\x00-\x7F])
+PORT       ^(?:0|[1-9][0-9]{0,4})$, and at most 65535
+
+json-pointer           ^(?:/(?:[^~/]|~[01])*)*$
+relative-json-pointer  ^(?:0|[1-9][0-9]*)(?:#|(?:/(?:[^~/]|~[01])*)*)$
+semver                 ^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)
+                       (?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)
+                       (?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?
+                       (?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$
+mac                    ^[0-9A-Fa-f]{2}([:-])[0-9A-Fa-f]{2}(?:\1[0-9A-Fa-f]{2}){4}
+                       (?:(?:\1[0-9A-Fa-f]{2}){2})?$
+uri-template           ^(?:LITERAL|%[0-9A-Fa-f]{2}|\{[+#./;?&=,!@|]?VARSPEC(?:,VARSPEC)*\})*$
+  LITERAL  [^\x00-\x20"'%<>\\^`{|}\x7F]
+  VARSPEC  VARCHAR(?:\.?VARCHAR)*(?::[1-9][0-9]{0,3}|\*)?
+  VARCHAR  (?:[A-Za-z0-9_]|%[0-9A-Fa-f]{2})
+
+The URI parts (RFC 3986 §3); for an iri, every PCT is
+(?:%[0-9A-Fa-f]{2}|[^\x00-\x7F]):
+  U          [\-A-Za-z0-9._~!$&'()*+,;=]     unreserved and sub-delims
+  PCT        %[0-9A-Fa-f]{2}
+  PCHAR      (?:[U:@]|PCT)                  U's characters, ":" and "@"
+  NC         (?:[U@]|PCT)                   a PCHAR but ":"
+  AUTHORITY  (?:(?:[U:]|PCT)*@)?(?:\[[^\]]*\]|(?:[U]|PCT)*)(?::[0-9]*)?
+  TAIL       (?:\?(?:PCHAR|[/?])*)?(?:#(?:PCHAR|[/?])*)?
+  uri        ^[A-Za-z][A-Za-z0-9+.-]*:(?://AUTHORITY(?:/PCHAR*)*
+             |/(?:PCHAR+(?:/PCHAR*)*)?|PCHAR+(?:/PCHAR*)*|)TAIL$
+  relative   ^(?://AUTHORITY(?:/PCHAR*)*|/(?:PCHAR+(?:/PCHAR*)*)?
+             |NC+(?:/PCHAR*)*|)TAIL$
+  and a [...] host is an IPv6 address (@ip's reader) or
+  ^v[0-9A-Fa-f]+\.[A-Za-z0-9._~!$&'()*+,;=:-]+$ (IPvFuture).
+```
+
+A format takes only a string that is valid UTF-8; any other value it
+refuses (§4.2). JSON Schema's `regex` format has no counterpart: whether
+a pattern compiles depends on the engine, and not every implementation
+has PCRE.
 
 ### 4.3 Required vs. optional fields
 
