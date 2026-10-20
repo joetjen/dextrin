@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **One way to write a value: every sigil is gone** (Jan, 2026-10-20;
+  DXN.md §1.2). Breaking. Dates and times are ISO 8601 strings under a
+  tag -- `@date "2026-10-20"`, `@time "14:30:00.5"`, `@datetime
+  "2026-10-20T14:30:00Z"`, and the new `@local-datetime
+  "2026-10-20T14:30:00"` -- and a regex is `@regex "pattern"`, its flags
+  in a header, `@regex(im) "..."`, or inline, `@regex "(?im)..."`.
+  `~D[...]`, `~T[...]`, `~U[...]` and `~r/.../` are refused.
+- **`timestamp` and `datetime` are one type**, `datetime`: an instant
+  with its offset, `Z` for UTC. Breaking. `:timestamp` in a schema is
+  sugar for `{:refine :datetime %{offsets: ["Z"]}}`, so a schema naming it
+  keeps its meaning.
+- **Times, datetimes, local date-times and durations carry nanoseconds**
+  (DXN.md §2.2). A value finer than a microsecond decodes to
+  `Dextrin.Nanos`; `Dextrin.Duration`'s seventh field is `nanoseconds`
+  (was `microseconds`). In `.dxnb` the nanosecond forms have new tags
+  (218 time, 219 datetime, 220 duration, 217 local date-time); 0.2's
+  microsecond tags (1, 210, 211, 212) are still read, as what they
+  meant, and never written, so a tag never changes its meaning.
+- **Refine keys `finite:` and `offsets:`** (DXN.md §4.2), and **NaN lies
+  outside every range**: `min`, `max` and both exclusive bounds refuse it.
+- **The README's size table is measured again**: the pretty layout and
+  the datetime spelling both changed it.
 - **A named type sees the named types beside it** (DXN.md §4.5): a
   reference to a sibling in the same document resolves, in any order,
   where it used to fall back to a struct reference; a named type that

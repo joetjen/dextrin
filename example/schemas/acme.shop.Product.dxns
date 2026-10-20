@@ -9,7 +9,7 @@
   Product: %schema{
     id: :uuid
     # The stock-keeping unit: three letters, a dash, five digits.
-    sku: {:refine :string %{pattern: ~r/^[A-Z]{3}-[0-9]{5}$/}}
+    sku: {:refine :string %{pattern: @regex "^[A-Z]{3}-[0-9]{5}$"}}
     name: acme.common/NonEmptyString
     price: acme.common/Money
     # In kilograms; never zero.

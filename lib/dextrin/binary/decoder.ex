@@ -327,8 +327,11 @@ defmodule Dextrin.Binary.Decoder do
       tag == Tags.t_decimal() ->
         build_decimal(value)
 
-      tag == Tags.t_timestamp() ->
-        build_timestamp(value)
+      # DXN 0.2's UTC timestamp, epoch microseconds (DXN.md §2.3).
+      tag == Tags.t_timestamp_us() ->
+        if is_integer(value),
+          do: build_datetime([value * 1000, 0]),
+          else: build_datetime(:malformed)
 
       tag == Tags.t_rational() ->
         build_rational(value)
@@ -369,11 +372,28 @@ defmodule Dextrin.Binary.Decoder do
       tag == Tags.t_time() ->
         build_time(value)
 
-      tag == Tags.t_datetime_offset() ->
-        build_datetime_offset(value)
+      tag == Tags.t_datetime() ->
+        build_datetime(value)
+
+      tag == Tags.t_local_datetime() ->
+        build_local(value)
 
       tag == Tags.t_duration() ->
-        build_duration(value)
+        build_duration(value, 1)
+
+      # DXN 0.2's microsecond encodings, read as what they meant: a tag
+      # never changes its meaning (DXN.md §2.3).
+      tag == Tags.t_time_us() ->
+        if is_integer(value), do: build_time(value * 1000), else: build_time(:malformed)
+
+      tag == Tags.t_datetime_us() ->
+        case value do
+          [micros, offset] when is_integer(micros) -> build_datetime([micros * 1000, offset])
+          _ -> build_datetime(:malformed)
+        end
+
+      tag == Tags.t_duration_us() ->
+        build_duration(value, 1000)
 
       tag == Tags.t_regex() ->
         build_regex(value)
@@ -436,16 +456,6 @@ defmodule Dextrin.Binary.Decoder do
 
   defp build_bignum(_, tag, _transform),
     do: {:error, Dextrin.Error.binary("malformed bignum (tag #{tag}) payload")}
-
-  defp build_timestamp(micros) when is_integer(micros) do
-    case DateTime.from_unix(micros, :microsecond) do
-      {:ok, dt} -> {:ok, dt}
-      {:error, reason} -> {:error, Dextrin.Error.binary("invalid timestamp (tag 1): #{reason}")}
-    end
-  end
-
-  defp build_timestamp(_),
-    do: {:error, Dextrin.Error.binary("malformed timestamp (tag 1) payload")}
 
   defp build_uri(value) when is_binary(value), do: {:ok, Uri.new(value)}
   defp build_uri(_), do: {:error, Dextrin.Error.binary("malformed uri (tag 32) payload")}
@@ -604,63 +614,43 @@ defmodule Dextrin.Binary.Decoder do
     end
   end
 
-  defp build_time(total_micro) when is_integer(total_micro) and total_micro >= 0 do
-    {microsecond, rem1} = {rem(total_micro, 1_000_000), div(total_micro, 1_000_000)}
-    {second, rem2} = {rem(rem1, 60), div(rem1, 60)}
-    {minute, hour} = {rem(rem2, 60), div(rem2, 60)}
-    {:ok, %Time{hour: hour, minute: minute, second: second, microsecond: {microsecond, 6}}}
+  # Nanoseconds throughout (DXN.md §2.2, Jan, 2026-10-20). An integer
+  # out of any calendar's range -- CBOR integers are unbounded, and a
+  # malformed or adversarial document can hold one -- is refused, not
+  # left to crash the decode.
+  defp build_time(nanos) when is_integer(nanos) and nanos >= 0 and nanos < 86_400_000_000_000,
+    do: {:ok, Dextrin.Temporal.time_from_nanos(nanos)}
+
+  defp build_time(_),
+    do: {:error, Dextrin.Error.binary("malformed time (tag #{Tags.t_time()}) payload")}
+
+  defp build_datetime([nanos, offset])
+       when is_integer(nanos) and is_integer(offset) and abs(offset) < 1440 do
+    {:ok, Dextrin.Temporal.datetime_from(nanos, offset)}
+  rescue
+    ArgumentError ->
+      {:error, Dextrin.Error.binary("datetime (tag #{Tags.t_datetime()}) out of range")}
   end
 
-  defp build_time(_), do: {:error, Dextrin.Error.binary("malformed time (tag 210) payload")}
+  defp build_datetime(_),
+    do: {:error, Dextrin.Error.binary("malformed datetime (tag #{Tags.t_datetime()}) payload")}
 
-  defp build_datetime_offset([epoch_micros, offset_minutes])
-       when is_integer(epoch_micros) and is_integer(offset_minutes) do
-    offset_seconds = offset_minutes * 60
-
-    with {:ok, utc} <- DateTime.from_unix(epoch_micros, :microsecond) do
-      # `DateTime.add/3` can itself raise for an offset that pushes the
-      # result outside the calendar's representable range — an
-      # absurd-but-well-typed `offset_minutes` (CBOR integers are
-      # unbounded) is exactly the kind of input a malformed/adversarial
-      # document can supply, so this is rescued rather than left to
-      # crash the decode like `DateTime.from_unix!/2`'s bang form did.
-      try do
-        local = DateTime.add(utc, offset_seconds, :second)
-
-        {:ok,
-         %DateTime{
-           year: local.year,
-           month: local.month,
-           day: local.day,
-           hour: local.hour,
-           minute: local.minute,
-           second: local.second,
-           microsecond: local.microsecond,
-           time_zone: "fixed",
-           zone_abbr: format_offset(offset_seconds),
-           utc_offset: offset_seconds,
-           std_offset: 0
-         }}
-      rescue
-        ArgumentError ->
-          {:error,
-           Dextrin.Error.binary("datetime (tag #{Tags.t_datetime_offset()}) out of range")}
-      end
-    else
-      {:error, reason} ->
-        {:error,
-         Dextrin.Error.binary(
-           "datetime (tag #{Tags.t_datetime_offset()}) has an invalid epoch: #{reason}"
-         )}
-    end
+  defp build_local(nanos) when is_integer(nanos) do
+    {:ok, Dextrin.Temporal.local_from(nanos)}
+  rescue
+    ArgumentError ->
+      {:error,
+       Dextrin.Error.binary("local-datetime (tag #{Tags.t_local_datetime()}) out of range")}
   end
 
-  defp build_datetime_offset(_),
+  defp build_local(_),
     do:
       {:error,
-       Dextrin.Error.binary("malformed datetime (tag #{Tags.t_datetime_offset()}) payload")}
+       Dextrin.Error.binary("malformed local-datetime (tag #{Tags.t_local_datetime()}) payload")}
 
-  defp build_duration([bitmask | field_values]) when is_integer(bitmask) do
+  # `scale` turns the seventh field into nanoseconds: 1 for tag 220,
+  # 1000 for 0.2's microseconds (tag 212).
+  defp build_duration([bitmask | field_values], scale) when is_integer(bitmask) do
     fields = Tags.duration_bits() |> Enum.filter(fn field -> bit_set?(bitmask, field) end)
 
     if length(fields) == length(field_values) do
@@ -668,13 +658,16 @@ defmodule Dextrin.Binary.Decoder do
 
       {:ok,
        Enum.zip(fields, field_values)
-       |> Enum.reduce(base, fn {field, value}, acc -> Map.put(acc, field, value) end)}
+       |> Enum.reduce(base, fn
+         {:nanoseconds, value}, acc when is_integer(value) -> %{acc | nanoseconds: value * scale}
+         {field, value}, acc -> Map.put(acc, field, value)
+       end)}
     else
       {:error, Dextrin.Error.binary("duration bitmask doesn't match field count")}
     end
   end
 
-  defp build_duration(_),
+  defp build_duration(_, _scale),
     do: {:error, Dextrin.Error.binary("malformed duration (tag #{Tags.t_duration()}) payload")}
 
   defp build_regex([source, flags_byte]) when is_binary(source) and is_integer(flags_byte) do
@@ -709,15 +702,6 @@ defmodule Dextrin.Binary.Decoder do
   defp bit_set?(bitmask, field) do
     index = Enum.find_index(Tags.duration_bits(), &(&1 == field))
     Bitwise.band(bitmask, Bitwise.bsl(1, index)) != 0
-  end
-
-  defp format_offset(seconds) do
-    sign = if seconds < 0, do: "-", else: "+"
-    abs_s = abs(seconds)
-    h = div(abs_s, 3600)
-    m = div(rem(abs_s, 3600), 60)
-
-    "#{sign}#{String.pad_leading(Integer.to_string(h), 2, "0")}:#{String.pad_leading(Integer.to_string(m), 2, "0")}"
   end
 
   # ---- shared helpers ---------------------------------------------------------

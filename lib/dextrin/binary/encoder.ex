@@ -301,27 +301,24 @@ defmodule Dextrin.Binary.Encoder do
          do: {:ok, tag(Tags.t_date(), item)}
   end
 
-  defp encode_item_dispatch(%Time{} = time, opts) do
-    {micro, _precision} = time.microsecond
-    total = time.hour * 3_600_000_000 + time.minute * 60_000_000 + time.second * 1_000_000 + micro
-    with {:ok, item} <- encode_item(total, opts), do: {:ok, tag(Tags.t_time(), item)}
-  end
+  # Nanoseconds throughout (DXN.md §2.2, Jan, 2026-10-20): a time since
+  # midnight, a datetime since the epoch with its offset in minutes (UTC
+  # is offset 0), a local date-time since 1970-01-01T00:00 on the wall
+  # clock.
+  defp encode_item_dispatch(%Time{} = time, opts), do: encode_time(time, opts)
 
-  defp encode_item_dispatch(%DateTime{utc_offset: 0, std_offset: 0} = dt, opts) do
-    with {:ok, item} <- encode_item(DateTime.to_unix(dt, :microsecond), opts) do
-      {:ok, tag(Tags.t_timestamp(), item)}
-    end
-  end
+  defp encode_item_dispatch(%Dextrin.Nanos{value: %Time{}} = time, opts),
+    do: encode_time(time, opts)
 
-  defp encode_item_dispatch(%DateTime{} = dt, opts) do
-    epoch_micros = DateTime.to_unix(dt, :microsecond)
-    offset_minutes = div(dt.utc_offset + dt.std_offset, 60)
+  defp encode_item_dispatch(%DateTime{} = dt, opts), do: encode_datetime(dt, opts)
 
-    with {:ok, micros_item} <- encode_item(epoch_micros, opts),
-         {:ok, offset_item} <- encode_item(offset_minutes, opts) do
-      {:ok, tag(Tags.t_datetime_offset(), array_of([micros_item, offset_item]))}
-    end
-  end
+  defp encode_item_dispatch(%Dextrin.Nanos{value: %DateTime{}} = dt, opts),
+    do: encode_datetime(dt, opts)
+
+  defp encode_item_dispatch(%NaiveDateTime{} = n, opts), do: encode_local(n, opts)
+
+  defp encode_item_dispatch(%Dextrin.Nanos{value: %NaiveDateTime{}} = n, opts),
+    do: encode_local(n, opts)
 
   defp encode_item_dispatch(%Dextrin.Duration{} = d, opts) do
     fields = Enum.reject(Tags.duration_bits(), fn field -> Map.get(d, field) == nil end)
@@ -524,7 +521,7 @@ defmodule Dextrin.Binary.Encoder do
   defp bit_for(:days), do: 1 <<< 3
   defp bit_for(:hours), do: 1 <<< 4
   defp bit_for(:minutes), do: 1 <<< 5
-  defp bit_for(:microseconds), do: 1 <<< 6
+  defp bit_for(:nanoseconds), do: 1 <<< 6
 
   # ---- raw CBOR item builders -----------------------------------------------
 
@@ -574,4 +571,23 @@ defmodule Dextrin.Binary.Encoder do
     do: tag(Tags.t_bignum_pos(), bytes(:binary.encode_unsigned(i)))
 
   defp encode_integer(i), do: tag(Tags.t_bignum_neg(), bytes(:binary.encode_unsigned(-1 - i)))
+
+  defp encode_time(time, opts) do
+    with {:ok, item} <- encode_item(Dextrin.Temporal.time_nanos(time), opts),
+         do: {:ok, tag(Tags.t_time(), item)}
+  end
+
+  defp encode_datetime(dt, opts) do
+    {nanos, offset} = Dextrin.Temporal.datetime_parts(dt)
+
+    with {:ok, nanos_item} <- encode_item(nanos, opts),
+         {:ok, offset_item} <- encode_item(offset, opts) do
+      {:ok, tag(Tags.t_datetime(), array_of([nanos_item, offset_item]))}
+    end
+  end
+
+  defp encode_local(local, opts) do
+    with {:ok, item} <- encode_item(Dextrin.Temporal.local_nanos(local), opts),
+         do: {:ok, tag(Tags.t_local_datetime(), item)}
+  end
 end

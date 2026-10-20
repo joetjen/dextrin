@@ -54,8 +54,8 @@ char_body    = ? any single non-whitespace character ? | escape | "s" (* space, 
 char         = "?" , char_body ;
 ```
 
-Reserved sigils — none may begin a bare `identifier`: `#` comment, `@`
-open tag, `%` map/struct, `~` closed sigil family, `?` char, `:` keyword.
+Reserved leaders — none may begin a bare `identifier`: `#` comment, `@`
+tag, `%` map/struct, `?` char, `:` keyword.
 
 ### 1.2 Value grammar
 
@@ -66,7 +66,7 @@ discard      = "@_" , value ;                      (* parses and discards one va
 
 value_body   = nil | boolean | number | string | char | symbol | keyword
              | list | tuple | map_lit | struct_lit | set_lit
-             | sigil | tag_form ;
+             | tag_form ;
 
 nil          = "nil" ;
 boolean      = "true" | "false" ;
@@ -96,15 +96,40 @@ struct_lit   = "%" , identifier , [ "(" , integer , ")" ] ,   (* version, §4.8 
                  | ( "[" , { item } , { map_entry } , "]" ) ) ;   (* positional, then extra fields *)
 item         = value ;                                (* a value not followed by "=>" (§4.7) *)
 
-sigil        = date_sigil | time_sigil | instant_sigil | regex_sigil ;
-date_sigil   = "~D[" , iso_date , "]" ;
-time_sigil   = "~T[" , iso_time , "]" ;
-instant_sigil= "~U[" , iso_date , " " , iso_time , "Z" , "]" ;
-regex_sigil  = "~r/" , { regex_char } , "/" , [ regex_flags ] ;
-regex_flags  = { "i" | "m" | "s" | "u" | "x" | "f" | "r" } ;
-
-tag_form     = "@" , identifier , value ;             (* built-in tag name -> §1.3; else custom *)
+tag_form     = "@" , identifier , [ "(" , regex_flags , ")" ] , value ;
+                                                      (* built-in tag name -> §1.3; else custom *)
+regex_flags  = ( "i" | "m" | "s" | "u" | "x" | "f" | "r" ) ,
+               { "i" | "m" | "s" | "u" | "x" | "f" | "r" } ;   (* @regex only, §1.3 *)
 ```
+
+**One way to write a value** (Jan, 2026-10-20): every type that is not
+a number, string, char, symbol, keyword or collection is a tag, `@name
+value` -- dates and times among them. DXN 0.2 wrote dates, times, UTC
+timestamps and regexes as sigils, `~D[...]`, `~T[...]`, `~U[...]` and
+`~r/.../`; those are gone, and a reader refuses them (`syntax`).
+
+**Dates and times are ISO 8601 strings** under their tag:
+
+```text
+@date "2026-10-20"
+@time "14:30:00.123456789"
+@datetime "2026-10-20T14:30:00Z"          # UTC
+@datetime "2026-10-20T16:30:00+02:00"     # the same instant, written with its offset
+@local-datetime "2026-10-20T14:30:00"     # a wall-clock time, no offset
+@duration "PT1H30M"
+```
+
+A time takes up to nine fraction digits: nanoseconds. A `datetime` has
+an offset, `Z` or `±HH:MM`; `Z` is `+00:00`, and `-00:00` ("offset
+unknown") is refused -- a value with no offset is a `local-datetime`. A
+string that is not the form its tag names is `syntax`.
+
+**A regex is its pattern as a string**, its flags in a header against
+the tag: `@regex(im) "^\\d+$"`. PCRE's own inline modifiers are part of
+the pattern and need no header: `@regex "(?im)^\\d+$"` matches what the
+first does, and is a different value (its pattern differs). A pattern is
+an ordinary string, so a backslash in it is written `\\`. A header on
+any tag but `regex` is `syntax`, and so is a flag given twice.
 
 Tag resolution: an `identifier` immediately following `@` is matched
 against the built-in tag table (§1.3) first; any name not found there is
@@ -141,16 +166,16 @@ types[31]{type,category,dxn_syntax,notes}:
   struct-keyed,collection,"%Name{ ... }","requires schema to fully interpret"
   struct-positional,collection,"%Name[ ... ]","field order per schema; both struct forms parse equal"
   array,collection,"@array[ ... ]","fixed-size/indexed"
-  date,temporal,"~D[YYYY-MM-DD]","ISO 8601"
-  time,temporal,"~T[HH:MM:SS(.ffffff)?]","ISO 8601"
-  timestamp,temporal,"~U[YYYY-MM-DD HH:MM:SSZ]","ISO 8601, UTC only"
-  datetime,temporal,"@datetime ""...""","ISO 8601, offset required, non-UTC"
-  duration,temporal,"@duration ""P...""","ISO 8601 duration"
+  date,temporal,"@date ""YYYY-MM-DD""","ISO 8601"
+  time,temporal,"@time ""HH:MM:SS(.f{1,9})?""","ISO 8601, nanoseconds"
+  datetime,temporal,"@datetime ""YYYY-MM-DDTHH:MM:SS(.f{1,9})?(Z|±HH:MM)""","ISO 8601, an instant with its offset; Z is UTC"
+  local-datetime,temporal,"@local-datetime ""YYYY-MM-DDTHH:MM:SS(.f{1,9})?""","ISO 8601, no offset: a wall-clock time"
+  duration,temporal,"@duration ""P...""","ISO 8601 duration, nanoseconds"
   uuid,extended,"@uuid ""...""","RFC 4122"
   uri,extended,"@uri ""...""","RFC 3986"
   bytes,extended,"@bytes ""...""","base64"
   bits,extended,"@bits {""..."" n}","base64 and a bit count: a run of bits that is not whole bytes"
-  regex,extended,"~r/pattern/flags","PCRE-style via Erlang :re"
+  regex,extended,"@regex ""pattern"" | @regex(flags) ""pattern""","PCRE-style via Erlang :re"
   custom-tag,extended,"@tag value","open extension point, any unrecognized tag name"
   header,meta,"@dxn ""1.0""","optional, first form only; the format version (see the introduction)"
 ```
@@ -223,16 +248,16 @@ canonical[30]{type,form}:
   sorted-set,"@sorted-set @{ items } in canonical order"
   struct,"%Name(N){ entries } keyed, or %Name(N)[ items ] positional, as held; (N) when the version is known; keyed entries in held order, since in a %schema body the order is the field order"
   map entry,"name: value when the key is a keyword whose name is an identifier and not reserved, else key => value"
-  date,"~D[YYYY-MM-DD]"
-  time,"~T[HH:MM:SS] then .fraction with trailing zeros removed, omitted when zero"
-  timestamp,"~U[YYYY-MM-DD HH:MM:SS] then the fraction as for time, then Z"
-  datetime,"@datetime ""YYYY-MM-DDTHH:MM:SS"" with the fraction as for time, then ±HH:MM"
+  date,"@date ""YYYY-MM-DD"""
+  time,"@time ""HH:MM:SS"" then .fraction with trailing zeros removed, omitted when zero"
+  datetime,"@datetime ""YYYY-MM-DDTHH:MM:SS"" with the fraction as for time, then Z when the offset is zero, else ±HH:MM"
+  local-datetime,"@local-datetime ""YYYY-MM-DDTHH:MM:SS"" with the fraction as for time"
   duration,"@duration ""P..."" with fields in the order of §2.3, zero fields omitted, PT0S when all are zero"
   uuid,"@uuid ""8-4-4-4-12"" in lowercase hex"
   uri,"@uri ""..."" as held, with string escaping"
   bytes,"@bytes ""..."" in standard base64 with padding"
   bits,"@bits {""..."" n}: the bits in standard base64 with padding, the unused low bits of the last byte zero, and n their count; a run of whole bytes is bytes"
-  regex,"~r/pattern/flags with the flags in canonical order"
+  regex,"@regex ""pattern"" with string escaping, or @regex(flags) ""pattern"" with the flags in the order of §2.3"
   custom-tag,"@name value"
   extra fields,"in a keyed struct, entries after the declared fields in held order; in a positional struct, entries after the items, in canonical order of their keys (§4.7)"
 ```
@@ -285,7 +310,7 @@ every language. Excluded, and why:
   `NaN`, `1.0M` and `1.00M`, `2/4` and `1/2` are distinct DXN values
   that some languages hold as one, and the BEAM has no `NaN` or
   infinities.
-- `time`, `timestamp`, `datetime`, `duration`, `uri`: precision,
+- `time`, `datetime`, `local-datetime`, `duration`, `uri`: precision,
   offsets, `P1D` against `PT24H`, URI normalization.
 - `nil` and `boolean`: they collide with other keys in some languages
   (in PHP, `nil` with `""` and `true` with `1` as array keys), and they
@@ -343,10 +368,10 @@ cbor_map[30]{type,cbor_major_or_tag,payload,integrity_note}:
   struct,"tag T_STRUCT","[type-name-or-ref, field..., extras?]","positional only, §2.1; the type name carries the version, `User(3)` (§4.8); extra fields, when there are any, as one trailing `T_EXTRA` map (§4.7)"
   array,"tag T_ARRAY","major4 items",""
   date,"tag T_DATE","integer days since 1970-01-01","Unix epoch, day granularity"
-  time,"tag T_TIME","integer microseconds since midnight",""
-  timestamp,"tag1, integer form only","integer microseconds since epoch","MUST use integer, not float tag-1 form — float loses microsecond precision at scale"
-  datetime,"tag T_DATETIME_OFFSET","[epoch-microseconds int, offset-minutes]","same integer-only requirement as timestamp"
-  duration,"tag T_DURATION","bitmask byte + present fields, §2.3",""
+  time,"tag T_TIME (218)","integer nanoseconds since midnight","0.2's T_TIME_US (210), microseconds, is read, never written"
+  datetime,"tag T_DATETIME (219)","[epoch-nanoseconds int, offset-minutes]","UTC is offset 0; integers only -- a float loses nanoseconds at scale. 0.2's tag 1 (UTC, epoch microseconds) and T_DATETIME_US (211, [epoch-us, offset-min]) are read, never written"
+  local-datetime,"tag T_LOCAL_DATETIME","integer nanoseconds since 1970-01-01T00:00:00 on the wall clock","no offset, so no instant"
+  duration,"tag T_DURATION (220)","bitmask byte + present fields, §2.3","0.2's T_DURATION_US (212), its seventh field microseconds, is read, never written"
   uuid,"tag37","16 raw bytes","not the 36-char text form"
   uri,"tag32","major3 text",""
   bytes,"major2","raw bytes","no base64 in binary"
@@ -359,7 +384,7 @@ cbor_map[30]{type,cbor_major_or_tag,payload,integrity_note}:
 ### 2.3 Private tag assignments and bit layouts
 
 ```toon
-private_tags[17]{name,number,wraps}:
+private_tags[21]{name,number,wraps}:
   T_CHAR,200,"integer codepoint"
   T_SYMBOL,201,"text string"
   T_KEYWORD,202,"text string"
@@ -370,17 +395,26 @@ private_tags[17]{name,number,wraps}:
   T_SORTED_SET,207,"array"
   T_STRUCT,208,"array: [type-ref, field...]"
   T_DATE,209,"integer"
-  T_TIME,210,"integer"
-  T_DATETIME_OFFSET,211,"array: [epoch-us, offset-min]"
-  T_DURATION,212,"bitmask byte + fields"
+  T_TIME_US,210,"integer: DXN 0.2's microseconds since midnight; read, never written"
+  T_DATETIME_US,211,"array: [epoch-us, offset-min], DXN 0.2's; read, never written"
+  T_DURATION_US,212,"bitmask byte + fields, the seventh microseconds, DXN 0.2's; read, never written"
   T_REGEX,213,"array: [pattern, flags-byte]"
   T_CUSTOM,214,"array: [tag-ref, value]"
   T_EXTRA,215,"map: {key: value, ...} — a struct's extra fields, only ever its last item (§4.7)"
   T_BITS,216,"array: [bytes, bit-count] — a run of bits that is not whole bytes (§1.3)"
+  T_LOCAL_DATETIME,217,"integer: nanoseconds since 1970-01-01T00:00:00, wall clock"
+  T_TIME,218,"integer: nanoseconds since midnight"
+  T_DATETIME,219,"array: [epoch-ns, offset-min]"
+  T_DURATION,220,"bitmask byte + fields, the seventh nanoseconds"
 ```
 
+**A tag never changes its meaning** (2026-10-20): when DXN's times went
+from microseconds to nanoseconds, the nanosecond forms took new tags,
+and a reader still reads the old ones as what they meant -- a
+document DXN 0.2 wrote is not misread, and nothing writes them again.
+
 Allocated from CBOR's one-extra-byte tag range (24–255), placed at
-200–216 specifically to stay clear of the actively-managed low range
+200–220 specifically to stay clear of the actively-managed low range
 (0–40 has multiple assignments and gaps IANA could fill later). Not
 IANA-registered — collision-free only within `dextrin`-produced documents;
 register formally before any non-`dextrin` interop is expected.
@@ -397,7 +431,7 @@ duration_bits[7]{bit,field,unit}:
   3,days,count
   4,hours,count
   5,minutes,count
-  6,microseconds,"count (fractional seconds folded in, matching time/timestamp precision)"
+  6,nanoseconds,"count (fractional seconds folded in, matching time and datetime precision)"
 ```
 
 Bit 7 is reserved (must be 0).
@@ -453,7 +487,7 @@ This is a size optimization only, never an identity/aliasing feature:
 
 Not required for a conforming encoder to produce; a conforming decoder
 MUST accept it. Tags 28/29 do not collide with the private range in
-§2.3 (200–216) or with §2.4's tags (256, 25) — confirm both against
+§2.3 (200–220) or with §2.4's tags (256, 25) — confirm both against
 the current IANA CBOR tags registry before final implementation, as
 with any tag number cited normatively here.
 
@@ -469,16 +503,16 @@ with any tag number cited normatively here.
   active:  true
   score:   19.99M
   tags:    @{:admin :staff}
-  meta:    @ordered %{created: ~U[1990-01-01 00:00:00Z]}
+  meta:    @ordered %{created: @datetime "1990-01-01T00:00:00Z"}
   address: %Point[51.05, 13.74]
   result:  {:ok, 200}
-  handle:  ~r/^[a-z0-9_]{3,20}$/i
+  handle:  @regex(i) "^[a-z0-9_]{3,20}$"
 }
 ```
 
 Every construct above is fully specified by §1.2 + §1.3; every field
 round-trips through §2 without loss (§2.2's `integrity_note` column
-records the two places — bignum and timestamp precision — where that
+records the two places — bignum and datetime precision — where that
 took a specific encoding choice to guarantee, and the one value that
 does not: a negative-zero decimal, which `.dxnb` writes as positive
 zero).
@@ -531,7 +565,7 @@ takes arguments.
 ### 4.2 `refine` constraints
 
 ```toon
-refine_constraints[10]{key,applies_to,meaning}:
+refine_constraints[12]{key,applies_to,meaning}:
   min,"integer/float/decimal/rational","value >= given number"
   max,"integer/float/decimal/rational","value <= given number"
   exclusive-min,"integer/float/decimal/rational","value > given number"
@@ -542,11 +576,22 @@ refine_constraints[10]{key,applies_to,meaning}:
   pattern,string,"value matches given regex (§1.3's regex type)"
   min-count,"list/set/tuple","element count >= given integer"
   max-count,"list/set/tuple","element count <= given integer"
+  finite,float,"true: neither NaN nor an infinity"
+  offsets,datetime,"the value's offset is one of the given strings, Z or ±HH:MM"
 ```
 
 `{:refine t %{k: v, ...}}`'s constraint map may combine any number of
 these keys; a value must satisfy `t` itself *and* every listed
 constraint.
+
+**NaN lies outside every range** (Jan, 2026-10-20): `min`, `max` and
+both `exclusive-` bounds refuse it, as every IEEE 754 comparison with NaN
+is false; `Infinity` and `-Infinity` compare as the numbers they are.
+`finite: true` refuses all three.
+
+**`:timestamp` is sugar for a datetime in UTC**, `{:refine :datetime
+%{offsets: ["Z"]}}`: DXN 0.2 had a timestamp type of its own, and a
+schema naming it keeps its meaning (§1.2).
 
 ### 4.3 Required vs. optional fields
 

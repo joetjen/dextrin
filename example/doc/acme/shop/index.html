@@ -329,7 +329,7 @@
 <tr>
   <td class="pos">2</td>
   <th scope="row" class="field"><code>sku</code></th>
-  <td class="type"><code>{<span class="kw">:refine</span> <span class="kw">:string</span> %{pattern: ~r/^[A-Z]{3}-[0-9]{5}$/}}</code></td>
+  <td class="type"><code>{<span class="kw">:refine</span> <span class="kw">:string</span> %{pattern: @regex <span class="str">&quot;^[A-Z]{3}-[0-9]{5}$&quot;</span>}}</code></td>
   <td class="notes"><p>The stock-keeping unit: three letters, a dash, five digits.</p></td>
 </tr>
 <tr>

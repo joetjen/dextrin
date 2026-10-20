@@ -14,10 +14,10 @@ defmodule Dextrin.Conformance.WorkedExampleTest do
     active:  true
     score:   19.99M
     tags:    @{:admin :staff}
-    meta:    @ordered %{created: ~U[1990-01-01 00:00:00Z]}
+    meta:    @ordered %{created: @datetime "1990-01-01T00:00:00Z"}
     address: %Point[51.05, 13.74]
     result:  {:ok, 200}
-    handle:  ~r/^[a-z0-9_]{3,20}$/i
+    handle:  @regex(i) "^[a-z0-9_]{3,20}$"
   }
   """
 

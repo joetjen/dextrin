@@ -143,13 +143,13 @@ defmodule Dextrin.Text.PrinterTest do
 
   describe "temporal" do
     test "date and time" do
-      assert Printer.print(~D[2024-01-01]) == {:ok, "~D[2024-01-01]"}
-      assert Printer.print(~T[12:30:00]) == {:ok, "~T[12:30:00]"}
+      assert Printer.print(~D[2024-01-01]) == {:ok, ~s|@date "2024-01-01"|}
+      assert Printer.print(~T[12:30:00]) == {:ok, ~s|@time "12:30:00"|}
     end
 
-    test "a UTC timestamp uses the ~U[...] sigil" do
+    test "a UTC datetime is @datetime with Z" do
       {:ok, dt, 0} = DateTime.from_iso8601("2024-01-01T12:30:00Z")
-      assert Printer.print(dt) == {:ok, "~U[2024-01-01 12:30:00Z]"}
+      assert Printer.print(dt) == {:ok, ~s|@datetime "2024-01-01T12:30:00Z"|}
     end
 
     test "a non-UTC datetime uses the @datetime tag" do
@@ -179,8 +179,8 @@ defmodule Dextrin.Text.PrinterTest do
       assert printed == ~s(@duration "P1Y2M10D")
     end
 
-    test "a duration with only a microseconds field round-trips through fractional seconds" do
-      d = %Dextrin.Duration{microseconds: 1_500_000}
+    test "a duration with only a nanoseconds field round-trips through fractional seconds" do
+      d = %Dextrin.Duration{nanoseconds: 1_500_000_000}
       assert {:ok, printed} = Printer.print(d)
       assert printed =~ "@duration"
     end
@@ -198,7 +198,7 @@ defmodule Dextrin.Text.PrinterTest do
     end
 
     test "regex" do
-      assert Printer.print(~r/abc/i) == {:ok, "~r/abc/i"}
+      assert Printer.print(~r/abc/i) == {:ok, ~s|@regex(i) "abc"|}
     end
 
     test "custom tag, recursively printing its inner value" do

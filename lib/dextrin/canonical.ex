@@ -93,24 +93,15 @@ defmodule Dextrin.Canonical do
     Struct.head(name, version) <> "[" <> body <> "]"
   end
 
-  defp text(%Date{} = date), do: "~D[" <> Date.to_iso8601(date) <> "]"
-  defp text(%Time{} = time), do: "~T[" <> time(time) <> "]"
-
-  defp text(%DateTime{utc_offset: 0, std_offset: 0} = dt),
-    do:
-      "~U[" <> Date.to_iso8601(DateTime.to_date(dt)) <> " " <> time(DateTime.to_time(dt)) <> "Z]"
-
-  defp text(%DateTime{} = dt) do
-    "@datetime " <>
-      string(
-        Date.to_iso8601(DateTime.to_date(dt)) <>
-          "T" <> time(DateTime.to_time(dt)) <> offset(dt.utc_offset + dt.std_offset)
-      )
-  end
-
-  defp text(%Dextrin.Duration{} = d) do
-    {:ok, printed} = Dextrin.Text.Printer.print(d)
-    printed
+  # Dates and times are ISO 8601 strings under their tag (DXN.md §1.5,
+  # Jan, 2026-10-20): the fraction without trailing zeros, Z for a zero
+  # offset.
+  defp text(value)
+       when is_struct(value, Date) or is_struct(value, Time) or is_struct(value, DateTime) or
+              is_struct(value, NaiveDateTime) or is_struct(value, Dextrin.Nanos) or
+              is_struct(value, Dextrin.Duration) do
+    {:ok, tag, iso} = Dextrin.Temporal.tagged(value)
+    "@" <> tag <> " " <> string(iso)
   end
 
   defp text(%Uuid{} = uuid), do: "@uuid " <> string(String.downcase(Uuid.format(uuid)))
@@ -118,10 +109,13 @@ defmodule Dextrin.Canonical do
   defp text(%Bytes{data: data}) when is_binary(data), do: "@bytes " <> string(Base.encode64(data))
   defp text(%Bytes{data: bits}), do: Dextrin.Text.Printer.bits_form(bits)
 
-  defp text(%Regex{source: source, opts: opts}) do
-    flags = opts |> Dextrin.Binary.Tags.regex_opts_to_flags() |> String.graphemes() |> Enum.sort()
-    "~r/" <> source <> "/" <> Enum.join(flags)
-  end
+  # Its flags in §2.3's bit order, which `regex_opts_to_flags/1` gives.
+  defp text(%Regex{source: source, opts: opts}),
+    do:
+      Dextrin.Text.Printer.regex_form(
+        Dextrin.Binary.Tags.regex_opts_to_flags(opts),
+        string(source)
+      )
 
   defp text(%CustomTag{name: name, value: value}), do: "@" <> name <> " " <> text(value)
 
@@ -280,29 +274,4 @@ defmodule Dextrin.Canonical do
   end
 
   defp whitespace?(cp), do: String.match?(<<cp::utf8>>, ~r/^\s$/u)
-
-  # ---- time -----------------------------------------------------------------------
-
-  # HH:MM:SS, then the fraction with trailing zeros removed, or nothing
-  # when it is zero.
-  defp time(%Time{} = time) do
-    case String.split(Time.to_iso8601(time), ".") do
-      [seconds] ->
-        seconds
-
-      [seconds, fraction] ->
-        case String.trim_trailing(fraction, "0") do
-          "" -> seconds
-          kept -> seconds <> "." <> kept
-        end
-    end
-  end
-
-  defp offset(seconds) do
-    sign = if seconds < 0, do: "-", else: "+"
-    minutes = div(abs(seconds), 60)
-    sign <> pad2(div(minutes, 60)) <> ":" <> pad2(rem(minutes, 60))
-  end
-
-  defp pad2(n), do: String.pad_leading(Integer.to_string(n), 2, "0")
 end

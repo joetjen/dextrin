@@ -94,7 +94,7 @@
   <div class="prose"><p>An ISO 3166-1 alpha-2 country code, upper case: <code>DE</code>, <code>US</code>.</p></div>
   <div class="type-def">
   <p class="label">Definition</p>
-  <pre class="expr"><code>{<span class="kw">:refine</span> <span class="kw">:string</span> %{pattern: ~r/^[A-Z]{2}$/}}</code></pre>
+  <pre class="expr"><code>{<span class="kw">:refine</span> <span class="kw">:string</span> %{pattern: @regex <span class="str">&quot;^[A-Z]{2}$&quot;</span>}}</code></pre>
   <p class="file">acme.common.dxns</p>
 </div>
 
@@ -126,7 +126,7 @@
   <div class="prose"><p>An e-mail address, checked only roughly; the address is confirmed by sending mail to it, not by this pattern.</p></div>
   <div class="type-def">
   <p class="label">Definition</p>
-  <pre class="expr"><code>{<span class="kw">:refine</span> <span class="kw">:string</span> %{pattern: ~r/^[^@\s]+@[^@\s]+\.[^@\s]+$/ max-length: 254}}</code></pre>
+  <pre class="expr"><code>{<span class="kw">:refine</span> <span class="kw">:string</span> %{pattern: @regex <span class="str">&quot;^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$&quot;</span> max-length: 254}}</code></pre>
   <p class="file">acme.common.dxns</p>
 </div>
 
@@ -228,7 +228,7 @@
   <div class="prose"><p>A phone number in E.164 form: a plus, then up to 15 digits.</p></div>
   <div class="type-def">
   <p class="label">Definition</p>
-  <pre class="expr"><code>{<span class="kw">:refine</span> <span class="kw">:string</span> %{pattern: ~r/^\+[1-9][0-9]{1,14}$/}}</code></pre>
+  <pre class="expr"><code>{<span class="kw">:refine</span> <span class="kw">:string</span> %{pattern: @regex <span class="str">&quot;^\\+[1-9][0-9]{1,14}$&quot;</span>}}</code></pre>
   <p class="file">acme.common.dxns</p>
 </div>
 

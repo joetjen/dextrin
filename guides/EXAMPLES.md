@@ -17,7 +17,7 @@ Elixir-API-level) examples.
     host:     "db.internal"
     port:     5432
     pool:     10
-    timeout:  ~T[00:00:30]
+    timeout:  @time "00:00:30"
   }
   features: @{:billing :notifications}
 }
@@ -61,7 +61,7 @@ payload = """
   id:      @uuid "550e8400-e29b-41d4-a716-446655440000"
   email:   "ada@example.com"
   role:    :admin
-  created: ~U[2024-01-01 00:00:00Z]
+  created: @datetime "2024-01-01T00:00:00Z"
 }
 """
 
