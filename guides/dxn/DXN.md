@@ -491,14 +491,14 @@ A `.dxns` file is valid `.dxn` — §1's grammar, unchanged, no schema
 -specific syntax. What makes a document a *schema* document is purely
 the shape of the value it decodes to: a `map` whose values are either
 `%schema{...}` (a struct schema) or a `type_expr` (a **named type**,
-§4.5). `%schema{}`/`%field{}` (§4.4) are recognized by name directly,
+§4.5) -- a `%shape{...}` (§4.4a) among them. `%schema{}`/`%shape{}`/`%field{}` (§4.4) are recognized by name directly,
 the same way a built-in tag name is (§1.2) — not looked up against a
 schema of their own, which would be circular.
 
 ### 4.1 `type_expr` forms
 
 ```toon
-type_expr[19]{form,dxn_shape,meaning}:
+type_expr[21]{form,dxn_shape,meaning}:
   any,":any","matches any value at all"
   never,":never","matches no value at all (JSON Schema's false)"
   primitive,":integer / :string / ...","one keyword per §1.3 type name; :bits matches bits and bytes alike, :bytes only whole bytes"
@@ -518,6 +518,8 @@ type_expr[19]{form,dxn_shape,meaning}:
   nilable,"{:nilable t}","sugar for {:any-of :nil t}"
   refine,"{:refine t %{constraints}}","base type plus constraints, §4.2"
   struct,"%schema{...}","struct/record shape, §4.4"
+  shape,"%shape{...}","a plain map with these fields, defaults filled, §4.4a"
+  case,"{:case field %{value => type, :else => type}}","the type the sibling field's value chooses, §4.4a"
 ```
 
 A bare `type_expr` (no wrapping tuple/struct) is always a `primitive`
@@ -595,6 +597,43 @@ the field is absent; independent of `?`, which controls whether
 *absence itself* is an error) or a human-readable description. It never
 carries its own optionality flag — that's always the key's `?` suffix.
 
+### 4.4a Shapes (`%shape{}`) and `{:case}`
+
+```text
+Envelope: %schema{
+  type: :string,
+  payload: {:case type %{"order.placed" => OrderPlaced, :else => :any}}
+}
+OrderPlaced: %shape{
+  order_id: :uuid,
+  currency: %field{type: :string, default: "EUR"},
+  gift?: :boolean
+}
+```
+
+**A shape is a named, unversioned map type** (Jan, 2026-10-20): its
+body is a `%schema` body -- fields in order, `?` for optional,
+`%field{}` for a default or a description -- and it matches a **plain
+map** only, never a struct. `%shape(N){...}` and a positional
+`%shape[...]` are refused: a shape has no version, and evolving one
+compatibly is its author's business. A declared field is matched by
+name whatever spelling its key has (`name:`, `"name" =>`, `:"name" =>`),
+and a map giving one twice does not match. Every other key is an
+extra, kept; a strict decode (§4.7) refuses extras. **A missing field
+takes its default**: a map checked against a shape while decoding comes
+out with each missing field's default filled in, under a keyword key,
+as a struct's field does; encoding writes the map as it is given. A
+map a shape refuses is a `schema/type-mismatch` of the field holding it.
+
+**`{:case field %{value => type, ...}}` is the type its sibling chooses**:
+`field` names a field of the nearest enclosing schema or shape, whose
+value is compared with each key as `{:enum ...}` compares, and the type
+of the equal key is the type. `:else` is the type when no key is equal,
+or the sibling is absent; with no `:else`, that value is refused. A case
+may stand anywhere in a field's type -- inside `nilable`, `list-of`,
+`any-of` -- and a `field` naming no field of the schema or shape it is
+written in is a compile error.
+
 ### 4.5 Named types
 
 Any top-level entry whose value is not a `%schema{}` defines a **named
@@ -604,17 +643,22 @@ like a struct name — a bare symbol (§4.1's `reference` form) — since
 both are resolved the same way: by name, against whatever this
 document (or an already-known document, §4.6) defines.
 
-A named type's own body MAY reference another named type. Whether it
-may reference one declared *alongside* it in the same document (a
-same-document forward or sibling reference) is implementation-defined:
-a `.dxns` document's top-level `map` carries no ordering guarantee
-(§1.4), so there is no normative order to resolve such a reference
-against. A conforming reader MAY refuse same-document sibling
-references outright, MAY resolve them via some deterministic pass
-(e.g. two-phase compilation), or MAY support arbitrary forward
-reference — implementations are free to differ here, and a schema
-author SHOULD NOT rely on behavior beyond "a named type can reference
-one already known before this document was processed."
+A named type's own body MAY reference another named type, **including
+one declared alongside it in the same document**, in any order: a
+reader compiles every named type of a document before it resolves any
+reference between them, so the top-level `map`'s order (which §1.4
+does not give) never matters. A named type that reaches itself,
+directly or through others, is a compile error (`schema/compile`);
+recursive types are not supported yet.
+
+*Replaced (2026-10-20):* this section used to leave a same-document
+sibling reference implementation-defined -- a reader MAY refuse it, MAY
+resolve it by some deterministic pass, or MAY support forward
+reference -- on the argument that a map has no order to resolve it
+against. The argument only shows a reader must not resolve *in* map
+order; two-phase compilation needs no order at all. Shapes (§4.4a)
+name their siblings as a matter of course (`OrderCancelled` naming
+`CancelReason` beside it), so resolution is now required.
 
 ### 4.6 Cross-file references
 

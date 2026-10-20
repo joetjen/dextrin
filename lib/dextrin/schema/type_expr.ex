@@ -4,7 +4,8 @@ defmodule Dextrin.Schema.TypeExpr do
   vocabulary of DXN.md §4.1 (`any`, `never`, `primitive`, `reference`,
   `list-of`, `set-of`, `tuple-of`, `map-of`, `array-of`,
   `ordered-map-of`, `sorted-set-of`, `enum`, `one-of`, `any-of`,
-  `all-of`, `not`, `nilable`, `refine`, `struct`) `Dextrin.Schema.Compiler` turns a
+  `all-of`, `not`, `nilable`, `refine`, `struct`, and `shape` and `case`,
+  design/shapes-and-case.md) `Dextrin.Schema.Compiler` turns a
   parsed `.dxns` value into, and what `matches?/2` below checks a
   decoded value against. This vocabulary is fixed, not extensible from
   outside an actual library change — what schema *authors* extend
@@ -47,14 +48,35 @@ defmodule Dextrin.Schema.TypeExpr do
           | {:any_of, [t()]}
           | {:all_of, [t()]}
           | {:not, t()}
+          | {:shape, String.t(), [Dextrin.Schema.Field.t()]}
+          | {:case, String.t(), [{term(), t()}], t() | :none}
           | {:nilable, t()}
           | {:refine, t(), %{optional(String.t()) => term()}}
+
+  @typedoc """
+  What a check knows besides the type and the value: the registry
+  (`nil` when there is none -- strict and trusted are then off), and the
+  fields of the nearest enclosing struct or shape by name, which a
+  `{:case}` reads its sibling from (`nil` outside any).
+  """
+  @type context :: %{
+          registry: Dextrin.Registry.t() | nil,
+          siblings: %{String.t() => term()} | nil
+        }
+
+  @doc """
+  The context for a check with `registry`, the fields `siblings` around
+  it.
+  """
+  @spec context(Dextrin.Registry.t() | nil, %{String.t() => term()} | nil) :: context()
+  def context(registry, siblings \\ nil), do: %{registry: registry, siblings: siblings}
 
   @doc """
   Whether `value` matches `type` — shared by both decode
   (`Dextrin.Schema.Validator.materialize/4`) and encode-time
   validation (`Dextrin.Schema.Validator.validate_for_encode/3`): the
-  same recursive check, the same function, for both directions.
+  same recursive check, the same function, for both directions. It is
+  `conform/3` answered as a boolean, so there is one check, not two.
 
   `{:reference, name}` checks the *originating schema's* name, not
   the value's own shape — which is how it correctly rejects a
@@ -78,79 +100,109 @@ defmodule Dextrin.Schema.TypeExpr do
   errors -- a value matches only its declared type.
   """
   @spec matches?(t(), term(), Dextrin.Registry.t() | nil) :: boolean()
-  def matches?(type, value, registry \\ nil)
+  def matches?(type, value, registry \\ nil),
+    do: match?({:ok, _}, conform(type, value, context(registry)))
 
-  def matches?(:any, _value, _registry), do: true
-  def matches?(:never, _value, _registry), do: false
+  @doc """
+  `value` checked against `type` in `context`: `{:ok, value}` with every
+  shape's missing defaults filled in (design/shapes-and-case.md, Jan,
+  2026-10-20), or `:error`. Nothing but a shape changes a value.
+  """
+  @spec conform(t(), term(), context()) :: {:ok, term()} | :error
+  def conform(:any, value, _context), do: {:ok, value}
+  def conform(:never, _value, _context), do: :error
 
-  def matches?({:reference, name}, %Dextrin.Struct{name: struct_name}, _registry),
-    do: struct_name == name
+  def conform({:reference, name}, %Dextrin.Struct{name: struct_name} = value, _context),
+    do: when_true(struct_name == name, value)
 
-  def matches?({:reference, name}, %Validated{name: validated_name}, _registry),
-    do: validated_name == name
+  def conform({:reference, name}, %Validated{name: validated_name} = value, _context),
+    do: when_true(validated_name == name, value)
 
   # A struct is matched only by a struct (DXN.md §4.7): past a struct or
   # checked value of the right name, only the application struct
   # registered for `name` is one. A plain map, or any other value, is not
   # a struct, however much it looks like one -- nothing is converted to
   # make it match.
-  def matches?({:reference, name}, value, %Dextrin.Registry{} = registry)
+  def conform({:reference, name}, value, %{registry: %Dextrin.Registry{} = registry})
       when is_struct(value) do
     case Dextrin.Registry.fetch_struct_module(registry, name) do
-      {:ok, module} -> value.__struct__ == module
-      :error -> false
+      {:ok, module} -> when_true(value.__struct__ == module, value)
+      :error -> :error
     end
   end
 
-  def matches?({:reference, _name}, _value, _registry), do: false
+  def conform({:reference, _name}, _value, _context), do: :error
 
-  def matches?(type, %Validated{value: inner}, registry), do: matches?(type, inner, registry)
-
-  def matches?({:primitive, name}, value, _registry), do: primitive_matches?(name, value)
-
-  def matches?({:list_of, elem_type}, value, registry) do
-    is_list(value) and Enum.all?(value, &matches?(elem_type, &1, registry))
+  # A field's type is chosen by its sibling's value, wherever in the
+  # field's type the case stands.
+  def conform({:case, field, branches, otherwise}, value, context) do
+    case chosen(field, branches, otherwise, context.siblings) do
+      :none -> :error
+      type -> conform(type, value, context)
+    end
   end
 
-  def matches?({:set_of, elem_type}, %MapSet{} = value, registry) do
-    Enum.all?(MapSet.to_list(value), &matches?(elem_type, &1, registry))
+  def conform(type, %Validated{value: inner} = value, context) do
+    with {:ok, conformed} <- conform(type, inner, context), do: {:ok, %{value | value: conformed}}
   end
 
-  def matches?({:set_of, _}, _value, _registry), do: false
+  def conform({:primitive, name}, value, _context),
+    do: when_true(primitive_matches?(name, value), value)
 
-  def matches?({:tuple_of, types}, %Tuple{items: items}, registry) do
-    length(types) == length(items) and
-      Enum.all?(Enum.zip(types, items), fn {t, v} -> matches?(t, v, registry) end)
+  def conform({:shape, _name, fields}, value, context)
+      when is_map(value) and not is_struct(value),
+      do: shape(fields, value, context)
+
+  def conform({:shape, _name, _fields}, _value, _context), do: :error
+
+  def conform({:list_of, elem_type}, value, context) when is_list(value),
+    do: all(value, &conform(elem_type, &1, context))
+
+  def conform({:list_of, _}, _value, _context), do: :error
+
+  def conform({:set_of, elem_type}, %MapSet{} = value, context) do
+    with {:ok, items} <- all(MapSet.to_list(value), &conform(elem_type, &1, context)),
+         do: {:ok, MapSet.new(items)}
   end
 
-  def matches?({:tuple_of, _}, _value, _registry), do: false
+  def conform({:set_of, _}, _value, _context), do: :error
 
-  def matches?({:map_of, key_type, val_type}, value, registry)
+  def conform({:tuple_of, types}, %Tuple{items: items} = value, context)
+      when length(types) == length(items) do
+    with {:ok, conformed} <- all(Enum.zip(types, items), fn {t, v} -> conform(t, v, context) end),
+         do: {:ok, %{value | items: conformed}}
+  end
+
+  def conform({:tuple_of, _}, _value, _context), do: :error
+
+  def conform({:map_of, key_type, val_type}, value, context)
       when is_map(value) and not is_struct(value) do
-    Enum.all?(value, fn {k, v} ->
-      matches?(key_type, k, registry) and matches?(val_type, v, registry)
-    end)
+    with {:ok, pairs} <- all(Map.to_list(value), &pair(key_type, val_type, &1, context)),
+         do: {:ok, Map.new(pairs)}
   end
 
-  def matches?({:map_of, _, _}, _value, _registry), do: false
+  def conform({:map_of, _, _}, _value, _context), do: :error
 
-  def matches?({:array_of, elem_type}, %Array{items: items}, registry),
-    do: Enum.all?(Elixir.Tuple.to_list(items), &matches?(elem_type, &1, registry))
-
-  def matches?({:array_of, _}, _value, _registry), do: false
-
-  def matches?({:ordered_map_of, key_type, val_type}, %OrderedMap{pairs: pairs}, registry) do
-    Enum.all?(pairs, fn {k, v} ->
-      matches?(key_type, k, registry) and matches?(val_type, v, registry)
-    end)
+  def conform({:array_of, elem_type}, %Array{items: items} = value, context) do
+    with {:ok, conformed} <- all(Elixir.Tuple.to_list(items), &conform(elem_type, &1, context)),
+         do: {:ok, %{value | items: List.to_tuple(conformed)}}
   end
 
-  def matches?({:ordered_map_of, _, _}, _value, _registry), do: false
+  def conform({:array_of, _}, _value, _context), do: :error
 
-  def matches?({:sorted_set_of, elem_type}, %SortedSet{items: items}, registry),
-    do: Enum.all?(items, &matches?(elem_type, &1, registry))
+  def conform({:ordered_map_of, key_type, val_type}, %OrderedMap{pairs: pairs} = value, context) do
+    with {:ok, conformed} <- all(pairs, &pair(key_type, val_type, &1, context)),
+         do: {:ok, %{value | pairs: conformed}}
+  end
 
-  def matches?({:sorted_set_of, _}, _value, _registry), do: false
+  def conform({:ordered_map_of, _, _}, _value, _context), do: :error
+
+  def conform({:sorted_set_of, elem_type}, %SortedSet{items: items} = value, context) do
+    with {:ok, conformed} <- all(items, &conform(elem_type, &1, context)),
+         do: {:ok, %{value | items: conformed}}
+  end
+
+  def conform({:sorted_set_of, _}, _value, _context), do: :error
 
   # A schema's `enum` literals always come from `.dxns` *compilation*
   # (`Dextrin.Schema.Compiler`'s `atomize_back/1` normalizes them to
@@ -158,36 +210,175 @@ defmodule Dextrin.Schema.TypeExpr do
   # decoded), but the *data* being checked against them can be either
   # shape depending on the caller's own `trusted:` choice — a plain
   # `in` would only ever match the untrusted (`Dextrin.Keyword`) shape.
-  def matches?({:enum, literals}, value, _registry),
-    do: Enum.any?(literals, &keyword_aware_eq?(&1, value))
+  def conform({:enum, literals}, value, _context),
+    do: when_true(Enum.any?(literals, &keyword_aware_eq?(&1, value)), value)
 
   # Exactly one variant matches (JSON Schema's oneOf; Jan, 2026-10-20):
   # every variant is tried, stopping at a second match.
-  def matches?({:one_of, types}, value, registry) do
-    Enum.reduce_while(types, 0, fn type, found ->
-      cond do
-        not matches?(type, value, registry) -> {:cont, found}
-        found == 1 -> {:halt, 2}
-        true -> {:cont, 1}
+  def conform({:one_of, types}, value, context) do
+    Enum.reduce_while(types, :none, fn type, found ->
+      case {conform(type, value, context), found} do
+        {:error, _} -> {:cont, found}
+        {{:ok, _}, {:ok, _}} -> {:halt, :two}
+        {{:ok, _} = ok, :none} -> {:cont, ok}
       end
-    end) == 1
+    end)
+    |> case do
+      {:ok, _} = ok -> ok
+      _ -> :error
+    end
   end
 
-  # One or more match (JSON Schema's anyOf).
-  def matches?({:any_of, types}, value, registry),
-    do: Enum.any?(types, &matches?(&1, value, registry))
-
-  def matches?({:not, type}, value, registry), do: not matches?(type, value, registry)
-
-  def matches?({:all_of, types}, value, registry),
-    do: Enum.all?(types, &matches?(&1, value, registry))
-
-  def matches?({:nilable, _type}, nil, _registry), do: true
-  def matches?({:nilable, type}, value, registry), do: matches?(type, value, registry)
-
-  def matches?({:refine, type, constraints}, value, registry) do
-    matches?(type, value, registry) and satisfies_constraints?(value, constraints)
+  # One or more match (JSON Schema's anyOf): the first that does.
+  def conform({:any_of, types}, value, context) do
+    Enum.find_value(types, :error, fn type ->
+      case conform(type, value, context) do
+        {:ok, _} = ok -> ok
+        :error -> nil
+      end
+    end)
   end
+
+  def conform({:not, type}, value, context) do
+    case conform(type, value, context) do
+      {:ok, _} -> :error
+      :error -> {:ok, value}
+    end
+  end
+
+  # Every variant, each taking what the one before it answered.
+  def conform({:all_of, types}, value, context) do
+    Enum.reduce_while(types, {:ok, value}, fn type, {:ok, current} ->
+      case conform(type, current, context) do
+        {:ok, _} = ok -> {:cont, ok}
+        :error -> {:halt, :error}
+      end
+    end)
+  end
+
+  def conform({:nilable, _type}, nil, _context), do: {:ok, nil}
+  def conform({:nilable, type}, value, context), do: conform(type, value, context)
+
+  def conform({:refine, type, constraints}, value, context) do
+    with {:ok, conformed} <- conform(type, value, context),
+         true <- satisfies_constraints?(conformed, constraints) do
+      {:ok, conformed}
+    else
+      _ -> :error
+    end
+  end
+
+  defp when_true(true, value), do: {:ok, value}
+  defp when_true(false, _value), do: :error
+
+  # Every item conformed, in order, or `:error` at the first that is not.
+  defp all(items, conform_one) do
+    Enum.reduce_while(items, {:ok, []}, fn item, {:ok, acc} ->
+      case conform_one.(item) do
+        {:ok, conformed} -> {:cont, {:ok, [conformed | acc]}}
+        :error -> {:halt, :error}
+      end
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      :error -> :error
+    end
+  end
+
+  defp pair(key_type, val_type, {k, v}, context) do
+    with {:ok, k} <- conform(key_type, k, context),
+         {:ok, v} <- conform(val_type, v, context),
+         do: {:ok, {k, v}}
+  end
+
+  # ---- {:case} ----------------------------------------------------------------
+
+  # The type `branches` give the sibling `field`'s value; `otherwise`
+  # (`:none` without an `:else`) when none is equal, or the sibling is
+  # absent.
+  defp chosen(field, branches, otherwise, siblings) when is_map(siblings) do
+    case Map.fetch(siblings, field) do
+      {:ok, sibling} ->
+        sibling = Validated.strip(sibling)
+
+        Enum.find_value(branches, otherwise, fn {literal, type} ->
+          if keyword_aware_eq?(literal, sibling), do: type
+        end)
+
+      :error ->
+        otherwise
+    end
+  end
+
+  defp chosen(_field, _branches, otherwise, _siblings), do: otherwise
+
+  # ---- %shape{} -----------------------------------------------------------------
+
+  # A plain map against a shape's fields: each declared field matched by
+  # name, whatever spelling its key has (`name:`, `"name" =>`,
+  # `:"name" =>`) and refused given twice; a missing field takes its
+  # default, the key a keyword (an atom when the decode is trusted); an
+  # extra key is kept, and refused by a strict decode -- as a struct's
+  # fields are (design/shapes-and-case.md).
+  defp shape(fields, map, context) do
+    with {:ok, named} <- by_name(map),
+         siblings = Map.new(named, fn {name, {_key, value}} -> {name, value} end),
+         inner = %{context | siblings: siblings},
+         {:ok, filled} <- shape_fields(fields, named, map, inner),
+         :ok <- extras(fields, map, context) do
+      {:ok, filled}
+    end
+  end
+
+  # The map's keys that name a field, by that name: `:error` when two
+  # keys name the same one.
+  defp by_name(map) do
+    Enum.reduce_while(map, {:ok, %{}}, fn {key, value}, {:ok, acc} ->
+      case key_name(key) do
+        nil -> {:cont, {:ok, acc}}
+        name when is_map_key(acc, name) -> {:halt, :error}
+        name -> {:cont, {:ok, Map.put(acc, name, {key, value})}}
+      end
+    end)
+  end
+
+  defp key_name(%Keyword{name: name}), do: name
+  defp key_name(key) when is_atom(key) and key not in [nil, true, false], do: Atom.to_string(key)
+  defp key_name(key) when is_binary(key), do: key
+  defp key_name(_key), do: nil
+
+  defp shape_fields(fields, named, map, context) do
+    Enum.reduce_while(fields, {:ok, map}, fn field, {:ok, acc} ->
+      case shape_field(field, Map.fetch(named, field.name), context) do
+        {:put, key, value} -> {:cont, {:ok, Map.put(acc, key, value)}}
+        :absent -> {:cont, {:ok, acc}}
+        :error -> {:halt, :error}
+      end
+    end)
+  end
+
+  defp shape_field(field, {:ok, {key, value}}, context) do
+    case conform(field.type, value, context) do
+      {:ok, conformed} -> {:put, key, conformed}
+      :error -> :error
+    end
+  end
+
+  defp shape_field(%{default: default} = field, :error, context) when default != :none,
+    do: {:put, default_key(field.name, context), default}
+
+  defp shape_field(%{required: true}, :error, _context), do: :error
+  defp shape_field(_field, :error, _context), do: :absent
+
+  defp default_key(name, %{registry: %Dextrin.Registry{trusted: true}}), do: String.to_atom(name)
+  defp default_key(name, _context), do: Keyword.new(name)
+
+  defp extras(fields, map, %{registry: %Dextrin.Registry{strict: true}}) do
+    declared = MapSet.new(fields, & &1.name)
+    if Enum.all?(Map.keys(map), &(key_name(&1) in declared)), do: :ok, else: :error
+  end
+
+  defp extras(_fields, _map, _context), do: :ok
 
   # ---- primitives (DXN.md §1.3's 24 non-header types) ------------------------
 

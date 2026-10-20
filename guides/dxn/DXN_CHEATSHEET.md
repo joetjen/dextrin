@@ -91,6 +91,8 @@ Name                            bare symbol -- a struct name or a named type
 {:nilable T}                     sugar for {:any-of :nil T}
 {:refine T %{constraints}}       base type + constraints, see below
 %schema{}    struct/record shape
+%shape{}     plain map with these fields, defaults filled (unversioned)
+{:case f %{v => T, :else => U}}  the type field f's value chooses
 ```
 
 ## `refine` constraints

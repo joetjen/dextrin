@@ -165,6 +165,8 @@ Address                        bare symbol — a struct name or a named type
 {:nilable T}                   sugar for {:any-of :nil T}
 {:refine T %{constraints}}     base type + refine constraints (below)
 %schema{}  struct/record shape
+%shape{}   plain map with these fields, defaults filled (unversioned)
+{:case f %{v => T, :else => U}}  the type the sibling field f's value chooses
 ```
 
 ## `refine` constraints
@@ -173,6 +175,13 @@ Address                        bare symbol — a struct name or a named type
 min / max / exclusive-min / exclusive-max / multiple-of   -- integer/float/decimal/rational
 min-length / max-length / pattern                          -- string
 min-count / max-count                                      -- list/set/tuple
+```
+
+## Checking without decoding
+
+```elixir
+Dextrin.Schema.check(value, registry, "OrderPlaced")    # :ok | {:error, error}, never changes value
+Dextrin.Schema.conform(value, registry, "OrderPlaced")  # {:ok, value with shape defaults filled}
 ```
 
 ## Struct schema options
