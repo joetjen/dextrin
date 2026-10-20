@@ -16,10 +16,13 @@ defmodule Dextrin.Schema.Compiled do
   @type t :: %__MODULE__{
           name: String.t(),
           version: pos_integer(),
-          fields: [Field.t()]
+          fields: [Field.t()],
+          annotations: %{optional(String.t()) => term()}
         }
 
-  defstruct [:name, version: 1, fields: []]
+  # `annotations` are what a `{:doc %schema{...} %{...}}` around the
+  # entry says about it (DXN.md §4.1b).
+  defstruct [:name, version: 1, fields: [], annotations: %{}]
 
   @spec field_names(t()) :: [String.t()]
   def field_names(%__MODULE__{fields: fields}), do: Enum.map(fields, & &1.name)

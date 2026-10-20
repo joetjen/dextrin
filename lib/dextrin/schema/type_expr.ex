@@ -2,7 +2,7 @@ defmodule Dextrin.Schema.TypeExpr do
   @moduledoc """
   Internal, compiled representation of a `.dxns` type expression — the
   vocabulary of DXN.md §4.1 (`any`, `never`, `primitive`, `reference`,
-  `list-of`, `list-items`, `set-of`, `tuple-of`, `tuple-of-all`, `map-of`, `array-of`, `tagged`,
+  `list-of`, `list-items`, `set-of`, `tuple-of`, `tuple-of-all`, `map-of`, `array-of`, `tagged`, `doc`,
   `ordered-map-of`, `sorted-set-of`, `enum`, `one-of`, `any-of`,
   `all-of`, `not`, `nilable`, `refine`, `struct`, and `shape` and `case`,
   design/shapes-and-case.md) `Dextrin.Schema.Compiler` turns a
@@ -47,6 +47,7 @@ defmodule Dextrin.Schema.TypeExpr do
           | {:tuple_of, [t()]}
           | {:tuple_of_all, t()}
           | {:tagged, String.t(), t()}
+          | {:doc, t(), %{optional(String.t()) => term()}}
           | {:map_of, t(), t()}
           | {:array_of, t()}
           | {:ordered_map_of, t(), t()}
@@ -241,6 +242,9 @@ defmodule Dextrin.Schema.TypeExpr do
   end
 
   def conform({:tuple_of_all, _}, _value, _context), do: :error
+
+  # Annotations change nothing a type takes.
+  def conform({:doc, type, _notes}, value, context), do: conform(type, value, context)
 
   # A custom tag of that name, its value a `type`; or an application's
   # value that the registry's tag encoder writes as one.
@@ -449,6 +453,7 @@ defmodule Dextrin.Schema.TypeExpr do
   end
 
   defp substitute({:tagged, name, type}, bound), do: {:tagged, name, substitute(type, bound)}
+  defp substitute({:doc, type, notes}, bound), do: {:doc, substitute(type, bound), notes}
 
   defp substitute({:list_items, particles}, bound),
     do: {:list_items, Enum.map(particles, &substitute_particle(&1, bound))}

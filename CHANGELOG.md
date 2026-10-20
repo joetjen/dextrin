@@ -125,6 +125,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Annotations, `{:doc T %{...}}`** (Jan, 2026-10-20; DXN.md §4.1b;
+  the superset's group 8): a `title`, `description`, `examples`,
+  `read-only`, `write-only`, `deprecated` and free `meta` on any type,
+  around a whole schema, named type or generic too, and `values:` for an
+  enum's single values. They change nothing a type takes;
+  `Dextrin.Schema.annotations/2` reads them and `Dextrin.Schema.Compiled`
+  holds a schema's.
 - **`{:tagged name T}`** (Jan, 2026-10-20; DXN.md §4.1; the superset's
   group 7): a custom tag of that name whose value is a `T` -- or an
   application's value its registered tag encoder writes as one.
