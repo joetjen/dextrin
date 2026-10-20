@@ -1,0 +1,15 @@
+# A name with no namespace: `HealthCheck` is its own namespace and lives
+# in `HealthCheck.dxns`.
+
+%{
+  # What a service answers on its health endpoint.
+  HealthCheck: %schema{
+    status: {:enum :ok :degraded :down}
+    # Every dependency the service checked, and how long it took.
+    checks: {:map-of :keyword {:tuple-of {:enum :ok :down} :duration}}
+    # The opening hours of the support desk, as from-to pairs.
+    support_hours?: {:list-of {:tuple-of :time :time}}
+    # Feature switches, by name.
+    features?: {:set-of :keyword}
+  }
+}

@@ -1,0 +1,49 @@
+# A product, in a flat file: `acme.shop.Product.dxns` holds version 1 of
+# `acme.shop/Product`, the dots in its name standing for the directories.
+
+%{
+  # Something Acme sells.
+  #
+  # See [the product guide](https://example.com/acme/products) for how
+  # products are named and photographed.
+  Product: %schema{
+    id: :uuid
+    # The stock-keeping unit: three letters, a dash, five digits.
+    sku: {:refine :string %{pattern: ~r/^[A-Z]{3}-[0-9]{5}$/}}
+    name: acme.common/NonEmptyString
+    price: acme.common/Money
+    # In kilograms; never zero.
+    weight: {:refine :decimal %{exclusive-min: 0M}}
+    # Width, height and depth in centimetres, in that order.
+    dimensions: {:tuple-of :decimal :decimal :decimal}
+    images: {:list-of :uri}
+    # The variants a customer chooses between, in the order they are
+    # shown: sizes, colours.
+    variants?: {:array-of Variant}
+    # Shown on the product page in the order written here.
+    attributes?: {:ordered-map-of :keyword :string}
+    # From 0 to 5 stars.
+    rating?: {:refine :float %{min: 0.0, max: 5.0}}
+    released: :date
+    # When it may be bought, in the time zone of the store.
+    available_from?: :datetime
+    warranty: %field{
+      type: :duration
+      default: @duration "P2Y"
+      description: "How long the warranty lasts."
+    }
+    # Feature flags, one bit each, set by the warehouse system.
+    flags?: :bits
+    # The grade of a refurbished product: `?A`, `?B` or `?C`.
+    grade?: :char
+    discontinued: %field{type: :boolean, default: false}
+    tags?: acme.common/Tags
+  }
+
+  # One variant of a product.
+  Variant: %schema{
+    name: acme.common/NonEmptyString
+    # What it costs on top of the product's price; may be negative.
+    surcharge?: acme.common/Money
+  }
+}

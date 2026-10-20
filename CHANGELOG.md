@@ -67,6 +67,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`mix dextrin.docs` and `Dextrin.Schema.Docs`** (Jan, 2026-10-20):
+  HTML documentation for a directory of `.dxns` schemas: a sidebar tree
+  of every namespace and definition at the left of every page; the index
+  and every namespace's page in one design, a section per namespace
+  below it listing its own namespaces and definitions, then its own
+  definitions in full; the pages a directory tree, one `index.html` per
+  namespace; every reference a link, every version shown, a field's
+  position in the binary form; light or dark, the reader's choice kept
+  in localStorage. Names come from the file paths (DXN.md §4.6); a
+  definition's documentation is the comment block directly above it and
+  the comment on its line, in a small Markdown subset. `example/` holds
+  a schema set using every kind of definition, and its generated `doc/`.
 - **New type forms** (DXN.md §4.1): `{:not t}`, `:never` (JSON
   Schema's `false`), and element types for the collections that had
   none: `{:array-of t}`, `{:ordered-map-of k v}`, `{:sorted-set-of t}`.

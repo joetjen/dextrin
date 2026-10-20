@@ -1,0 +1,14 @@
+# The first version of a customer, as the shop wrote it until 2026.
+#
+# Kept so that customers written then can still be read: a reader with a
+# materializer upgrades them to version 2.
+
+%{
+  # Someone who buys from Acme.
+  Customer: %schema{
+    id: :uuid
+    name: acme.common/NonEmptyString
+    email: acme.common/Email
+    address: acme.common/Address
+  }
+}

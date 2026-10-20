@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>acme.shop · Acme schemas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../../style.css">
+<script>try { var t = localStorage.getItem("dextrin-docs-theme"); if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); } catch (e) {}</script>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" aria-label="All namespaces and definitions">
+    <div class="sidebar-head">
+      <a class="brand" href="../../index.html"><span class="brand-mark" aria-hidden="true">%{}</span>Acme schemas</a>
+      <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Switch between light and dark">Dark</button>
+    </div>
+    <details class="sidebar-toggle" open>
+      <summary>Browse</summary>
+      <ul class="tree"><li><details open><summary><a href="../../acme/index.html">acme</a></summary><ul><li><details><summary><a href="../../acme/common/index.html">common</a></summary><ul><li class="def-leaf"><a href="../../acme/common/index.html#Address"><span class="dot dot-schema" aria-hidden="true"></span>Address</a></li><li class="def-leaf"><a href="../../acme/common/index.html#CountryCode"><span class="dot dot-type" aria-hidden="true"></span>CountryCode</a></li><li class="def-leaf"><a href="../../acme/common/index.html#CurrencyCode"><span class="dot dot-type" aria-hidden="true"></span>CurrencyCode</a></li><li class="def-leaf"><a href="../../acme/common/index.html#Email"><span class="dot dot-type" aria-hidden="true"></span>Email</a></li><li class="def-leaf"><a href="../../acme/common/index.html#Metadata"><span class="dot dot-type" aria-hidden="true"></span>Metadata</a></li><li class="def-leaf"><a href="../../acme/common/index.html#Money"><span class="dot dot-schema" aria-hidden="true"></span>Money</a></li><li class="def-leaf"><a href="../../acme/common/index.html#NonEmptyString"><span class="dot dot-type" aria-hidden="true"></span>NonEmptyString</a></li><li class="def-leaf"><a href="../../acme/common/index.html#Percentage"><span class="dot dot-type" aria-hidden="true"></span>Percentage</a></li><li class="def-leaf"><a href="../../acme/common/index.html#PhoneNumber"><span class="dot dot-type" aria-hidden="true"></span>PhoneNumber</a></li><li class="def-leaf"><a href="../../acme/common/index.html#Tags"><span class="dot dot-type" aria-hidden="true"></span>Tags</a></li></ul></details></li><li><details><summary><a href="../../acme/events/index.html">events</a></summary><ul><li class="def-leaf"><a href="../../acme/events/index.html#CancelReason"><span class="dot dot-type" aria-hidden="true"></span>CancelReason</a></li><li class="def-leaf"><a href="../../acme/events/index.html#CustomerRegistered"><span class="dot dot-shape" aria-hidden="true"></span>CustomerRegistered</a></li><li class="def-leaf"><a href="../../acme/events/index.html#Envelope"><span class="dot dot-schema" aria-hidden="true"></span>Envelope</a></li><li class="def-leaf"><a href="../../acme/events/index.html#EventTag"><span class="dot dot-type" aria-hidden="true"></span>EventTag</a></li><li class="def-leaf"><a href="../../acme/events/index.html#EventType"><span class="dot dot-type" aria-hidden="true"></span>EventType</a></li><li class="def-leaf"><a href="../../acme/events/index.html#OrderCancelled"><span class="dot dot-shape" aria-hidden="true"></span>OrderCancelled</a></li><li class="def-leaf"><a href="../../acme/events/index.html#OrderPlaced"><span class="dot dot-shape" aria-hidden="true"></span>OrderPlaced</a></li></ul></details></li><li><details open><summary><a href="../../acme/shop/index.html" aria-current="page">shop</a></summary><ul><li class="def-leaf"><a href="../../acme/shop/index.html#Customer"><span class="dot dot-schema" aria-hidden="true"></span>Customer</a></li><li class="def-leaf"><a href="../../acme/shop/index.html#Order"><span class="dot dot-schema" aria-hidden="true"></span>Order</a><ul><li class="def-leaf"><a href="../../acme/shop/index.html#Order.OrderLine"><span class="dot dot-schema" aria-hidden="true"></span>OrderLine</a></li><li class="def-leaf"><a href="../../acme/shop/index.html#Order.Quantity"><span class="dot dot-type" aria-hidden="true"></span>Quantity</a></li><li class="def-leaf"><a href="../../acme/shop/index.html#Order.Status"><span class="dot dot-type" aria-hidden="true"></span>Status</a></li></ul></li><li class="def-leaf"><a href="../../acme/shop/index.html#Product"><span class="dot dot-schema" aria-hidden="true"></span>Product</a><ul><li class="def-leaf"><a href="../../acme/shop/index.html#Product.Variant"><span class="dot dot-schema" aria-hidden="true"></span>Variant</a></li></ul></li></ul></details></li></ul></details></li><li><details><summary><a href="../../index.html">No namespace</a></summary><ul><li class="def-leaf"><a href="../../index.html#HealthCheck"><span class="dot dot-schema" aria-hidden="true"></span>HealthCheck</a></li></ul></details></li></ul>
+    </details>
+  </nav>
+  <main class="main">
+    <div class="page">
+  <header class="intro">
+    <p class="crumbs"><a href="../../index.html">All namespaces</a> › <a href="../../acme/index.html">acme</a> › <b>shop</b></p>
+    <p class="eyebrow">Namespace</p>
+    <h1><code>acme.shop</code></h1>
+    
+    
+  </header>
+  
+  
+  <article class="def kind-schema" id="Customer">
+  <header class="def-head">
+    <h2><a class="self" href="#Customer"><code>Customer</code></a></h2>
+    <div class="chips"><span class="chip chip-schema">struct schema</span><span class="chip chip-version">v2</span><span class="chip chip-quiet">2 versions</span></div>
+    <p class="full-name"><code>acme.shop/Customer</code></p>
+  </header>
+  <div class="prose"><p>Someone who buys from Acme.</p>
+<p><strong>Personal data</strong>: everything here except <code>id</code> falls under the data protection rules. Never log a customer, and never put one in an event payload in full -- use <code>id</code>.</p></div>
+  <div class="prose version-note"><p>The current version of a customer.</p>
+<p>Version 2 only appends fields to version 1, so an older reader of the binary form still finds every field it knows in the same position.</p></div>
+<div class="table-wrap">
+  <table class="fields">
+    <thead><tr><th scope="col" class="pos" title="Position in the binary form">#</th><th scope="col">Field</th><th scope="col">Type</th><th scope="col">Notes</th></tr></thead>
+    <tbody><tr>
+  <td class="pos">1</td>
+  <th scope="row" class="field"><code>id</code></th>
+  <td class="type"><code><span class="kw">:uuid</span></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">2</td>
+  <th scope="row" class="field"><code>name</code></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#NonEmptyString">acme.common/NonEmptyString</a></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">3</td>
+  <th scope="row" class="field"><code>email</code></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#Email">acme.common/Email</a></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">4</td>
+  <th scope="row" class="field"><code>address</code></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#Address">acme.common/Address</a></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">5</td>
+  <th scope="row" class="field"><code>shipping_addresses</code><span class="opt">optional</span></th>
+  <td class="type"><code>{<span class="kw">:list-of</span> <a class="ref" href="../../acme/common/index.html#Address">acme.common/Address</a>}</code></td>
+  <td class="notes"><p>Where a parcel goes when it is not the main address.</p></td>
+</tr>
+<tr>
+  <td class="pos">6</td>
+  <th scope="row" class="field"><code>phone</code><span class="opt">optional</span></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#PhoneNumber">acme.common/PhoneNumber</a></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">7</td>
+  <th scope="row" class="field"><code>contact_by</code></th>
+  <td class="type"><code>{<span class="kw">:enum</span> <span class="kw">:email</span> <span class="kw">:phone</span> <span class="kw">:post</span>}</code><div class="default"><span class="label">default</span> <code><span class="kw">:email</span></code></div></td>
+  <td class="notes"><p>The channel the customer prefers to be reached on.</p></td>
+</tr>
+<tr>
+  <td class="pos">8</td>
+  <th scope="row" class="field"><code>registered_at</code></th>
+  <td class="type"><code><span class="kw">:timestamp</span></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">9</td>
+  <th scope="row" class="field"><code>avatar</code><span class="opt">optional</span></th>
+  <td class="type"><code><span class="kw">:bytes</span></code></td>
+  <td class="notes"><p>A small picture, at most a few kilobytes.</p></td>
+</tr>
+<tr>
+  <td class="pos">10</td>
+  <th scope="row" class="field"><code>tags</code><span class="opt">optional</span></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#Tags">acme.common/Tags</a></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">11</td>
+  <th scope="row" class="field"><code>metadata</code><span class="opt">optional</span></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#Metadata">acme.common/Metadata</a></code></td>
+  <td class="notes"></td>
+</tr>
+</tbody>
+  </table>
+</div>
+<p class="file">acme/shop/Customer-v2.dxns</p>
+
+  <details class="older">
+  <summary>Version 1 <span class="file">acme/shop/Customer-v1.dxns</span></summary>
+  <div class="prose version-note"><p>The first version of a customer, as the shop wrote it until 2026.</p>
+<p>Kept so that customers written then can still be read: a reader with a materializer upgrades them to version 2.</p></div>
+<div class="table-wrap">
+  <table class="fields">
+    <thead><tr><th scope="col" class="pos" title="Position in the binary form">#</th><th scope="col">Field</th><th scope="col">Type</th><th scope="col">Notes</th></tr></thead>
+    <tbody><tr>
+  <td class="pos">1</td>
+  <th scope="row" class="field"><code>id</code></th>
+  <td class="type"><code><span class="kw">:uuid</span></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">2</td>
+  <th scope="row" class="field"><code>name</code></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#NonEmptyString">acme.common/NonEmptyString</a></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">3</td>
+  <th scope="row" class="field"><code>email</code></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#Email">acme.common/Email</a></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">4</td>
+  <th scope="row" class="field"><code>address</code></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#Address">acme.common/Address</a></code></td>
+  <td class="notes"></td>
+</tr>
+</tbody>
+  </table>
+</div>
+<p class="file">acme/shop/Customer-v1.dxns</p>
+
+</details>
+
+  
+</article>
+<article class="def kind-schema" id="Order">
+  <header class="def-head">
+    <h2><a class="self" href="#Order"><code>Order</code></a></h2>
+    <div class="chips"><span class="chip chip-schema">struct schema</span><span class="chip chip-version">v1</span></div>
+    <p class="full-name"><code>acme.shop/Order</code></p>
+  </header>
+  <div class="prose"><p>One purchase by one customer.</p></div>
+  <div class="prose version-note"><p>An order, kept in a directory of its own: <code>acme/shop/Order/vN.dxns</code> holds version N of <a class="ref" href="../../acme/shop/index.html#Order"><code>acme.shop/Order</code></a>.</p>
+<p>The other entries in this file -- <a class="ref" href="../../acme/shop/index.html#Order.OrderLine"><code>OrderLine</code></a>, <a class="ref" href="../../acme/shop/index.html#Order.Status"><code>Status</code></a>, <a class="ref" href="../../acme/shop/index.html#Order.Quantity"><code>Quantity</code></a> -- are internal to it: <a class="ref" href="../../acme/shop/index.html#Order"><code>Order</code></a> uses them, and no other schema can, because no file name leads to them.</p></div>
+<div class="table-wrap">
+  <table class="fields">
+    <thead><tr><th scope="col" class="pos" title="Position in the binary form">#</th><th scope="col">Field</th><th scope="col">Type</th><th scope="col">Notes</th></tr></thead>
+    <tbody><tr>
+  <td class="pos">1</td>
+  <th scope="row" class="field"><code>id</code></th>
+  <td class="type"><code><span class="kw">:uuid</span></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">2</td>
+  <th scope="row" class="field"><code>customer_id</code></th>
+  <td class="type"><code><span class="kw">:uuid</span></code></td>
+  <td class="notes"><p>The customer who placed the order, by id. Not the customer itself: an order outlives changes to a customer.</p></td>
+</tr>
+<tr>
+  <td class="pos">3</td>
+  <th scope="row" class="field"><code>lines</code></th>
+  <td class="type"><code>{<span class="kw">:refine</span> {<span class="kw">:list-of</span> <a class="ref" href="../../acme/shop/index.html#Order.OrderLine">OrderLine</a>} %{min-count: 1}}</code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">4</td>
+  <th scope="row" class="field"><code>status</code></th>
+  <td class="type"><code><a class="ref" href="../../acme/shop/index.html#Order.Status">Status</a></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">5</td>
+  <th scope="row" class="field"><code>total</code></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#Money">acme.common/Money</a></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">6</td>
+  <th scope="row" class="field"><code>discount</code><span class="opt">optional</span></th>
+  <td class="type"><code>{<span class="kw">:nilable</span> <a class="ref" href="../../acme/common/index.html#Percentage">acme.common/Percentage</a>}</code></td>
+  <td class="notes"><p>Off the total, after it was summed up.</p></td>
+</tr>
+<tr>
+  <td class="pos">7</td>
+  <th scope="row" class="field"><code>shipping_address</code></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#Address">acme.common/Address</a></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">8</td>
+  <th scope="row" class="field"><code>placed_at</code></th>
+  <td class="type"><code><span class="kw">:timestamp</span></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">9</td>
+  <th scope="row" class="field"><code>deliver_by</code><span class="opt">optional</span></th>
+  <td class="type"><code><span class="kw">:date</span></code></td>
+  <td class="notes"><p>When the parcel is promised to arrive.</p></td>
+</tr>
+<tr>
+  <td class="pos">10</td>
+  <th scope="row" class="field"><code>note</code><span class="opt">optional</span></th>
+  <td class="type"><code><span class="kw">:string</span></code></td>
+  <td class="notes"></td>
+</tr>
+</tbody>
+  </table>
+</div>
+<p class="file">acme/shop/Order/v1.dxns</p>
+
+  
+  
+</article>
+<article class="def kind-schema" id="Order.OrderLine">
+  <header class="def-head">
+    <h2><a class="self" href="#Order.OrderLine"><code>OrderLine</code></a></h2>
+    <div class="chips"><span class="chip chip-schema">struct schema</span><span class="chip chip-internal">internal to <a href="../../acme/shop/index.html#Order">Order</a></span><span class="chip chip-version">v1</span></div>
+    <p class="full-name"><code>acme.shop.Order/OrderLine</code></p>
+  </header>
+  <div class="prose"><p>One product, in some quantity, at the price it had when the order was placed.</p></div>
+  
+<div class="table-wrap">
+  <table class="fields">
+    <thead><tr><th scope="col" class="pos" title="Position in the binary form">#</th><th scope="col">Field</th><th scope="col">Type</th><th scope="col">Notes</th></tr></thead>
+    <tbody><tr>
+  <td class="pos">1</td>
+  <th scope="row" class="field"><code>product</code></th>
+  <td class="type"><code><a class="ref" href="../../acme/shop/index.html#Product">acme.shop/Product</a></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">2</td>
+  <th scope="row" class="field"><code>quantity</code></th>
+  <td class="type"><code><a class="ref" href="../../acme/shop/index.html#Order.Quantity">Quantity</a></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">3</td>
+  <th scope="row" class="field"><code>unit_price</code></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#Money">acme.common/Money</a></code></td>
+  <td class="notes"><p>what the customer paid, not today's price</p></td>
+</tr>
+</tbody>
+  </table>
+</div>
+<p class="file">acme/shop/Order/v1.dxns</p>
+
+  
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/shop/index.html#Order"><code>acme.shop/Order</code></a></p>
+</article>
+<article class="def kind-type" id="Order.Quantity">
+  <header class="def-head">
+    <h2><a class="self" href="#Order.Quantity"><code>Quantity</code></a></h2>
+    <div class="chips"><span class="chip chip-type">type</span><span class="chip chip-internal">internal to <a href="../../acme/shop/index.html#Order">Order</a></span></div>
+    <p class="full-name"><code>acme.shop.Order/Quantity</code></p>
+  </header>
+  <div class="prose"><p>How many of a product, from 1 to 999.</p></div>
+  <div class="type-def">
+  <p class="label">Definition</p>
+  <pre class="expr"><code>{<span class="kw">:refine</span> <span class="kw">:integer</span> %{min: 1 max: 999}}</code></pre>
+  <p class="file">acme/shop/Order/v1.dxns</p>
+</div>
+
+  
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/shop/index.html#Order.OrderLine"><code>Order › OrderLine</code></a></p>
+</article>
+<article class="def kind-type" id="Order.Status">
+  <header class="def-head">
+    <h2><a class="self" href="#Order.Status"><code>Status</code></a></h2>
+    <div class="chips"><span class="chip chip-type">type</span><span class="chip chip-internal">internal to <a href="../../acme/shop/index.html#Order">Order</a></span></div>
+    <p class="full-name"><code>acme.shop.Order/Status</code></p>
+  </header>
+  <div class="prose"><p>Where an order is in its life. It only moves forward:</p>
+<p><code>placed</code> → <code>paid</code> → <code>shipped</code> → <code>delivered</code>, and <code>cancelled</code> from any state before <code>shipped</code>.</p></div>
+  <div class="type-def">
+  <p class="label">Definition</p>
+  <pre class="expr"><code>{<span class="kw">:enum</span> <span class="kw">:placed</span> <span class="kw">:paid</span> <span class="kw">:shipped</span> <span class="kw">:delivered</span> <span class="kw">:cancelled</span>}</code></pre>
+  <p class="file">acme/shop/Order/v1.dxns</p>
+</div>
+
+  
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/shop/index.html#Order"><code>acme.shop/Order</code></a></p>
+</article>
+<article class="def kind-schema" id="Product">
+  <header class="def-head">
+    <h2><a class="self" href="#Product"><code>Product</code></a></h2>
+    <div class="chips"><span class="chip chip-schema">struct schema</span><span class="chip chip-version">v1</span></div>
+    <p class="full-name"><code>acme.shop/Product</code></p>
+  </header>
+  <div class="prose"><p>Something Acme sells.</p>
+<p>See <a href="https://example.com/acme/products">the product guide</a> for how products are named and photographed.</p></div>
+  <div class="prose version-note"><p>A product, in a flat file: <code>acme.shop.Product.dxns</code> holds version 1 of <a class="ref" href="../../acme/shop/index.html#Product"><code>acme.shop/Product</code></a>, the dots in its name standing for the directories.</p></div>
+<div class="table-wrap">
+  <table class="fields">
+    <thead><tr><th scope="col" class="pos" title="Position in the binary form">#</th><th scope="col">Field</th><th scope="col">Type</th><th scope="col">Notes</th></tr></thead>
+    <tbody><tr>
+  <td class="pos">1</td>
+  <th scope="row" class="field"><code>id</code></th>
+  <td class="type"><code><span class="kw">:uuid</span></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">2</td>
+  <th scope="row" class="field"><code>sku</code></th>
+  <td class="type"><code>{<span class="kw">:refine</span> <span class="kw">:string</span> %{pattern: ~r/^[A-Z]{3}-[0-9]{5}$/}}</code></td>
+  <td class="notes"><p>The stock-keeping unit: three letters, a dash, five digits.</p></td>
+</tr>
+<tr>
+  <td class="pos">3</td>
+  <th scope="row" class="field"><code>name</code></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#NonEmptyString">acme.common/NonEmptyString</a></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">4</td>
+  <th scope="row" class="field"><code>price</code></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#Money">acme.common/Money</a></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">5</td>
+  <th scope="row" class="field"><code>weight</code></th>
+  <td class="type"><code>{<span class="kw">:refine</span> <span class="kw">:decimal</span> %{exclusive-min: 0M}}</code></td>
+  <td class="notes"><p>In kilograms; never zero.</p></td>
+</tr>
+<tr>
+  <td class="pos">6</td>
+  <th scope="row" class="field"><code>dimensions</code></th>
+  <td class="type"><code>{<span class="kw">:tuple-of</span> <span class="kw">:decimal</span> <span class="kw">:decimal</span> <span class="kw">:decimal</span>}</code></td>
+  <td class="notes"><p>Width, height and depth in centimetres, in that order.</p></td>
+</tr>
+<tr>
+  <td class="pos">7</td>
+  <th scope="row" class="field"><code>images</code></th>
+  <td class="type"><code>{<span class="kw">:list-of</span> <span class="kw">:uri</span>}</code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">8</td>
+  <th scope="row" class="field"><code>variants</code><span class="opt">optional</span></th>
+  <td class="type"><code>{<span class="kw">:array-of</span> <a class="ref" href="../../acme/shop/index.html#Product.Variant">Variant</a>}</code></td>
+  <td class="notes"><p>The variants a customer chooses between, in the order they are shown: sizes, colours.</p></td>
+</tr>
+<tr>
+  <td class="pos">9</td>
+  <th scope="row" class="field"><code>attributes</code><span class="opt">optional</span></th>
+  <td class="type"><code>{<span class="kw">:ordered-map-of</span> <span class="kw">:keyword</span> <span class="kw">:string</span>}</code></td>
+  <td class="notes"><p>Shown on the product page in the order written here.</p></td>
+</tr>
+<tr>
+  <td class="pos">10</td>
+  <th scope="row" class="field"><code>rating</code><span class="opt">optional</span></th>
+  <td class="type"><code>{<span class="kw">:refine</span> <span class="kw">:float</span> %{min: 0.0 max: 5.0}}</code></td>
+  <td class="notes"><p>From 0 to 5 stars.</p></td>
+</tr>
+<tr>
+  <td class="pos">11</td>
+  <th scope="row" class="field"><code>released</code></th>
+  <td class="type"><code><span class="kw">:date</span></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">12</td>
+  <th scope="row" class="field"><code>available_from</code><span class="opt">optional</span></th>
+  <td class="type"><code><span class="kw">:datetime</span></code></td>
+  <td class="notes"><p>When it may be bought, in the time zone of the store.</p></td>
+</tr>
+<tr>
+  <td class="pos">13</td>
+  <th scope="row" class="field"><code>warranty</code></th>
+  <td class="type"><code><span class="kw">:duration</span></code><div class="default"><span class="label">default</span> <code>@duration <span class="str">&quot;P2Y&quot;</span></code></div></td>
+  <td class="notes"><p>How long the warranty lasts.</p></td>
+</tr>
+<tr>
+  <td class="pos">14</td>
+  <th scope="row" class="field"><code>flags</code><span class="opt">optional</span></th>
+  <td class="type"><code><span class="kw">:bits</span></code></td>
+  <td class="notes"><p>Feature flags, one bit each, set by the warehouse system.</p></td>
+</tr>
+<tr>
+  <td class="pos">15</td>
+  <th scope="row" class="field"><code>grade</code><span class="opt">optional</span></th>
+  <td class="type"><code><span class="kw">:char</span></code></td>
+  <td class="notes"><p>The grade of a refurbished product: <code>?A</code>, <code>?B</code> or <code>?C</code>.</p></td>
+</tr>
+<tr>
+  <td class="pos">16</td>
+  <th scope="row" class="field"><code>discontinued</code></th>
+  <td class="type"><code><span class="kw">:boolean</span></code><div class="default"><span class="label">default</span> <code>false</code></div></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">17</td>
+  <th scope="row" class="field"><code>tags</code><span class="opt">optional</span></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#Tags">acme.common/Tags</a></code></td>
+  <td class="notes"></td>
+</tr>
+</tbody>
+  </table>
+</div>
+<p class="file">acme.shop.Product.dxns</p>
+
+  
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/shop/index.html#Order.OrderLine"><code>Order › OrderLine</code></a></p>
+</article>
+<article class="def kind-schema" id="Product.Variant">
+  <header class="def-head">
+    <h2><a class="self" href="#Product.Variant"><code>Variant</code></a></h2>
+    <div class="chips"><span class="chip chip-schema">struct schema</span><span class="chip chip-internal">internal to <a href="../../acme/shop/index.html#Product">Product</a></span><span class="chip chip-version">v1</span></div>
+    <p class="full-name"><code>acme.shop.Product/Variant</code></p>
+  </header>
+  <div class="prose"><p>One variant of a product.</p></div>
+  
+<div class="table-wrap">
+  <table class="fields">
+    <thead><tr><th scope="col" class="pos" title="Position in the binary form">#</th><th scope="col">Field</th><th scope="col">Type</th><th scope="col">Notes</th></tr></thead>
+    <tbody><tr>
+  <td class="pos">1</td>
+  <th scope="row" class="field"><code>name</code></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#NonEmptyString">acme.common/NonEmptyString</a></code></td>
+  <td class="notes"></td>
+</tr>
+<tr>
+  <td class="pos">2</td>
+  <th scope="row" class="field"><code>surcharge</code><span class="opt">optional</span></th>
+  <td class="type"><code><a class="ref" href="../../acme/common/index.html#Money">acme.common/Money</a></code></td>
+  <td class="notes"><p>What it costs on top of the product's price; may be negative.</p></td>
+</tr>
+</tbody>
+  </table>
+</div>
+<p class="file">acme.shop.Product.dxns</p>
+
+  
+  <p class="used-by"><span class="label">Used by</span> <a href="../../acme/shop/index.html#Product"><code>acme.shop/Product</code></a></p>
+</article>
+
+</div>
+
+    <footer class="site-foot"><p>Generated from the <code>.dxns</code> sources by Dextrin. A field's # is its position in the binary form.</p></footer>
+  </main>
+</div>
+<script>(function () {
+  var root = document.documentElement, button = document.getElementById("theme-toggle");
+  function current() {
+    var t = root.getAttribute("data-theme");
+    if (t) return t;
+    return window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  function label() {
+    var next = current() === "dark" ? "light" : "dark";
+    button.textContent = next === "dark" ? "Dark" : "Light";
+    button.setAttribute("aria-label", "Switch to " + next);
+  }
+  button.addEventListener("click", function () {
+    var next = current() === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem("dextrin-docs-theme", next); } catch (e) {}
+    label();
+  });
+  label();
+})();
+</script>
+</body>
+</html>

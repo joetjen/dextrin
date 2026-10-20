@@ -1,0 +1,75 @@
+# The events Acme's services publish on RabbitMQ.
+#
+# Every message is an `Envelope`. Its `type` names the event, and the
+# event decides what the `payload` looks like: the payload types below
+# are shapes -- plain maps with known keys -- not structs, so a consumer
+# in any language reads them as maps.
+#
+# To add an event:
+#
+# 1. Add a shape for its payload here.
+# 2. Add its type to `EventType` and to the `payload` case in `Envelope`.
+# 3. Publish it; a consumer that does not know the type skips it.
+
+%{
+  # A message on the bus.
+  Envelope: %schema{
+    # Unique per message; a consumer uses it to drop duplicates.
+    id: :uuid
+    type: EventType
+    occurred_at: :timestamp
+    # The service that published the message, as a URI:
+    # `acme://shop`, `acme://billing`.
+    source: :uri
+    # What happened. Which shape it has is decided by `type`.
+    payload: {:case type %{
+      "acme.shop.order.placed"         => OrderPlaced
+      "acme.shop.order.cancelled"      => OrderCancelled
+      "acme.shop.customer.registered"  => CustomerRegistered
+      :else                            => :any
+    }}
+    # Set by the tracing middleware; a publisher never sets it itself.
+    trace?: {:map-of :string :string}
+  }
+
+  # The types of event on the bus.
+  EventType: {:enum "acme.shop.order.placed"
+                    "acme.shop.order.cancelled"
+                    "acme.shop.customer.registered"}
+
+  # An order was placed and paid for.
+  OrderPlaced: %shape{
+    order_id: :uuid
+    customer_id: :uuid
+    total: acme.common/Money
+    line_count: {:refine :integer %{min: 1}}
+  }
+
+  # An order was cancelled before it was shipped.
+  OrderCancelled: %shape{
+    order_id: :uuid
+    reason: CancelReason
+    # Only when `reason` is free text.
+    comment?: acme.common/NonEmptyString
+  }
+
+  # A customer registered.
+  #
+  # The payload carries the id and the country only: an event is no
+  # place for personal data (see `acme.shop/Customer`).
+  CustomerRegistered: %shape{
+    customer_id: :uuid
+    country: acme.common/CountryCode
+    # Removed in 2026: the e-mail address must not travel in an event.
+    email?: :never
+  }
+
+  # Why an order was cancelled: one of the known reasons, or a short
+  # text -- exactly one of them.
+  CancelReason: {:one-of {:enum :customer_request :out_of_stock :payment_failed}
+                         {:refine :string %{max-length: 200}}}
+
+  # A tag on an event, as a keyword or a string. A tag may not be empty.
+  EventTag: {:all-of {:any-of :keyword :string}
+                     {:not {:enum "" :""}}}
+}

@@ -1,0 +1,43 @@
+# An order, kept in a directory of its own: `acme/shop/Order/vN.dxns`
+# holds version N of `acme.shop/Order`.
+#
+# The other entries in this file -- `OrderLine`, `Status`, `Quantity` --
+# are internal to it: `Order` uses them, and no other schema can, because
+# no file name leads to them.
+
+%{
+  # One purchase by one customer.
+  Order: %schema{
+    id: :uuid
+    # The customer who placed the order, by id. Not the customer
+    # itself: an order outlives changes to a customer.
+    customer_id: :uuid
+    lines: {:refine {:list-of OrderLine} %{min-count: 1}}
+    status: Status
+    total: acme.common/Money
+    # Off the total, after it was summed up.
+    discount?: {:nilable acme.common/Percentage}
+    shipping_address: acme.common/Address
+    placed_at: :timestamp
+    # When the parcel is promised to arrive.
+    deliver_by?: :date
+    note?: :string
+  }
+
+  # One product, in some quantity, at the price it had when the order
+  # was placed.
+  OrderLine: %schema{
+    product: acme.shop/Product
+    quantity: Quantity
+    unit_price: acme.common/Money   # what the customer paid, not today's price
+  }
+
+  # Where an order is in its life. It only moves forward:
+  #
+  # `placed` → `paid` → `shipped` → `delivered`, and `cancelled` from
+  # any state before `shipped`.
+  Status: {:enum :placed :paid :shipped :delivered :cancelled}
+
+  # How many of a product, from 1 to 999.
+  Quantity: {:refine :integer %{min: 1, max: 999}}
+}
