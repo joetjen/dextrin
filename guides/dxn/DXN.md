@@ -647,9 +647,26 @@ A named type's own body MAY reference another named type, **including
 one declared alongside it in the same document**, in any order: a
 reader compiles every named type of a document before it resolves any
 reference between them, so the top-level `map`'s order (which §1.4
-does not give) never matters. A named type that reaches itself,
-directly or through others, is a compile error (`schema/compile`);
-recursive types are not supported yet.
+does not give) never matters.
+
+**A named type may refer to itself**, directly or through others
+(Jan, 2026-10-20), when every such cycle passes a **guard**: a field of
+a `%shape` or `%schema`, or the elements of a collection (`list-of`,
+`set-of`, `map-of`, `tuple-of`, `array-of`, `ordered-map-of`,
+`sorted-set-of`). `nilable`, `any-of`, `one-of`, `all-of`, `not`,
+`refine` and `case` check the same value again, so they are no guard:
+`A: {:nilable A}` describes no value and is a compile error
+(`schema/compile`). A guarded check always ends, since a DXN value is
+finite (§2.5) and every guard steps into a smaller part of it:
+
+```text
+Comment: %shape{text: :string, replies?: {:list-of Comment}}
+JsonValue: {:any-of :nil :boolean :integer :float :string
+                    {:list-of JsonValue} {:map-of :string JsonValue}}
+```
+
+A cycle stays within one document: a reference to another file sees
+only documents read before it (§4.6).
 
 *Replaced (2026-10-20):* this section used to leave a same-document
 sibling reference implementation-defined -- a reader MAY refuse it, MAY

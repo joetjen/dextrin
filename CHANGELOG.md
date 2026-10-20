@@ -83,6 +83,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Recursive named types** (DXN.md §4.5, Jan, 2026-10-20): a named type
+  or shape may refer to itself, directly or through others, when the
+  cycle passes a field or a collection's elements -- `Comment:
+  %shape{replies?: {:list-of Comment}}`, a JSON-like value type. A cycle
+  with no such guard, `A: {:nilable A}`, is a compile error.
 - **`%shape{...}` and `{:case field %{...}}`** (DXN.md §4.4a, Jan,
   2026-10-20; design/shapes-and-case.md): a shape is a named, unversioned
   plain-map type with a `%schema` body, which fills its missing fields'

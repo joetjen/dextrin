@@ -76,9 +76,10 @@ same document implementation-defined. Shapes need it (`OrderCancelled`
 names `CancelReason` beside it), so it becomes normative: **every
 named type in a document may refer to every other**, resolved after all
 of them are read, so the order of a map's entries never matters. A
-named type that refers to itself, directly or through others, is a
-compile error (`schema/compile`) for now; recursive types are part of
-the JSON Schema parity work.
+named type may refer to itself, directly or through others, when every
+cycle passes a guard -- a field, or a collection's elements (Jan,
+2026-10-20, DXN.md §4.5); there the reference stays by name and is
+looked up when it is checked. An unguarded cycle is a compile error.
 
 ## Checking without decoding
 

@@ -50,6 +50,7 @@ defmodule Dextrin.Schema.TypeExpr do
           | {:not, t()}
           | {:shape, String.t(), [Dextrin.Schema.Field.t()]}
           | {:case, String.t(), [{term(), t()}], t() | :none}
+          | {:named, String.t()}
           | {:nilable, t()}
           | {:refine, t(), %{optional(String.t()) => term()}}
 
@@ -141,6 +142,21 @@ defmodule Dextrin.Schema.TypeExpr do
       type -> conform(type, value, context)
     end
   end
+
+  # A recursive named type's reference to itself (DXN.md §4.5), looked
+  # up when it is checked; with no registry there is nothing to look in.
+  def conform(
+        {:named, name},
+        value,
+        %{registry: %Dextrin.Registry{type_aliases: aliases}} = context
+      ) do
+    case Map.fetch(aliases, name) do
+      {:ok, type} -> conform(type, value, context)
+      :error -> :error
+    end
+  end
+
+  def conform({:named, _name}, _value, _context), do: :error
 
   def conform(type, %Validated{value: inner} = value, context) do
     with {:ok, conformed} <- conform(type, inner, context), do: {:ok, %{value | value: conformed}}
