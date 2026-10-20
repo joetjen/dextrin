@@ -109,8 +109,10 @@ defmodule Dextrin.Schema.Compiler do
              end
            end),
          :ok <- guarded(compiled) do
+      known = Map.merge(registry.type_aliases, compiled)
+
       Result.reduce_ok(alias_entries, registry, fn {name, _}, registry ->
-        case resolved(Map.fetch!(compiled, name), compiled, [name]) do
+        case entry_resolved(Map.fetch!(compiled, name), known, [name]) do
           {:ok, type_expr} -> {:ok, Registry.put_type_alias(registry, name, type_expr)}
           {:error, reason} -> {:error, compile_error("named type #{inspect(name)}: #{reason}")}
         end
@@ -165,9 +167,53 @@ defmodule Dextrin.Schema.Compiler do
   defp unguarded_names({:case, _field, branches, otherwise}),
     do: Enum.flat_map([otherwise | Enum.map(branches, &elem(&1, 1))], &unguarded_names/1)
 
+  defp unguarded_names({:apply, name, args}), do: [name | Enum.flat_map(args, &unguarded_names/1)]
+  defp unguarded_names({:generic, _params, body}), do: unguarded_names(body)
   defp unguarded_names(_guarded_or_leaf), do: []
 
+  # Whether `name` is a generic taking `count` arguments.
+  defp applies(name, count, known) do
+    case Map.fetch(known, name) do
+      {:ok, {:generic, params, _}} when length(params) == count ->
+        :ok
+
+      {:ok, {:generic, params, _}} ->
+        {:error,
+         "#{name} takes #{length(params)} type argument(s), {:of #{name} ...} gives #{count}"}
+
+      {:ok, {:named, _}} ->
+        :ok
+
+      _ ->
+        {:error, "{:of #{name} ...} names no generic"}
+    end
+  end
+
+  defp takes_arguments(name, known) do
+    {:generic, params, _} = Map.fetch!(known, name)
+    "#{name} is generic: write {:of #{name} #{Enum.join(params, " ")}}, with a type for each"
+  end
+
   # A shape carries its own name; every other named type is its type.
+  defp compile_named(
+         name,
+         %Tuple{items: [%Keyword{name: "generic"}, params, body]},
+         scope
+       )
+       when is_list(params) do
+    with {:ok, names} <- parameter_names(params),
+         scope = Map.merge(scope, Map.new(names, &{&1, {:param, &1}})),
+         {:ok, body} <- compile_named(name, body, scope) do
+      {:ok, {:generic, names, body}}
+    end
+  end
+
+  defp compile_named(_name, %Struct{name: "schema"}, _scope),
+    do:
+      {:error,
+       "a struct schema cannot be generic: a struct goes on the wire under its one name; " <>
+         "make the generic a %shape, or give each use a schema of its own"}
+
   defp compile_named(name, raw_value, scope) do
     case compile_type_expr(raw_value, scope) do
       {:ok, {:shape, nil, fields}} -> {:ok, {:shape, name, fields}}
@@ -175,15 +221,60 @@ defmodule Dextrin.Schema.Compiler do
     end
   end
 
+  # `{:generic [t ...] body}`'s parameters: distinct bare symbols.
+  defp parameter_names(params) do
+    names = Enum.map(params, fn p -> match?(%Symbol{}, p) && p.name end)
+
+    cond do
+      names == [] or false in names ->
+        {:error, "a generic's parameters are symbols: {:generic [t ...] body}"}
+
+      length(Enum.uniq(names)) != length(names) ->
+        {:error, "a generic names a parameter twice"}
+
+      true ->
+        {:ok, names}
+    end
+  end
+
+  # A named type's own definition resolved: a generic's body, with its
+  # parameters left standing, or the type itself.
+  defp entry_resolved({:generic, params, body}, known, path) do
+    with {:ok, body} <- resolved(body, known, path), do: {:ok, {:generic, params, body}}
+  end
+
+  defp entry_resolved(type_expr, known, path), do: resolved(type_expr, known, path)
+
   # `type_expr` with every `{:named, name}` replaced by that named type,
   # `path` the names being resolved, so a cycle is seen.
   # A reference back to a type being resolved closes a cycle, which
   # `guarded/1` has passed: it stays a reference by name.
   defp resolved({:named, name} = reference, compiled, path) do
-    if name in path,
-      do: {:ok, reference},
-      else: resolved(Map.fetch!(compiled, name), compiled, [name | path])
+    cond do
+      name in path ->
+        {:ok, reference}
+
+      match?({:generic, _, _}, Map.fetch!(compiled, name)) ->
+        {:error, takes_arguments(name, compiled)}
+
+      true ->
+        resolved(Map.fetch!(compiled, name), compiled, [name | path])
+    end
   end
+
+  # `{:of Name type ...}` stays a use of the generic, its arguments
+  # resolved; the generic's body is filled in when it is checked.
+  defp resolved({:apply, name, args}, compiled, path) do
+    with :ok <- applies(name, length(args), compiled),
+         {:ok, args} <-
+           Result.reduce_ok(args, [], fn arg, acc ->
+             with {:ok, arg} <- resolved(arg, compiled, path), do: {:ok, [arg | acc]}
+           end),
+         do: {:ok, {:apply, name, Enum.reverse(args)}}
+  end
+
+  defp resolved({:generic, _, _}, _compiled, _path),
+    do: {:error, "a generic is a named type's whole definition, {:generic [t ...] body}"}
 
   defp resolved({:shape, name, fields}, compiled, path) do
     with {:ok, fields} <-
@@ -464,10 +555,28 @@ defmodule Dextrin.Schema.Compiler do
 
   defp compile_type_expr(%Symbol{name: name}, aliases) do
     case Map.fetch(aliases, name) do
+      {:ok, {:generic, _, _}} -> {:error, takes_arguments(name, aliases)}
       {:ok, type_expr} -> {:ok, type_expr}
       :error -> {:ok, {:reference, name}}
     end
   end
+
+  # `{:of Name type ...}`: one use of the generic `Name`.
+  defp compile_type_expr(
+         %Tuple{items: [%Keyword{name: "of"}, %Symbol{name: name} | args]},
+         aliases
+       )
+       when args != [] do
+    with :ok <- applies(name, length(args), aliases),
+         {:ok, args} <- map_compile(args, aliases),
+         do: {:ok, {:apply, name, args}}
+  end
+
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "of"} | _]}, _aliases),
+    do: {:error, "a use of a generic is {:of Name type ...}"}
+
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "generic"} | _]}, _aliases),
+    do: {:error, "a generic is a named type's whole definition, {:generic [t ...] body}"}
 
   defp compile_type_expr(%Tuple{items: [%Keyword{name: "list-of"}, elem]}, aliases) do
     with {:ok, t} <- compile_type_expr(elem, aliases), do: {:ok, {:list_of, t}}
