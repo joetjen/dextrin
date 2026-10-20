@@ -55,14 +55,10 @@ ESCAPE := "\\" ("\"" | "\\" | "n" | "t" | "r" | "0" | "a" | "b" | "f" | "v" | ("
 STRING := "\"" (ESCAPE | (![\"\\] .))* "\""
 CHAR   := "?" (ESCAPE | "s" | (![ \t\r\n] .))
 
-; Sigil bodies are captured whole; ISO 8601/regex validation happens
-; in Dextrin.Text.Actions (via Date/Time/DateTime.from_iso8601 and
-; Regex.compile), not in the grammar — smaller grammar, and correctness
-; for calendar edge cases comes from a battle-tested stdlib parser.
-DATE_SIGIL    := "~D[" (!"]" .)* "]"
-TIME_SIGIL    := "~T[" (!"]" .)* "]"
-INSTANT_SIGIL := "~U[" (!"]" .)* "]"
-REGEX_SIGIL   := "~r/" (("\\" .) | (!"/" .))* "/" [imsuxfr]*
+; DXN 0.2's sigils (~D[...], ~T[...], ~U[...], ~r/.../) are gone (Jan,
+; 2026-10-20): every such value is a tag with a string, `@date "..."`,
+; validated in Dextrin.Text.Actions, so a sigil is no token at all and
+; fails to parse.
 
 ; ---- rules -------------------------------------------------------------
 
@@ -90,7 +86,7 @@ discard := AT_DISCARD value
 
 value_body := nil | boolean | number | string | char | keyword | symbol
             | list | tuple | map_lit | struct_lit | set_lit
-            | sigil | tag_form
+            | tag_form
 
 nil     := NIL
 boolean := TRUE | FALSE
@@ -130,6 +126,7 @@ struct_keyed      := "{" map_entry* "}"
 ; `3 => :x` is an entry, and an item after an entry is a syntax error.
 struct_positional := "[" (value !"=>")* map_entry* "]"
 
-sigil := DATE_SIGIL | TIME_SIGIL | INSTANT_SIGIL | REGEX_SIGIL
-
-tag_form := AT name:IDENTIFIER value
+; `@regex(im) "..."`: a regex's flags in a header, as `%Name(3)` carries
+; a version; the actions refuse a header on any other tag. The flags are
+; an identifier's letters, checked there too.
+tag_form := AT name:IDENTIFIER ("(" flags:IDENTIFIER ")")? value

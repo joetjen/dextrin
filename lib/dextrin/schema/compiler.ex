@@ -41,7 +41,7 @@ defmodule Dextrin.Schema.Compiler do
 
   @primitives ~w(nil boolean integer float decimal rational string char symbol keyword
                  list tuple map ordered-map set sorted-set array
-                 date time timestamp datetime duration uuid uri bytes bits regex)
+                 date time datetime local-datetime duration uuid uri bytes bits regex)
 
   @doc """
   Compiles every entry of a decoded `.dxns` document into
@@ -558,6 +558,11 @@ defmodule Dextrin.Schema.Compiler do
 
   defp compile_type_expr(%Keyword{name: name}, _aliases) when name in @primitives,
     do: {:ok, {:primitive, name}}
+
+  # DXN 0.2's timestamp type, now a datetime in UTC (DXN.md §4.2, Jan,
+  # 2026-10-20): a schema naming it keeps its meaning.
+  defp compile_type_expr(%Keyword{name: "timestamp"}, _aliases),
+    do: {:ok, {:refine, {:primitive, "datetime"}, %{"offsets" => ["Z"]}}}
 
   # `atomize_back/1` deliberately leaves `nil`/`true`/`false` alone
   # (converting them would corrupt a genuine `default: nil`/`true`

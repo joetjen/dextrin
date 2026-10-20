@@ -159,18 +159,18 @@ defmodule Dextrin.CanonicalTest do
 
   describe "temporal and extended types" do
     test "a date" do
-      assert canonical(~D[2026-10-17]) == "~D[2026-10-17]"
+      assert canonical(~D[2026-10-17]) == ~s|@date "2026-10-17"|
     end
 
     test "a time drops trailing zeros from its fraction, and a zero fraction" do
-      assert canonical(~T[10:00:00]) == "~T[10:00:00]"
-      assert canonical(~T[10:00:00.500000]) == "~T[10:00:00.5]"
-      assert canonical(~T[10:00:00.000]) == "~T[10:00:00]"
+      assert canonical(~T[10:00:00]) == ~s|@time "10:00:00"|
+      assert canonical(~T[10:00:00.500000]) == ~s|@time "10:00:00.5"|
+      assert canonical(~T[10:00:00.000]) == ~s|@time "10:00:00"|
     end
 
     test "a timestamp is UTC with a Z" do
-      assert canonical(~U[2026-10-17 10:00:00Z]) == "~U[2026-10-17 10:00:00Z]"
-      assert canonical(~U[2026-10-17 10:00:00.250000Z]) == "~U[2026-10-17 10:00:00.25Z]"
+      assert canonical(~U[2026-10-17 10:00:00Z]) == ~s|@datetime "2026-10-17T10:00:00Z"|
+      assert canonical(~U[2026-10-17 10:00:00.250000Z]) == ~s|@datetime "2026-10-17T10:00:00.25Z"|
     end
 
     test "a datetime keeps its offset" do

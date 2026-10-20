@@ -22,7 +22,7 @@ defmodule Dextrin.ValueTest do
                days: nil,
                hours: nil,
                minutes: nil,
-               microseconds: nil
+               nanoseconds: nil
              }
     end
 

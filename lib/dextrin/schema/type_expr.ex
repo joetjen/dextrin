@@ -481,13 +481,17 @@ defmodule Dextrin.Schema.TypeExpr do
   defp primitive_matches?("sorted-set", value), do: match?(%SortedSet{}, value)
   defp primitive_matches?("array", value), do: match?(%Array{}, value)
   defp primitive_matches?("date", value), do: match?(%Date{}, value)
-  defp primitive_matches?("time", value), do: match?(%Time{}, value)
+  # A datetime is one type whatever its offset, UTC included (Jan,
+  # 2026-10-20); one finer than a microsecond is a `Dextrin.Nanos`.
+  defp primitive_matches?("time", value),
+    do: match?(%Time{}, value) or match?(%Dextrin.Nanos{value: %Time{}}, value)
 
-  defp primitive_matches?("timestamp", value),
-    do: match?(%DateTime{utc_offset: 0, std_offset: 0}, value)
+  defp primitive_matches?("datetime", value),
+    do: match?(%DateTime{}, value) or match?(%Dextrin.Nanos{value: %DateTime{}}, value)
 
-  defp primitive_matches?("datetime", %DateTime{utc_offset: 0, std_offset: 0}), do: false
-  defp primitive_matches?("datetime", value), do: match?(%DateTime{}, value)
+  defp primitive_matches?("local-datetime", value),
+    do: match?(%NaiveDateTime{}, value) or match?(%Dextrin.Nanos{value: %NaiveDateTime{}}, value)
+
   defp primitive_matches?("duration", value), do: match?(%Duration{}, value)
   defp primitive_matches?("uuid", value), do: match?(%Uuid{}, value)
   defp primitive_matches?("uri", value), do: match?(%Uri{}, value)
@@ -517,10 +521,24 @@ defmodule Dextrin.Schema.TypeExpr do
     Enum.all?(constraints, fn {key, arg} -> satisfies_constraint?(key, arg, value) end)
   end
 
-  defp satisfies_constraint?("min", min, value), do: to_number(value) >= to_number(min)
-  defp satisfies_constraint?("max", max, value), do: to_number(value) <= to_number(max)
-  defp satisfies_constraint?("exclusive-min", min, value), do: to_number(value) > to_number(min)
-  defp satisfies_constraint?("exclusive-max", max, value), do: to_number(value) < to_number(max)
+  # NaN lies outside every range, as every IEEE 754 comparison with it is
+  # false; the infinities compare as the numbers they are (Jan,
+  # 2026-10-20).
+  defp satisfies_constraint?("min", min, value), do: compare(value, min) in [:gt, :eq]
+  defp satisfies_constraint?("max", max, value), do: compare(value, max) in [:lt, :eq]
+  defp satisfies_constraint?("exclusive-min", min, value), do: compare(value, min) == :gt
+  defp satisfies_constraint?("exclusive-max", max, value), do: compare(value, max) == :lt
+
+  defp satisfies_constraint?("finite", true, value),
+    do: value not in [:nan, :positive_infinity, :negative_infinity]
+
+  defp satisfies_constraint?("finite", false, _value), do: true
+
+  # The datetime's offset is one of these, `Z` or `±HH:MM`.
+  defp satisfies_constraint?("offsets", offsets, value) when is_list(offsets) do
+    {_nanos, minutes} = Dextrin.Temporal.datetime_parts(value)
+    Dextrin.Temporal.offset_name(minutes) in offsets
+  end
 
   defp satisfies_constraint?("multiple-of", n, value),
     do: rem_zero?(to_number(value), to_number(n))
@@ -539,6 +557,25 @@ defmodule Dextrin.Schema.TypeExpr do
 
   defp rem_zero?(a, b) when is_integer(a) and is_integer(b), do: rem(a, b) == 0
   defp rem_zero?(a, b), do: :math.fmod(a, b) == 0.0
+
+  defp compare(a, b) do
+    case {extended(a), extended(b)} do
+      {:nan, _} -> :nan
+      {_, :nan} -> :nan
+      {x, y} when x == y -> :eq
+      {:negative_infinity, _} -> :lt
+      {_, :negative_infinity} -> :gt
+      {:positive_infinity, _} -> :gt
+      {_, :positive_infinity} -> :lt
+      {x, y} when x < y -> :lt
+      _ -> :gt
+    end
+  end
+
+  defp extended(special) when special in [:nan, :positive_infinity, :negative_infinity],
+    do: special
+
+  defp extended(n), do: to_number(n)
 
   defp to_number(%Decimal{} = d), do: Decimal.to_float(d)
   defp to_number(%Rational{numerator: n, denominator: d}), do: n / d

@@ -25,7 +25,7 @@ defmodule Dextrin.Text.ErrorPositionsTest do
   end
 
   test "an impossible date is placed at its sigil" do
-    assert position("[\n  ~D[2020-13-45]]") == {"syntax", 2, 3}
+    assert position(~s|[\n  @date "2020-13-45"]|) == {"syntax", 2, 3}
   end
 
   test "a zero denominator is placed at its rational" do

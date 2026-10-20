@@ -16,7 +16,7 @@ for the Elixir-API-level equivalents of several of these.
   server: %{
     host:    "0.0.0.0"
     port:    4000
-    timeout: ~T[00:00:30]
+    timeout: @time "00:00:30"
   }
 
   database: %{
@@ -37,7 +37,7 @@ for the Elixir-API-level equivalents of several of these.
     id:      @uuid "9b74c989-1e2a-4b17-9b1f-2a6a4a2b6f10"
     email:   "ada@example.com"
     role:    :admin
-    created: ~U[2024-01-01 00:00:00Z]
+    created: @datetime "2024-01-01T00:00:00Z"
   }
 }
 ```
@@ -47,7 +47,7 @@ for the Elixir-API-level equivalents of several of these.
 ```
 %{
   event:  :purchase
-  at:     ~U[2024-03-15 14:22:07Z]
+  at:     @datetime "2024-03-15T14:22:07Z"
   user:   @uuid "9b74c989-1e2a-4b17-9b1f-2a6a4a2b6f10"
   amount: 49.99M
   items:  [

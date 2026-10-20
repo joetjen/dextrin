@@ -17,19 +17,19 @@ defmodule Dextrin.Text.ActionsErrorTest do
   end
 
   test "an invalid date sigil body is a clear error" do
-    assert error_message("~D[not-a-date]") =~ "invalid date"
+    assert error_message(~s|@date "not-a-date"|) =~ "invalid date"
   end
 
   test "an invalid time sigil body is a clear error" do
-    assert error_message("~T[25:99:99]") =~ "invalid time"
+    assert error_message(~s|@time "25:99:99"|) =~ "invalid time"
   end
 
   test "an invalid instant sigil body is a clear error" do
-    assert error_message("~U[garbage]") =~ "invalid instant"
+    assert error_message(~s|@datetime "garbage"|) =~ "invalid datetime"
   end
 
   test "a regex with invalid PCRE syntax fails to compile" do
-    assert error_message("~r/(/") =~ "invalid regex"
+    assert error_message(~s|@regex "("|) =~ "invalid regex"
   end
 
   test "an invalid uuid is a clear error" do

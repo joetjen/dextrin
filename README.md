@@ -141,10 +141,10 @@ as a string in JSON, for instance).
 
 | | config file | API response, 100 records | time series, 1,000 points | record with a 4 KiB blob |
 |---|---:|---:|---:|---:|
-| DXN text | 279 / 199 | 18,602 / 4,192 | 55,159 / 13,682 | 5,516 / 4,222 |
-| DXN text, pretty | 362 / 223 | 24,804 / 4,281 | 71,161 / 13,878 | 5,527 / 4,234 |
-| `.dxnb` | 270 / 214 | 14,085 / 3,739 | 33,006 / 13,611 | 4,145 / 4,168 |
-| `.dxnb`, shared | 270 / 214 | 9,117 / 3,678 | 26,017 / 13,339 | 4,145 / 4,168 |
+| DXN text | 279 / 199 | 19,402 / 4,218 | 63,159 / 13,895 | 5,516 / 4,222 |
+| DXN text, pretty | 314 / 216 | 23,504 / 4,249 | 67,161 / 13,961 | 5,527 / 4,234 |
+| `.dxnb` | 270 / 214 | 14,385 / 3,802 | 36,006 / 14,463 | 4,145 / 4,168 |
+| `.dxnb`, shared | 270 / 214 | 9,417 / 3,749 | 29,017 / 14,035 | 4,145 / 4,168 |
 | JSON | 306 / 207 | 19,202 / 4,201 | 56,159 / 13,692 | 5,514 / 4,216 |
 | JSON, pretty | 403 / 229 | 26,253 / 4,287 | 74,160 / 14,182 | 5,527 / 4,231 |
 | BSON | 312 / 231 | 17,621 / 4,448 | 36,903 / 15,700 | 4,161 / 4,184 |
@@ -153,14 +153,16 @@ as a string in JSON, for instance).
 | Protocol Buffers | 141 / 111 | 8,552 / 3,702 | 19,000 / 10,832 | 4,122 / 4,145 |
 
 - **DXN text is about JSON's size** -- keys need no quotes -- while
-  carrying the types JSON drops.
+  carrying the types JSON drops. Data full of dates and times is the
+  exception, about an eighth larger: each datetime names its type
+  (`@datetime "..."`) where JSON writes a bare string.
 - **`.dxnb` sits between JSON and the compact binaries.** Value sharing
   (`encode_binary(value, share: true)`) writes a repeated key or string
-  once; on the API response that brings it within 7% of Protocol
+  once; on the API response that brings it within about 10% of Protocol
   Buffers, with no schema needed to read it.
-- **Where it is larger, it is carrying more.** A `.dxnb` timestamp keeps
-  microseconds and its type, where CBOR's and MessagePack's carry whole
-  seconds; a keyword key is tagged as a keyword rather than written as a
+- **Where it is larger, it is carrying more.** A `.dxnb` datetime keeps
+  nanoseconds, its offset and its type, where CBOR's and MessagePack's
+  carry whole seconds; a keyword key is tagged as a keyword rather than written as a
   plain string. Protocol Buffers is smallest because its schema, not the
   data, holds the field names.
 - **Compressed, the gap narrows.** Gzipped, DXN text stays within about
@@ -177,7 +179,7 @@ parser, and through Dextrin:
 | `9223372036854775808` | integer / integer | **9223372036854776000** / `BigInt` | **float** / `DXNInteger` | integer / integer |
 | `19.99` as an exact decimal | **float** / `Decimal` | **float** / `DXNDecimal` | **float** / `DXNDecimal` | **float** / `dextrin.decimal` |
 | `1.0` | float / float | **1, an integer** / float | float, **written back as `1`** / float | float / float |
-| a timestamp | **string** / `DateTime` | **string** / `DXNTimestamp` | **string** / `DXNTimestamp` | **string** / a `praxis.time` instant |
+| a datetime | **string** / `DateTime` | **string** / `DXNDateTime` | **string** / `DXNDateTime` | **string** / a `praxis.time` instant |
 | bytes | **base64 string** / `Dextrin.Bytes` | **base64 string** / `DXNBytes` | **base64 string** / `DXNBytes` | **base64 string** / `dextrin.bytes` |
 | a map keyed by integers | **string keys** / integer keys | **string keys** / integer keys | **string keys** / integer keys | **string keys** / integer keys |
 | a set | **list** / `MapSet` | **array** / `Set` | **array** / `DXNSet` | **vector** / set |

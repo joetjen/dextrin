@@ -5,7 +5,8 @@ defmodule Dextrin.Duration do
   a bit in `.dxnb`'s bitmask (DXN.md §2.3). `years`/`months` are
   calendar-relative (variable length) and not reducible to a single
   elapsed-time scalar, so all seven fields are tracked independently
-  rather than folded into one (DXN.md §1.4).
+  rather than folded into one (DXN.md §1.4). Seconds and their fraction
+  are one field, `nanoseconds` (Jan, 2026-10-20).
   """
 
   @type t :: %__MODULE__{
@@ -15,10 +16,10 @@ defmodule Dextrin.Duration do
           days: integer() | nil,
           hours: integer() | nil,
           minutes: integer() | nil,
-          microseconds: integer() | nil
+          nanoseconds: integer() | nil
         }
 
-  defstruct [:years, :months, :weeks, :days, :hours, :minutes, :microseconds]
+  defstruct [:years, :months, :weeks, :days, :hours, :minutes, :nanoseconds]
 
   @spec new(keyword()) :: t()
   def new(fields \\ []) when is_list(fields), do: struct!(__MODULE__, fields)

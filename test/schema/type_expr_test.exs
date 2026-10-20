@@ -221,7 +221,7 @@ defmodule Dextrin.Schema.TypeExprTest do
     end
 
     test "pattern" do
-      r = registry_for("{:refine :string %{pattern: ~r/^[a-z]+$/}}")
+      r = registry_for(~s|{:refine :string %{pattern: @regex "^[a-z]+$"}}|)
       assert {:ok, _} = field(r, ~s("abc"))
       assert {:error, %Dextrin.Error{}} = field(r, ~s("ABC"))
     end
@@ -292,15 +292,16 @@ defmodule Dextrin.Schema.TypeExprTest do
           {"set", "@{1}", "1"},
           {"sorted-set", "@sorted-set @{1}", "1"},
           {"array", "@array[1]", "1"},
-          {"date", "~D[2024-01-01]", "1"},
-          {"time", "~T[12:00:00]", "1"},
-          {"timestamp", "~U[2024-01-01 00:00:00Z]", "1"},
+          {"date", ~s|@date "2024-01-01"|, "1"},
+          {"time", ~s|@time "12:00:00"|, "1"},
+          {"local-datetime", ~s|@local-datetime "2024-01-01T00:00:00"|, "1"},
+          {"timestamp", ~s|@datetime "2024-01-01T00:00:00Z"|, "1"},
           {"datetime", ~s(@datetime "2024-01-01T00:00:00+02:00"), "1"},
           {"duration", ~s(@duration "P1D"), "1"},
           {"uuid", ~s(@uuid "550e8400-e29b-41d4-a716-446655440000"), "1"},
           {"uri", ~s(@uri "https://example.com"), "1"},
           {"bytes", ~s(@bytes "aGk="), "1"},
-          {"regex", "~r/abc/", "1"}
+          {"regex", ~s|@regex "abc"|, "1"}
         ] do
       test "#{type}" do
         r = registry_for(":#{unquote(type)}")
@@ -309,12 +310,27 @@ defmodule Dextrin.Schema.TypeExprTest do
       end
     end
 
-    test "timestamp specifically rejects a non-UTC datetime, and vice versa" do
+    # One datetime type whatever its offset; :timestamp is a datetime in
+    # UTC (Jan, 2026-10-20).
+    test "timestamp takes a UTC datetime only; datetime takes any offset" do
       r = registry_for(":timestamp")
+      assert {:ok, _} = field(r, ~s|@datetime "2024-01-01T00:00:00Z"|)
       assert {:error, %Dextrin.Error{}} = field(r, ~s(@datetime "2024-01-01T00:00:00+02:00"))
 
       r = registry_for(":datetime")
-      assert {:error, %Dextrin.Error{}} = field(r, "~U[2024-01-01 00:00:00Z]")
+      assert {:ok, _} = field(r, ~s|@datetime "2024-01-01T00:00:00Z"|)
+      assert {:ok, _} = field(r, ~s(@datetime "2024-01-01T00:00:00+02:00"))
+    end
+
+    test "finite refuses NaN and the infinities; a range refuses NaN" do
+      r = registry_for("{:refine :float %{finite: true}}")
+      assert {:ok, _} = field(r, "1.5")
+      for bad <- ~w(NaN Infinity -Infinity), do: assert({:error, _} = field(r, bad))
+
+      r = registry_for("{:refine :float %{min: 0}}")
+      assert {:ok, _} = field(r, "Infinity")
+      assert {:error, _} = field(r, "NaN")
+      assert {:error, _} = field(r, "-Infinity")
     end
   end
 

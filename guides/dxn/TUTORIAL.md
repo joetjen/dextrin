@@ -95,17 +95,19 @@ in DXN, not a separate DSL.
 ## 5. Temporal types
 
 ```
-~D[2024-01-01]
-~T[12:30:00]
-~U[2024-01-01 12:30:00Z]
-@datetime "2024-01-01T12:30:00+02:00"
+@date "2024-01-01"
+@time "12:30:00.5"
+@datetime "2024-01-01T12:30:00Z"
+@datetime "2024-01-01T14:30:00+02:00"
+@local-datetime "2024-01-01T12:30:00"
 @duration "P1Y2M10D"
 ```
 
-`~D[...]`/`~T[...]` are ISO 8601 dates/times. `~U[...]` is a UTC
-instant. `@datetime` is for anything with a *non-zero* offset — the
-sigil form is reserved for UTC specifically so a reader can tell the
-two apart by syntax alone. `@duration` uses ISO 8601 duration syntax;
+Every date and time is an ISO 8601 string under its tag, one way of
+writing each: a time keeps up to nine fraction digits (nanoseconds). A
+`@datetime` is an instant with its offset -- `Z` for UTC, or `±HH:MM` --
+and keeps the offset it was written with; a `@local-datetime` has none,
+a wall-clock time that is no instant. `@duration` uses ISO 8601 duration syntax;
 note a duration tracks years/months/weeks/days/hours/minutes/seconds
 as **independent** fields, since years and months are calendar-relative
 (a "month" isn't a fixed number of seconds) and can't be folded into
@@ -117,14 +119,15 @@ one elapsed-time number.
 @uuid "550e8400-e29b-41d4-a716-446655440000"
 @uri "https://example.com/path"
 @bytes "SGVsbG8="
-~r/^[a-z0-9_]{3,20}$/i
+@regex(i) "^[a-z0-9_]{3,20}$"
 ```
 
 `@uuid` takes the canonical 36-character hyphenated form. `@uri` is
 any RFC 3986 URI, kept as the exact string given. `@bytes` is raw
-binary data, base64-encoded in text. `~r/pattern/flags` is a regular
-expression — the same PCRE-ish syntax and flag letters (`i m s u x f
-r`) most host languages already use for their own regex literals.
+binary data, base64-encoded in text. `@regex "pattern"` is a regular
+expression, PCRE syntax, its flags (`i m s u x f r`) in a header,
+`@regex(im) "..."`, or inline in the pattern, `@regex "(?im)..."`. The
+pattern is a string, so a backslash in it is doubled: `@regex "\\d+"`.
 
 ## 7. Custom tags — the open extension point
 
@@ -180,10 +183,10 @@ using nearly every type at once:
   active:  true
   score:   19.99M
   tags:    @{:admin :staff}
-  meta:    @ordered %{created: ~U[1990-01-01 00:00:00Z]}
+  meta:    @ordered %{created: @datetime "1990-01-01T00:00:00Z"}
   address: %Point[51.05, 13.74]
   result:  {:ok, 200}
-  handle:  ~r/^[a-z0-9_]{3,20}$/i
+  handle:  @regex(i) "^[a-z0-9_]{3,20}$"
 }
 ```
 

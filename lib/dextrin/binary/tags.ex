@@ -8,7 +8,9 @@ defmodule Dextrin.Binary.Tags do
   def t_bignum_pos, do: 2
   def t_bignum_neg, do: 3
   def t_decimal, do: 4
-  def t_timestamp, do: 1
+  # DXN 0.2's UTC timestamp, epoch microseconds: read, never written
+  # (DXN.md §2.3, Jan, 2026-10-20).
+  def t_timestamp_us, do: 1
   def t_rational, do: 30
   def t_uri, do: 32
   def t_uuid, do: 37
@@ -17,7 +19,7 @@ defmodule Dextrin.Binary.Tags do
   def t_shareable, do: 28
   def t_shared_ref, do: 29
 
-  # ---- private tag block, DXN.md §2.3 (200-215) --------------------------
+  # ---- private tag block, DXN.md §2.3 (200-220) --------------------------
   def t_char, do: 200
   def t_symbol, do: 201
   def t_keyword, do: 202
@@ -28,19 +30,30 @@ defmodule Dextrin.Binary.Tags do
   def t_sorted_set, do: 207
   def t_struct, do: 208
   def t_date, do: 209
-  def t_time, do: 210
-  def t_datetime_offset, do: 211
-  def t_duration, do: 212
+  # DXN 0.2's microsecond encodings: read, never written. A tag never
+  # changes its meaning, so a document 0.2 wrote reads as it was meant.
+  def t_time_us, do: 210
+  def t_datetime_us, do: 211
+  def t_duration_us, do: 212
   def t_regex, do: 213
   def t_custom, do: 214
   # A struct's extra fields: only ever its last item (DXN.md §2.3).
   def t_extra, do: 215
   # A run of bits that is not whole bytes: `[bytes, count]` (DXN.md §2.3).
   def t_bits, do: 216
+  # A local date-time: nanoseconds since 1970-01-01T00:00:00 on the wall
+  # clock (DXN.md §2.3, Jan, 2026-10-20).
+  def t_local_datetime, do: 217
+  # Nanoseconds since midnight.
+  def t_time, do: 218
+  # `[epoch-nanoseconds, offset-minutes]`; UTC is offset 0.
+  def t_datetime, do: 219
+  # The duration bitmask, its seventh field nanoseconds.
+  def t_duration, do: 220
 
   @doc "Duration bitmask field order, low bit first (DXN.md §2.3)."
   @spec duration_bits() :: [atom()]
-  def duration_bits, do: [:years, :months, :weeks, :days, :hours, :minutes, :microseconds]
+  def duration_bits, do: [:years, :months, :weeks, :days, :hours, :minutes, :nanoseconds]
 
   @doc "Regex flags byte bit order, low bit first (DXN.md §2.3)."
   @spec regex_bits() :: [{non_neg_integer(), String.t()}]
