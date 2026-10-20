@@ -73,6 +73,17 @@ defmodule Dextrin.Binary.RoundTripTest do
   # not here, since it needs its own fixtures (repeated compound
   # values) rather than the one-off samples this file uses.
 
+  # DXN.md §2.2 (Jan, 2026-10-20): CBOR's decimal has no negative zero,
+  # so `.dxnb` writes `-0.0M` as `0.0M` -- the one value it does not
+  # keep. Text keeps the sign.
+  test "a negative-zero decimal comes back from binary as positive zero" do
+    {:ok, value} = Dextrin.decode("-0.0M")
+    {:ok, bytes} = Dextrin.encode_binary(value)
+    {:ok, read} = Dextrin.decode_binary(bytes)
+    assert Dextrin.encode(read) == {:ok, "0.0M"}
+    assert Dextrin.encode(value) == {:ok, "-0.0M"}
+  end
+
   # A `Regex` compiled from the same source/opts twice is never `==` to
   # itself in Elixir — its `re_pattern` field is a distinct opaque
   # resource per compile, even though both inspect identically — so a

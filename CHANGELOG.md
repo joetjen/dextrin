@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **DXN.md says `.dxnb` writes `-0.0M` as `0.0M`** (Jan, 2026-10-20):
+  CBOR's decimal (tag 4) has no negative zero, so it is the one value
+  the binary form does not keep; text keeps the sign (§1.5, §2.2).
 - **The pretty layout keeps short collections on one line** (Jan,
   2026-10-20): the top-level collection still breaks, one entry per
   line, however short; a nested one is written on one line, its entries
