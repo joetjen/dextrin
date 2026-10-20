@@ -182,6 +182,9 @@ min / max / exclusive-min / exclusive-max / multiple-of   -- integer/float/decim
 min / max / exclusive-*  on temporals                     -- date/time/datetime/local-datetime/duration, same kind
 min-bytes / max-bytes                                     -- string: UTF-8 bytes
 format                                                    -- string: :email :uri :hostname :semver ... (DXN.md §4.2a)
+encoding / media-type                                     -- string: :base64 ... / "type/subtype"
+content                                                   -- string: a DXN document of this type
+encodes / encodes-seq                                     -- bytes: .dxnb document(s) of this type
 float32                                                   -- float: single precision holds it
 min-precision / max-precision                             -- decimal: coefficient digits
 min-exponent / max-exponent                               -- decimal: exponent

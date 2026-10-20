@@ -39,6 +39,10 @@ defmodule Dextrin.Schema.Compiler do
   # The scope key the document's names travel under (see compile/3).
   @names :"$names"
 
+  # A refine's keys whose argument is a type, compiled and resolved as
+  # its base is.
+  @type_keys ~w(contains content encodes encodes-seq)
+
   @primitives ~w(nil boolean integer float decimal rational string char symbol keyword
                  list tuple map ordered-map set sorted-set array
                  date time datetime local-datetime duration uuid objectid ip uri bytes bits regex)
@@ -315,7 +319,7 @@ defmodule Dextrin.Schema.Compiler do
 
   defp resolved({:refine, type, constraints}, compiled, path) do
     with {:ok, type} <- resolved(type, compiled, path),
-         {:ok, constraints} <- resolved_contains(constraints, compiled, path),
+         {:ok, constraints} <- resolved_types(constraints, compiled, path),
          do: {:ok, {:refine, type, constraints}}
   end
 
@@ -346,12 +350,19 @@ defmodule Dextrin.Schema.Compiler do
 
   defp resolved(type_expr, _compiled, _path), do: {:ok, type_expr}
 
-  defp resolved_contains(%{"contains" => type} = constraints, compiled, path) do
-    with {:ok, type} <- resolved(type, compiled, path),
-         do: {:ok, %{constraints | "contains" => type}}
-  end
+  # A refine's types -- `contains`, `content`, `encodes`, `encodes-seq` --
+  # resolved as its base is.
+  defp resolved_types(constraints, compiled, path) do
+    Result.reduce_ok(@type_keys, constraints, fn key, acc ->
+      case Map.fetch(acc, key) do
+        :error ->
+          {:ok, acc}
 
-  defp resolved_contains(constraints, _compiled, _path), do: {:ok, constraints}
+        {:ok, type} ->
+          with {:ok, t} <- resolved(type, compiled, path), do: {:ok, %{acc | key => t}}
+      end
+    end)
+  end
 
   defp resolved_particles(particles, compiled, path) do
     Result.reduce_ok(particles, [], fn
@@ -765,29 +776,34 @@ defmodule Dextrin.Schema.Compiler do
                   min-bytes max-bytes pattern min-count max-count finite float32 offsets
                   version prefix contains min-contains max-contains unique unique-by
                   min-precision max-precision min-exponent max-exponent bits before-now
-                  after-now within resolution format)
+                  after-now within resolution format encoding media-type content encodes
+                  encodes-seq)
 
-  # A refine's constraints by name, every key one DXN.md §4.2 knows:
-  # a misspelt key would otherwise refuse every value, silently.
-  # `contains` holds a type, compiled here; `unique-by` and `resolution`
-  # a name.
+  @counts ~w(min-length max-length min-bytes max-bytes min-count max-count min-contains
+             max-contains min-precision max-precision)
+  @flags ~w(finite float32 unique before-now after-now prefix)
+  @bounds ~w(min max exclusive-min exclusive-max)
+  @encodings ~w(base64 base64url base32 base16)
+
+  # What `content` reads a string as, by its media type.
+  @content_readers [nil, "application/dxn", "application/dxnb"]
+
+  # A refine's constraints by name, every key one DXN.md §4.2 knows and
+  # every argument one it takes: a misspelt key would otherwise refuse
+  # every value, silently, and a bad argument fail at check time. The
+  # types are compiled here; `unique-by`, `format`, `resolution` and
+  # `encoding` become names.
   defp refine_constraints(constraints, aliases) do
-    with {:ok, named} <- constraint_names(constraints) do
-      cond do
-        key = Enum.find(Enum.sort(Map.keys(named)), &(&1 not in @refine_keys)) ->
-          {:error, "#{key} is no refine constraint (DXN.md §4.2)"}
-
-        not Map.has_key?(named, "contains") and
-            (Map.has_key?(named, "min-contains") or Map.has_key?(named, "max-contains")) ->
-          {:error, "min-contains and max-contains count the items a contains matches"}
-
-        true ->
-          with {:ok, named} <- contains_type(named, aliases),
-               {:ok, named} <- named_arg(named, "unique-by", nil),
-               {:ok, named} <- named_arg(named, "format", Dextrin.Schema.Format.names()),
-               do: named_arg(named, "resolution", TypeExpr.resolutions())
-      end
-    end
+    with {:ok, named} <- constraint_names(constraints),
+         :ok <- known_keys(named),
+         :ok <- contains_counted(named),
+         {:ok, named} <- named_arg(named, "unique-by", nil),
+         {:ok, named} <- named_arg(named, "format", Dextrin.Schema.Format.names()),
+         {:ok, named} <- named_arg(named, "resolution", TypeExpr.resolutions()),
+         {:ok, named} <- named_arg(named, "encoding", @encodings),
+         :ok <- arguments(named),
+         :ok <- content_readable(named),
+         do: types(named, aliases)
   end
 
   # The constraints keyed by their names; a key that is no name is an
@@ -795,10 +811,24 @@ defmodule Dextrin.Schema.Compiler do
   defp constraint_names(constraints) do
     Enum.reduce_while(constraints, {:ok, %{}}, fn {key, value}, {:ok, acc} ->
       case name_of(key) do
-        nil -> {:halt, {:error, "a refine constraint's key is a name, not #{inspect(key)}"}}
+        nil -> {:halt, {:error, "a refine constraint's key is a name, not #{shown(key)}"}}
         name -> {:cont, {:ok, Map.put(acc, name, value)}}
       end
     end)
+  end
+
+  defp known_keys(named) do
+    case Enum.find(Enum.sort(Map.keys(named)), &(&1 not in @refine_keys)) do
+      nil -> :ok
+      key -> {:error, "#{key} is no refine constraint (DXN.md §4.2)"}
+    end
+  end
+
+  defp contains_counted(named) do
+    if not Map.has_key?(named, "contains") and
+         (Map.has_key?(named, "min-contains") or Map.has_key?(named, "max-contains")),
+       do: {:error, "min-contains and max-contains count the items a contains matches"},
+       else: :ok
   end
 
   # `key`'s argument as a name, one of `allowed` when they are given.
@@ -812,23 +842,136 @@ defmodule Dextrin.Schema.Compiler do
 
         if name != nil and (allowed == nil or name in allowed),
           do: {:ok, %{named | key => name}},
-          else: {:error, "#{key} takes #{expected(allowed)}, not #{inspect(arg)}"}
+          else: {:error, "#{key} takes #{expected(allowed)}, not #{shown(arg)}"}
     end
   end
 
   defp expected(nil), do: "a name"
   defp expected(allowed), do: "one of " <> Enum.map_join(Enum.sort(allowed), " ", &":#{&1}")
 
+  # Every argument the kind its key takes, in key order.
+  defp arguments(named) do
+    named
+    |> Enum.sort()
+    |> Enum.find_value(:ok, fn {key, arg} ->
+      case argument(key, arg) do
+        :ok -> nil
+        {:takes, what} -> {:error, "#{key} takes #{what}, not #{shown(arg)}"}
+      end
+    end)
+  end
+
+  defp argument(key, arg) when key in @counts do
+    if is_integer(arg) and arg >= 0, do: :ok, else: {:takes, "a non-negative integer"}
+  end
+
+  defp argument(key, arg) when key in ["min-exponent", "max-exponent"] do
+    if is_integer(arg), do: :ok, else: {:takes, "an integer"}
+  end
+
+  defp argument(key, arg) when key in @flags do
+    if is_boolean(arg), do: :ok, else: {:takes, "true or false"}
+  end
+
+  defp argument(key, arg) when key in @bounds do
+    if TypeExpr.comparable?(arg),
+      do: :ok,
+      else:
+        {:takes,
+         "a number, date, time, datetime, local date-time or a duration without years or months"}
+  end
+
+  defp argument("multiple-of", arg) do
+    if TypeExpr.nonzero_number?(arg), do: :ok, else: {:takes, "a number other than 0"}
+  end
+
+  defp argument("pattern", arg) do
+    if match?(%Regex{}, arg), do: :ok, else: {:takes, "a regex, @regex \"...\""}
+  end
+
+  defp argument("version", arg) do
+    if arg in [4, 6], do: :ok, else: {:takes, "4 or 6"}
+  end
+
+  defp argument("offsets", arg) do
+    if is_list(arg) and Enum.all?(arg, &offset?/1),
+      do: :ok,
+      else: {:takes, "a list of offsets, \"Z\" or \"±HH:MM\""}
+  end
+
+  defp argument("bits", arg) do
+    if is_list(arg) and Enum.all?(arg, &(is_integer(&1) and &1 >= 0)),
+      do: :ok,
+      else: {:takes, "a list of bit numbers, non-negative integers"}
+  end
+
+  defp argument("within", arg) do
+    if TypeExpr.span?(arg), do: :ok, else: {:takes, "a duration without years or months"}
+  end
+
+  # RFC 6838's type/subtype, without parameters.
+  defp argument("media-type", arg) do
+    if is_binary(arg) and
+         Regex.match?(
+           ~r/^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,126}\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,126}$/,
+           arg
+         ),
+       do: :ok,
+       else: {:takes, "a media type, \"type/subtype\""}
+  end
+
+  defp argument(_key, _arg), do: :ok
+
+  defp offset?("Z"), do: true
+
+  defp offset?(text) when is_binary(text),
+    do: Regex.match?(~r/^[+-](?:[01][0-9]|2[0-3]):[0-5][0-9]$/, text)
+
+  defp offset?(_other), do: false
+
+  # `content` reads a DXN document: text, or `.dxnb` under
+  # application/dxnb, which a string holds only encoded.
+  defp content_readable(%{"content" => _} = named) do
+    media = named |> Map.get("media-type") |> then(&(&1 && String.downcase(&1)))
+
+    cond do
+      media not in @content_readers ->
+        {:error, "content reads application/dxn or application/dxnb, not #{shown(media)}"}
+
+      media == "application/dxnb" and not Map.has_key?(named, "encoding") ->
+        {:error, "content under application/dxnb needs an encoding: a string holds no raw bytes"}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp content_readable(_named), do: :ok
+
+  defp types(named, aliases) do
+    Result.reduce_ok(@type_keys, named, fn key, acc ->
+      case Map.fetch(acc, key) do
+        :error ->
+          {:ok, acc}
+
+        {:ok, type} ->
+          with {:ok, t} <- compile_type_expr(type, aliases), do: {:ok, %{acc | key => t}}
+      end
+    end)
+  end
+
+  # `value` as DXN writes it, for a message.
+  defp shown(value) do
+    case Dextrin.Canonical.print(value) do
+      {:ok, text} -> text
+      {:error, _} -> inspect(value)
+    end
+  end
+
   defp name_of(%Keyword{name: name}), do: name
   defp name_of(%Symbol{name: name}), do: name
   defp name_of(name) when is_binary(name), do: name
   defp name_of(_other), do: nil
-
-  defp contains_type(%{"contains" => type} = named, aliases) do
-    with {:ok, t} <- compile_type_expr(type, aliases), do: {:ok, %{named | "contains" => t}}
-  end
-
-  defp contains_type(named, _aliases), do: {:ok, named}
 
   defp maybe_compile(:none, _aliases), do: {:ok, :none}
   defp maybe_compile(value, aliases), do: compile_type_expr(value, aliases)

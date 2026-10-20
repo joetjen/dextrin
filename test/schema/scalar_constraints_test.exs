@@ -44,9 +44,40 @@ defmodule Dextrin.Schema.ScalarConstraintsTest do
       assert compile_error("{:refine {:list-of :any} %{unique-by: 5}}") =~ "unique-by"
       assert compile_error("{:refine :time %{resolution: :fortnight}}") =~ ":millisecond"
     end
+
+    test "every constraint's argument is checked: a bad one never reaches a check" do
+      for {type, key} <- [
+            {"{:refine :integer %{bits: 5}}", "bits"},
+            {"{:refine :integer %{bits: [-1]}}", "bits"},
+            {"{:refine :datetime %{before-now: 5}}", "before-now"},
+            {"{:refine :integer %{multiple-of: 0}}", "multiple-of"},
+            {~s|{:refine :string %{min-length: "x"}}|, "min-length"},
+            {"{:refine :string %{max-length: -1}}", "max-length"},
+            {"{:refine :decimal %{min-exponent: 1.5}}", "min-exponent"},
+            {"{:refine :ip %{version: 5}}", "version"},
+            {~s|{:refine :string %{pattern: "a"}}|, "pattern"},
+            {~s|{:refine :datetime %{within: @duration "P1Y"}}|, "within"},
+            {~s|{:refine :datetime %{offsets: "Z"}}|, "offsets"},
+            {~s|{:refine :datetime %{offsets: ["UTC"]}}|, "offsets"},
+            {~s|{:refine :integer %{min: "x"}}|, "min"}
+          ] do
+        assert compile_error(type) =~ key, type
+      end
+    end
+
+    test "a value in a message is written in DXN" do
+      assert compile_error("{:refine :time %{resolution: :fortnight}}") =~ "not :fortnight"
+      assert compile_error(~s|{:refine :string %{min-length: "x"}}|) =~ ~s|not "x"|
+    end
   end
 
   describe "lengths" do
+    test "a string's counts codepoints, not what a reader sees as one character" do
+      decomposed = "e\u0301"
+      assert takes?("{:refine :string %{min-length: 2}}", ~s|"#{decomposed}"|)
+      refute takes?("{:refine :string %{max-length: 1}}", ~s|"#{decomposed}"|)
+    end
+
     test "a keyword's or a symbol's is its name's, in codepoints" do
       assert takes?("{:refine :keyword %{max-length: 3}}", ":abc")
       refute takes?("{:refine :keyword %{max-length: 3}}", ":abcd")

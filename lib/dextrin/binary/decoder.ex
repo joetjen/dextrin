@@ -30,33 +30,65 @@ defmodule Dextrin.Binary.Decoder do
   @spec decode(binary(), keyword()) :: {:ok, term()} | {:error, Dextrin.Error.t()}
   def decode(bin, opts \\ [])
 
-  def decode(<<@magic, @version, rest::binary>>, opts) do
-    # Scoped to this one call (initialized here, torn down in `after`)
-    # — see the matching note on `Dextrin.Binary.Encoder.encode/2` for
-    # why the process dictionary, not a threaded accumulator.
+  def decode(<<@magic, @version, _::binary>> = bin, opts) do
+    case document(bin, opts) do
+      {:ok, value, <<>>} ->
+        {:ok, value}
+
+      {:ok, _value, leftover} ->
+        {:error,
+         Dextrin.Error.binary(
+           "trailing bytes after top-level value (#{byte_size(leftover)} left over)"
+         )}
+
+      {:error, _} = err ->
+        err
+    end
+  end
+
+  def decode(bin, _opts) when is_binary(bin), do: envelope_error()
+
+  @doc """
+  `bin` read as `.dxnb` documents back to back, each with its own
+  envelope -- a CBOR sequence of documents, as a schema's `encodes-seq:`
+  reads one (DXN.md §4.2); no bytes at all are no documents.
+  """
+  @spec decode_sequence(binary(), keyword()) :: {:ok, [term()]} | {:error, Dextrin.Error.t()}
+  def decode_sequence(bin, opts \\ []), do: sequence(bin, opts, [])
+
+  defp sequence(<<>>, _opts, acc), do: {:ok, Enum.reverse(acc)}
+
+  defp sequence(<<@magic, @version, _::binary>> = bin, opts, acc) do
+    with {:ok, value, rest} <- document(bin, opts), do: sequence(rest, opts, [value | acc])
+  end
+
+  defp sequence(_bin, _opts, _acc), do: envelope_error()
+
+  # One document from the front of `bin`, and the bytes after it. The
+  # shared-item and stringref state is this document's alone: scoped to
+  # the call, and what an enclosing decode had is put back after, so a
+  # schema check that reads a document inside a document (`encodes:`)
+  # leaves the outer one's state as it was. See the matching note on
+  # `Dextrin.Binary.Encoder.encode/2` for why the process dictionary,
+  # not a threaded accumulator.
+  defp document(<<@magic, @version, rest::binary>>, opts) do
+    outer = {Process.get(:dextrin_shared_items), Process.get(:dextrin_stringref_stack)}
     Process.put(:dextrin_shared_items, %{})
     Process.put(:dextrin_stringref_stack, [])
 
     try do
-      with {:ok, value, <<>>} <- decode_item(rest, opts) do
-        {:ok, Dextrin.Schema.Validated.strip(value)}
-      else
-        {:ok, _value, leftover} ->
-          {:error,
-           Dextrin.Error.binary(
-             "trailing bytes after top-level value (#{byte_size(leftover)} left over)"
-           )}
-
-        {:error, _} = err ->
-          err
-      end
+      with {:ok, value, leftover} <- decode_item(rest, opts),
+           do: {:ok, Dextrin.Schema.Validated.strip(value), leftover}
     after
-      Process.delete(:dextrin_shared_items)
-      Process.delete(:dextrin_stringref_stack)
+      restore(:dextrin_shared_items, elem(outer, 0))
+      restore(:dextrin_stringref_stack, elem(outer, 1))
     end
   end
 
-  def decode(bin, _opts) when is_binary(bin) do
+  defp restore(key, nil), do: Process.delete(key)
+  defp restore(key, value), do: Process.put(key, value)
+
+  defp envelope_error do
     {:error,
      Dextrin.Error.binary(
        "missing or invalid .dxnb envelope (expected magic \"DX\" + version #{@version})"
