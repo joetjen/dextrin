@@ -109,7 +109,8 @@ defmodule Dextrin.MixProject do
   end
 
   defp description do
-    "DXN (Data eXchange Notation) for Elixir -- .dxn text, .dxnb binary, " <>
+    "Under heavy development: not for production use before 1.0.0. " <>
+      "DXN (Data eXchange Notation) for Elixir -- .dxn text, .dxnb binary, " <>
       "and .dxns schema documents, built on the Ichor grammar compiler."
   end
 

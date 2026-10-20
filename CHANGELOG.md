@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The package description opens with the development warning**
+  (Jan, 2026-10-20), "Under heavy development: not for production use
+  before 1.0.0.", so the registry's search results show it too.
 - **An array is written `@array[1 2]`**, its bracket against the tag
   (Jan, 2026-10-20): the preferred spelling, which the compact text
   form now writes as the pretty layout and the canonical form already
