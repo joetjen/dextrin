@@ -82,6 +82,7 @@ Name                            bare symbol -- a struct name or a named type
 {:set-of T}                     set, every element matches T
 {:tuple-of A B C}                fixed-arity positional tuple
 {:tuple-of-all T}               tuple of any length, every element a T
+{:tagged acme.money T}          a custom tag of that name, its value a T
 {:map-of K V}                   every key matches K, every value matches V
 {:array-of T}                   array, every element matches T
 {:ordered-map-of K V}           ordered map, keys match K, values match V

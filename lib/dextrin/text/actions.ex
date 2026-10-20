@@ -343,6 +343,11 @@ defmodule Dextrin.Text.Actions do
 
   @built_in_tags ~w(ordered sorted-set array uuid objectid ip uri bytes date time datetime local-datetime duration regex)
 
+  @doc false
+  # The tags DXN.md §1.3 builds in: no custom tag has one of their names.
+  @spec built_in_tags() :: [String.t()]
+  def built_in_tags, do: @built_in_tags
+
   defp dispatch_tag("ordered", value_cap, ctx), do: eval_ordered_map(value_cap, ctx)
 
   defp dispatch_tag("sorted-set", value_cap, ctx) do

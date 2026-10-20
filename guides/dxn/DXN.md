@@ -551,7 +551,7 @@ schema of their own, which would be circular.
 ### 4.1 `type_expr` forms
 
 ```toon
-type_expr[25]{form,dxn_shape,meaning}:
+type_expr[26]{form,dxn_shape,meaning}:
   any,":any","matches any value at all"
   never,":never","matches no value at all (JSON Schema's false)"
   primitive,":integer / :string / ...","one keyword per §1.3 type name; :bits matches bits and bytes alike, :bytes only whole bytes"
@@ -565,6 +565,7 @@ type_expr[25]{form,dxn_shape,meaning}:
   array-of,"{:array-of elem}","array whose every element matches elem"
   ordered-map-of,"{:ordered-map-of key-type val-type}","ordered map: every key matches key-type, every value matches val-type"
   sorted-set-of,"{:sorted-set-of elem}","sorted set whose every element matches elem"
+  tagged,"{:tagged acme.money T}","a custom tag of that name whose value matches T; an application's value as its registered tag encoder writes it"
   enum,"{:enum lit lit ...}","value must equal one of the given literals (any type)"
   one-of,"{:one-of a b}","exactly one variant matches (JSON Schema's oneOf): none, or two or more, is a refusal"
   any-of,"{:any-of a b}","union — one or more variants match (JSON Schema's anyOf)"
@@ -582,6 +583,14 @@ type_expr[25]{form,dxn_shape,meaning}:
 A bare `type_expr` (no wrapping tuple/struct) is always a `primitive`
 or a `reference` — the tuple form is only needed once a constructor
 takes arguments.
+
+`{:tagged name T}` takes the name as a symbol, a keyword or a string
+(Jan, 2026-10-20). A built-in tag's name (§1.3) is a compile error
+there: `@uuid` is the type `:uuid`, no custom tag. An application's
+value -- what a registered tag decoder made of the tag -- matches when
+the registry's tag encoder for its module writes it under that name,
+with a value that matches `T`; register both directions, as for a
+struct (§4.7).
 
 ### 4.1a A list's items (`{:list-items}`)
 
@@ -906,8 +915,8 @@ does not give) never matters.
 (Jan, 2026-10-20), when every such cycle passes a **guard**: a field of
 a `%shape` or `%schema`, or the elements of a collection (`list-of`,
 `list-items`, `set-of`, `map-of`, `tuple-of`, `tuple-of-all`,
-`array-of`, `ordered-map-of`, `sorted-set-of`, and a refine's
-`contains`). `nilable`, `any-of`, `one-of`, `all-of`, `not`,
+`array-of`, `ordered-map-of`, `sorted-set-of`, `tagged`, and a refine's
+`contains`, `content`, `encodes` and `encodes-seq`). `nilable`, `any-of`, `one-of`, `all-of`, `not`,
 `refine` and `case` check the same value again, so they are no guard:
 `A: {:nilable A}` describes no value and is a compile error
 (`schema/compile`). A guarded check always ends, since a DXN value is

@@ -323,6 +323,10 @@ defmodule Dextrin.Schema.Compiler do
          do: {:ok, {:refine, type, constraints}}
   end
 
+  defp resolved({:tagged, name, type}, compiled, path) do
+    with {:ok, type} <- resolved(type, compiled, path), do: {:ok, {:tagged, name, type}}
+  end
+
   defp resolved({:list_items, particles}, compiled, path) do
     with {:ok, particles} <- resolved_particles(particles, compiled, path),
          do: {:ok, {:list_items, particles}}
@@ -720,6 +724,24 @@ defmodule Dextrin.Schema.Compiler do
   defp compile_type_expr(%Tuple{items: [%Keyword{name: "tuple-of-all"}, elem]}, aliases) do
     with {:ok, t} <- compile_type_expr(elem, aliases), do: {:ok, {:tuple_of_all, t}}
   end
+
+  # `{:tagged name type}`: a custom tag of that name, its value a type
+  # (DXN.md §4.1).
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "tagged"}, name, type]}, aliases) do
+    case name_of(name) do
+      nil ->
+        {:error, "a tagged is {:tagged name type}, the name a symbol, keyword or string"}
+
+      tag ->
+        if tag in Dextrin.Text.Actions.built_in_tags(),
+          do:
+            {:error, "#{tag} is a built-in tag (DXN.md §1.3), no custom one: its type is :#{tag}"},
+          else: with({:ok, t} <- compile_type_expr(type, aliases), do: {:ok, {:tagged, tag, t}})
+    end
+  end
+
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "tagged"} | _]}, _aliases),
+    do: {:error, "a tagged is {:tagged name type}"}
 
   defp compile_type_expr(%Tuple{items: [%Keyword{name: form} | _]}, _aliases)
        when form in ["repeat", "group"],

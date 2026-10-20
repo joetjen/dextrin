@@ -2,7 +2,7 @@ defmodule Dextrin.Schema.TypeExpr do
   @moduledoc """
   Internal, compiled representation of a `.dxns` type expression — the
   vocabulary of DXN.md §4.1 (`any`, `never`, `primitive`, `reference`,
-  `list-of`, `list-items`, `set-of`, `tuple-of`, `tuple-of-all`, `map-of`, `array-of`,
+  `list-of`, `list-items`, `set-of`, `tuple-of`, `tuple-of-all`, `map-of`, `array-of`, `tagged`,
   `ordered-map-of`, `sorted-set-of`, `enum`, `one-of`, `any-of`,
   `all-of`, `not`, `nilable`, `refine`, `struct`, and `shape` and `case`,
   design/shapes-and-case.md) `Dextrin.Schema.Compiler` turns a
@@ -18,6 +18,7 @@ defmodule Dextrin.Schema.TypeExpr do
     Array,
     Bytes,
     Char,
+    CustomTag,
     Duration,
     Keyword,
     Nanos,
@@ -45,6 +46,7 @@ defmodule Dextrin.Schema.TypeExpr do
           | {:list_items, [particle()]}
           | {:tuple_of, [t()]}
           | {:tuple_of_all, t()}
+          | {:tagged, String.t(), t()}
           | {:map_of, t(), t()}
           | {:array_of, t()}
           | {:ordered_map_of, t(), t()}
@@ -240,6 +242,28 @@ defmodule Dextrin.Schema.TypeExpr do
 
   def conform({:tuple_of_all, _}, _value, _context), do: :error
 
+  # A custom tag of that name, its value a `type`; or an application's
+  # value that the registry's tag encoder writes as one.
+  def conform({:tagged, name, type}, %CustomTag{name: name, value: inner} = tag, context) do
+    with {:ok, conformed} <- conform(type, inner, context), do: {:ok, %{tag | value: conformed}}
+  end
+
+  def conform(
+        {:tagged, name, type},
+        %module{} = value,
+        %{registry: %Dextrin.Registry{} = r} = context
+      ) do
+    with {:ok, {^name, encode}} <- Dextrin.Registry.fetch_tag_encoder(r, module),
+         {:ok, written} <- encode.(value),
+         {:ok, _} <- conform(type, written, context) do
+      {:ok, value}
+    else
+      _ -> :error
+    end
+  end
+
+  def conform({:tagged, _name, _type}, _value, _context), do: :error
+
   def conform({:map_of, key_type, val_type}, value, context)
       when is_map(value) and not is_struct(value) do
     with {:ok, pairs} <- all(Map.to_list(value), &pair(key_type, val_type, &1, context)),
@@ -423,6 +447,8 @@ defmodule Dextrin.Schema.TypeExpr do
        other -> other
      end)}
   end
+
+  defp substitute({:tagged, name, type}, bound), do: {:tagged, name, substitute(type, bound)}
 
   defp substitute({:list_items, particles}, bound),
     do: {:list_items, Enum.map(particles, &substitute_particle(&1, bound))}
