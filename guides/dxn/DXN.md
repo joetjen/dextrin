@@ -551,7 +551,7 @@ schema of their own, which would be circular.
 ### 4.1 `type_expr` forms
 
 ```toon
-type_expr[26]{form,dxn_shape,meaning}:
+type_expr[27]{form,dxn_shape,meaning}:
   any,":any","matches any value at all"
   never,":never","matches no value at all (JSON Schema's false)"
   primitive,":integer / :string / ...","one keyword per §1.3 type name; :bits matches bits and bytes alike, :bytes only whole bytes"
@@ -576,6 +576,7 @@ type_expr[26]{form,dxn_shape,meaning}:
   struct,"%schema{...}","struct/record shape, §4.4"
   shape,"%shape{...}","a plain map with these fields, defaults filled, §4.4a"
   case,"{:case field %{value => type, :else => type}}","the type the sibling field's value chooses, §4.4a"
+  doc,"{:doc T %{description: ...}}","T, annotated: a title, a description, examples and the like, §4.1b; takes what T takes"
   generic,"{:generic [t ...] body}","a named type with parameters, §4.5"
   of,"{:of Name type ...}","one use of a generic, its arguments where its parameters stand, §4.5"
 ```
@@ -626,6 +627,46 @@ anywhere else they are a compile error (`schema/compile`).
 `list-items` closes the list (an item no `p` takes is a refusal), which
 is why DXNS has no `unevaluatedItems`: a list that may go on ends in
 `{:repeat :any 0 nil}`.
+
+### 4.1b Annotations (`{:doc}`)
+
+`{:doc T %{...}}` says things about `T` and changes nothing it takes
+(Jan, 2026-10-20; JSON Schema's annotations, protobuf's options, Ion
+Schema's open content). It stands wherever a type does, and around a
+whole entry: a named type, a generic, a `%shape` or a `%schema`.
+
+```dxn
+%{
+  Order: {:doc %schema(2){
+    id:      :integer
+    email:   {:doc :string %{description: "Where receipts go", meta: %{"acme.pii" => true}}}
+    legacy?: {:doc :string %{deprecated: "use email"}}
+  } %{title: "An order", deprecated: false}}
+
+  Color: {:doc {:enum :red :green :old-blue} %{
+    values: %{:old-blue => %{deprecated: true, description: "Use :blue"}}
+  }}
+}
+```
+
+```toon
+annotations[8]{key,takes,meaning}:
+  title,string,"a short name for the type"
+  description,string,"what the type is for"
+  examples,list,"values the type takes, for a reader"
+  read-only,boolean,"the value is written by its owner only"
+  write-only,boolean,"the value is never read back"
+  deprecated,"boolean or string","true, or the reason, when the type is on its way out"
+  meta,map,"anything else, kept as written, meaning nothing to a check"
+  values,map,"on an enum: each of its values to that value's own annotations (no values of their own)"
+```
+
+Any other key is a compile error (`schema/compile`), as is a value of
+the wrong kind; `meta` is where what DXNS does not name goes.
+`Dextrin.Schema.annotations/2` reads a named type's or a schema's (its
+latest version's); a field's stay on its type. A `doc` checks the value
+`T` checks, so it is no guard (§4.5): `A: {:doc A %{}}` is a compile
+error.
 
 ### 4.2 `refine` constraints
 
@@ -917,7 +958,7 @@ a `%shape` or `%schema`, or the elements of a collection (`list-of`,
 `list-items`, `set-of`, `map-of`, `tuple-of`, `tuple-of-all`,
 `array-of`, `ordered-map-of`, `sorted-set-of`, `tagged`, and a refine's
 `contains`, `content`, `encodes` and `encodes-seq`). `nilable`, `any-of`, `one-of`, `all-of`, `not`,
-`refine` and `case` check the same value again, so they are no guard:
+`refine`, `doc` and `case` check the same value again, so they are no guard:
 `A: {:nilable A}` describes no value and is a compile error
 (`schema/compile`). A guarded check always ends, since a DXN value is
 finite (§2.5) and every guard steps into a smaller part of it:

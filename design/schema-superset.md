@@ -155,6 +155,15 @@ encoder writes it.
 
 ### 8. Annotations and metadata (J C I P)
 
+**Done** (Jan, 2026-10-20; DXN.md §4.1b) as one form, `{:doc T %{...}}`,
+in place of three of the rows below. What was wrong with them: the
+schema header map, `%schema(3, %{...})`, would have changed the grammar
+of every struct header for one use, where `{:doc %schema(3){...}
+%{...}}` needs none; `{:enum %{:red => %{...}}}` already means an enum
+whose one value is that map, so the enum's value docs moved to the
+doc's `values:`; and `%field{meta:}` is `{:doc T %{meta: ...}}` as the
+field's type, one place for every annotation.
+
 | Gap | Proposed |
 |---|---|
 | title, description, examples, readOnly/writeOnly, deprecated anywhere, not just on fields | `{:doc T %{title:, description:, examples:, read-only:, write-only:, deprecated:}}` |

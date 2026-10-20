@@ -129,6 +129,37 @@ defmodule Dextrin.Schema do
   end
 
   @doc """
+  What the `{:doc ... %{...}}` around the schema or named type `name`
+  says about it (DXN.md §4.1b): its annotations by name, `%{}` when it
+  has none, `:error` when there is no such name. A schema answers for
+  its latest version.
+
+      iex> {:ok, doc} = Dextrin.decode(~s|%{Port: {:doc :integer %{description: "A TCP port"}}}|)
+      iex> {:ok, registry} = Dextrin.Schema.compile(doc)
+      iex> Dextrin.Schema.annotations(registry, "Port")
+      {:ok, %{"description" => "A TCP port"}}
+  """
+  @spec annotations(Registry.t(), String.t()) :: {:ok, %{optional(String.t()) => term()}} | :error
+  def annotations(%Registry{} = registry, name) do
+    case Map.fetch(registry.type_aliases, name) do
+      {:ok, {:doc, _type, notes}} ->
+        {:ok, notes}
+
+      {:ok, {:generic, _params, {:doc, _body, notes}}} ->
+        {:ok, notes}
+
+      {:ok, _type} ->
+        {:ok, %{}}
+
+      :error ->
+        case Registry.fetch_struct_schema(registry, name) do
+          {:ok, compiled, _registry} -> {:ok, compiled.annotations}
+          _ -> :error
+        end
+    end
+  end
+
+  @doc """
   `value` checked as `check/3` checks it, answered with every shape's
   missing defaults filled in, as a decode fills them: `{:ok, value}`, or
   the error saying why.

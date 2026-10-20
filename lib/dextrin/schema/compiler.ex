@@ -88,7 +88,9 @@ defmodule Dextrin.Schema.Compiler do
       end)
 
     {schema_entries, alias_entries} =
-      Enum.split_with(named_entries, fn {_name, v} -> match?(%Struct{name: "schema"}, v) end)
+      Enum.split_with(named_entries, fn {_name, v} ->
+        match?(%Struct{name: "schema"}, undoc(v))
+      end)
 
     with {:ok, registry} <- compile_aliases(alias_entries, base_registry, names) do
       Result.reduce_ok(schema_entries, registry, fn {name, entry}, registry ->
@@ -184,6 +186,7 @@ defmodule Dextrin.Schema.Compiler do
 
   defp unguarded_names({form, type}) when form in [:not, :nilable], do: unguarded_names(type)
   defp unguarded_names({:refine, type, _}), do: unguarded_names(type)
+  defp unguarded_names({:doc, type, _}), do: unguarded_names(type)
 
   defp unguarded_names({:case, _field, branches, otherwise}),
     do: Enum.flat_map([otherwise | Enum.map(branches, &elem(&1, 1))], &unguarded_names/1)
@@ -226,6 +229,21 @@ defmodule Dextrin.Schema.Compiler do
          scope = Map.merge(scope, Map.new(names, &{&1, {:param, &1}})),
          {:ok, body} <- compile_named(name, body, scope) do
       {:ok, {:generic, names, body}}
+    end
+  end
+
+  # A named type's annotations wrap it whole: a generic keeps them on its
+  # body, a shape takes the name as it would bare.
+  defp compile_named(name, %Tuple{items: [%Keyword{name: "doc"}, inner, raw]}, scope) do
+    with {:ok, compiled} <- compile_named(name, inner, scope) do
+      case compiled do
+        {:generic, params, body} ->
+          with {:ok, notes} <- annotations(raw, body),
+               do: {:ok, {:generic, params, {:doc, body, notes}}}
+
+        type ->
+          with {:ok, notes} <- annotations(raw, type), do: {:ok, {:doc, type, notes}}
+      end
     end
   end
 
@@ -321,6 +339,10 @@ defmodule Dextrin.Schema.Compiler do
     with {:ok, type} <- resolved(type, compiled, path),
          {:ok, constraints} <- resolved_types(constraints, compiled, path),
          do: {:ok, {:refine, type, constraints}}
+  end
+
+  defp resolved({:doc, type, notes}, compiled, path) do
+    with {:ok, type} <- resolved(type, compiled, path), do: {:ok, {:doc, type, notes}}
   end
 
   defp resolved({:tagged, name, type}, compiled, path) do
@@ -449,6 +471,14 @@ defmodule Dextrin.Schema.Compiler do
          :ok <- cases_name_fields(pairs, fields) do
       {:ok, %Compiled{version: version || 1, fields: fields}}
     end
+  end
+
+  # A schema's annotations, `{:doc %schema{...} %{...}}`, kept on its
+  # `Compiled`.
+  defp compile_entry(%Tuple{items: [%Keyword{name: "doc"}, inner, raw]}, aliases) do
+    with {:ok, compiled} <- compile_entry(inner, aliases),
+         {:ok, notes} <- annotations(raw, :schema),
+         do: {:ok, %{compiled | annotations: notes}}
   end
 
   defp compile_entry(%Struct{name: "schema", fields: {:positional, _}}, _aliases),
@@ -725,6 +755,16 @@ defmodule Dextrin.Schema.Compiler do
     with {:ok, t} <- compile_type_expr(elem, aliases), do: {:ok, {:tuple_of_all, t}}
   end
 
+  # `{:doc type %{...}}`: the type, annotated (DXN.md §4.1b).
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "doc"}, inner, raw]}, aliases) do
+    with {:ok, type} <- compile_type_expr(inner, aliases),
+         {:ok, notes} <- annotations(raw, type),
+         do: {:ok, {:doc, type, notes}}
+  end
+
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "doc"} | _]}, _aliases),
+    do: {:error, "a doc is {:doc type %{description: ..., ...}}"}
+
   # `{:tagged name type}`: a custom tag of that name, its value a type
   # (DXN.md §4.1).
   defp compile_type_expr(%Tuple{items: [%Keyword{name: "tagged"}, name, type]}, aliases) do
@@ -994,6 +1034,99 @@ defmodule Dextrin.Schema.Compiler do
   defp name_of(%Symbol{name: name}), do: name
   defp name_of(name) when is_binary(name), do: name
   defp name_of(_other), do: nil
+
+  @annotation_keys ~w(title description examples read-only write-only deprecated meta values)
+
+  # A doc's annotations by name, each of its kind (DXN.md §4.1b); `type`
+  # is what they annotate, `:schema` for a whole schema, so `values` can
+  # be checked against an enum's literals.
+  defp annotations(raw, type) when is_map(raw) and not is_struct(raw) do
+    with {:ok, named} <- constraint_names(raw) do
+      named
+      |> Enum.sort()
+      |> Enum.find_value({:ok, named}, fn {key, value} ->
+        case annotation(key, value, type) do
+          :ok -> nil
+          {:takes, what} -> {:error, "a doc's #{key} is #{what}, not #{shown(value)}"}
+          {:error, _} = error -> error
+        end
+      end)
+      |> case do
+        {:ok, named} -> annotated_values(named)
+        error -> error
+      end
+    end
+  end
+
+  defp annotations(raw, _type),
+    do: {:error, "a doc's annotations are a map, %{description: ...}, not #{shown(raw)}"}
+
+  defp annotation(key, value, _type) when key in ["title", "description"],
+    do: if(is_binary(value), do: :ok, else: {:takes, "a string"})
+
+  defp annotation("examples", value, _type),
+    do: if(is_list(value), do: :ok, else: {:takes, "a list"})
+
+  defp annotation(key, value, _type) when key in ["read-only", "write-only"],
+    do: if(is_boolean(value), do: :ok, else: {:takes, "true or false"})
+
+  defp annotation("deprecated", value, _type),
+    do:
+      if(is_boolean(value) or is_binary(value),
+        do: :ok,
+        else: {:takes, "true, false or a reason"}
+      )
+
+  defp annotation("meta", value, _type),
+    do: if(is_map(value) and not is_struct(value), do: :ok, else: {:takes, "a map"})
+
+  defp annotation("values", value, {:enum, literals})
+       when is_map(value) and not is_struct(value) do
+    Enum.find_value(Enum.sort(value), :ok, fn {literal, notes} ->
+      cond do
+        literal not in literals ->
+          {:error,
+           "a doc's values annotate the enum's own values; #{shown(literal)} is none of them"}
+
+        not (is_map(notes) and not is_struct(notes)) ->
+          {:error, "a doc's values hold a map of annotations for each value"}
+
+        Map.has_key?(notes, Keyword.new("values")) ->
+          {:error, "a value's annotations hold no values of their own"}
+
+        true ->
+          case annotations(notes, :value) do
+            {:ok, _} -> nil
+            error -> error
+          end
+      end
+    end)
+  end
+
+  defp annotation("values", _value, _type),
+    do: {:takes, "a map of an enum's values to their annotations, on an enum"}
+
+  defp annotation(key, _value, _type),
+    do: {:error, "#{key} is no annotation; a doc holds #{Enum.join(@annotation_keys, ", ")}"}
+
+  # `values`' annotation maps keyed by name, as the doc's own are.
+  defp annotated_values(%{"values" => values} = named) do
+    {:ok,
+     %{
+       named
+       | "values" =>
+           Map.new(values, fn {literal, notes} ->
+             {:ok, notes} = annotations(notes, :value)
+             {literal, notes}
+           end)
+     }}
+  end
+
+  defp annotated_values(named), do: {:ok, named}
+
+  # An entry's value without the `{:doc ...}` around it.
+  defp undoc(%Tuple{items: [%Keyword{name: "doc"}, inner, _]}), do: inner
+  defp undoc(value), do: value
 
   defp maybe_compile(:none, _aliases), do: {:ok, :none}
   defp maybe_compile(value, aliases), do: compile_type_expr(value, aliases)
