@@ -15,6 +15,7 @@ same `doc/`.
 - `doc/` -- what `mix dextrin.docs example/schemas --out example/doc
   --title "Acme schemas"` writes. Open `doc/index.html` in a browser.
 
-`acme.events.dxns` uses `%shape{...}` and `{:case ...}`, which are
-decided but not built yet: the documentation reads the source, so it
-shows them already; compiling those two definitions waits for them.
+`acme.events.dxns` uses `%shape{...}` and `{:case ...}`;
+`acme.shop.Product.dxns` and `HealthCheck.dxns` carry annotations,
+`{:doc T %{...}}` (DXN.md §4.1b), which the documentation shows beside
+the definitions they annotate.

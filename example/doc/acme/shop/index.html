@@ -330,7 +330,7 @@
   <td class="pos">2</td>
   <th scope="row" class="field"><code>sku</code></th>
   <td class="type"><code>{<span class="kw">:refine</span> <span class="kw">:string</span> %{pattern: @regex <span class="str">&quot;^[A-Z]{3}-[0-9]{5}$&quot;</span>}}</code></td>
-  <td class="notes"><p>The stock-keeping unit: three letters, a dash, five digits.</p></td>
+  <td class="notes"><p>The stock-keeping unit: three letters, a dash, five digits.</p><div class="examples"><p class="label">Examples</p><ul><li><code>&quot;TEE-00042&quot;</code></li></ul></div></td>
 </tr>
 <tr>
   <td class="pos">3</td>
@@ -402,7 +402,7 @@
   <td class="pos">14</td>
   <th scope="row" class="field"><code>flags</code><span class="opt">optional</span></th>
   <td class="type"><code><span class="kw">:bits</span></code></td>
-  <td class="notes"><p>Feature flags, one bit each, set by the warehouse system.</p></td>
+  <td class="notes"><span class="chip chip-read-only">read-only</span><p>Feature flags, one bit each, set by the warehouse system.</p><dl class="meta"><p class="label">Meta</p><dt><code>&quot;acme.owner&quot;</code></dt><dd><code>&quot;warehouse&quot;</code></dd></dl></td>
 </tr>
 <tr>
   <td class="pos">15</td>

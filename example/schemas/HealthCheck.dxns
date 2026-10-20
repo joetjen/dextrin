@@ -4,7 +4,9 @@
 %{
   # What a service answers on its health endpoint.
   HealthCheck: %schema{
-    status: {:enum :ok :degraded :down}
+    status: {:doc {:enum :ok :degraded :down} %{
+      values: %{:degraded => %{description: "Up, but a dependency is slow or down"}}
+    }}
     # Every dependency the service checked, and how long it took.
     checks: {:map-of :keyword {:tuple-of {:enum :ok :down} :duration}}
     # The opening hours of the support desk, as from-to pairs.
