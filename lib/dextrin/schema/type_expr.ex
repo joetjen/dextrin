@@ -32,6 +32,9 @@ defmodule Dextrin.Schema.TypeExpr do
 
   alias Dextrin.Schema.Validated
 
+  # A refine's keys whose argument is a type (DXN.md §4.2).
+  @type_keys ~w(contains content encodes encodes-seq)
+
   @type t ::
           :any
           | :never
@@ -413,13 +416,13 @@ defmodule Dextrin.Schema.TypeExpr do
      substitute(otherwise, bound)}
   end
 
-  defp substitute({:refine, type, %{"contains" => contains} = constraints}, bound),
-    do:
-      {:refine, substitute(type, bound),
-       %{constraints | "contains" => substitute(contains, bound)}}
-
-  defp substitute({:refine, type, constraints}, bound),
-    do: {:refine, substitute(type, bound), constraints}
+  defp substitute({:refine, type, constraints}, bound) do
+    {:refine, substitute(type, bound),
+     Map.new(constraints, fn
+       {key, t} when key in @type_keys -> {key, substitute(t, bound)}
+       other -> other
+     end)}
+  end
 
   defp substitute({:list_items, particles}, bound),
     do: {:list_items, Enum.map(particles, &substitute_particle(&1, bound))}
@@ -618,6 +621,9 @@ defmodule Dextrin.Schema.TypeExpr do
   defp satisfies_constraints?(value, constraints, base, context) do
     Enum.all?(constraints, fn
       {"contains", type} -> contains?(type, constraints, value, context)
+      {"content", type} -> content?(type, constraints, value, context)
+      {"encodes", type} -> encodes?(type, value, context)
+      {"encodes-seq", type} -> encodes_seq?(type, value, context)
       {"min-length", n} -> within?(length_of(value, base), n, nil)
       {"max-length", n} -> within?(length_of(value, base), nil, n)
       {key, arg} -> satisfies_constraint?(key, arg, value)
@@ -640,6 +646,65 @@ defmodule Dextrin.Schema.TypeExpr do
           Map.get(constraints, "max-contains")
         )
     end
+  end
+
+  # The string, decoded by its `encoding` when it has one, is a DXN
+  # document whose value is a `type`: `.dxnb` under application/dxnb,
+  # text otherwise.
+  defp content?(type, constraints, value, context) when is_binary(value) do
+    with {:ok, bytes} <- decoded(Map.get(constraints, "encoding"), value),
+         {:ok, document} <- read_content(content_media(constraints), bytes),
+         do: match?({:ok, _}, conform(type, document, context)),
+         else: (_ -> false)
+  end
+
+  defp content?(_type, _constraints, _value, _context), do: false
+
+  defp content_media(constraints) do
+    case Map.get(constraints, "media-type") do
+      nil -> nil
+      media -> String.downcase(media)
+    end
+  end
+
+  defp read_content("application/dxnb", bytes), do: Dextrin.decode_binary(bytes)
+
+  defp read_content(_text, bytes) do
+    if String.valid?(bytes), do: Dextrin.decode(bytes), else: :error
+  end
+
+  # The bytes are a `.dxnb` document whose value is a `type`.
+  defp encodes?(type, %Bytes{data: data}, context) when is_binary(data) do
+    case Dextrin.decode_binary(data) do
+      {:ok, document} -> match?({:ok, _}, conform(type, document, context))
+      {:error, _} -> false
+    end
+  end
+
+  defp encodes?(_type, _value, _context), do: false
+
+  # The bytes are `.dxnb` documents back to back, each a `type`.
+  defp encodes_seq?(type, %Bytes{data: data}, context) when is_binary(data) do
+    case Dextrin.Binary.Decoder.decode_sequence(data) do
+      {:ok, documents} -> Enum.all?(documents, &match?({:ok, _}, conform(type, &1, context)))
+      {:error, _} -> false
+    end
+  end
+
+  defp encodes_seq?(_type, _value, _context), do: false
+
+  # `text` decoded by RFC 4648's `encoding`; no encoding leaves it as it
+  # is. base64 and base32 take their padding, base64url with or without
+  # it, base16 either case.
+  defp decoded(nil, text), do: {:ok, text}
+  defp decoded("base64", text), do: Base.decode64(text)
+  defp decoded("base32", text), do: Base.decode32(text)
+  defp decoded("base16", text), do: Base.decode16(text, case: :mixed)
+
+  defp decoded("base64url", text) do
+    if String.contains?(text, "="),
+      do: Base.url_decode64(text),
+      else: Base.url_decode64(text, padding: false)
   end
 
   # Whether `count` lies between `least` and `most`, either `nil` for no
@@ -693,6 +758,12 @@ defmodule Dextrin.Schema.TypeExpr do
       _ -> false
     end
   end
+
+  defp satisfies_constraint?("encoding", encoding, value) when is_binary(value),
+    do: match?({:ok, _}, decoded(encoding, value))
+
+  # What the string holds; it checks nothing more (`content` reads it).
+  defp satisfies_constraint?("media-type", _media, value), do: is_binary(value)
 
   # One of DXN.md §4.2a's formats, checked as `Dextrin.Schema.Format` says.
   defp satisfies_constraint?("format", name, value) when is_binary(value),
@@ -767,12 +838,15 @@ defmodule Dextrin.Schema.TypeExpr do
 
   # A string's, keyword's or symbol's length in codepoints; a byte
   # string's in bytes, in bits under `:bits`; `nil` for anything else.
-  defp length_of(value, _base) when is_binary(value), do: String.length(value)
-  defp length_of(%Keyword{name: name}, _base), do: String.length(name)
-  defp length_of(%Symbol{name: name}, _base), do: String.length(name)
+  defp length_of(value, _base) when is_binary(value), do: codepoints(value)
+  defp length_of(%Keyword{name: name}, _base), do: codepoints(name)
+  defp length_of(%Symbol{name: name}, _base), do: codepoints(name)
   defp length_of(%Bytes{data: data}, {:primitive, "bits"}), do: bit_size(data)
   defp length_of(%Bytes{data: data}, _base), do: div(bit_size(data) + 7, 8)
   defp length_of(_value, _base), do: nil
+
+  # Codepoints, not graphemes: `"e\u0301"` is two (DXN.md §4.2).
+  defp codepoints(text), do: text |> String.to_charlist() |> length()
 
   defp utf8_size(value) when is_binary(value), do: byte_size(value)
   defp utf8_size(%Keyword{name: name}), do: byte_size(name)
@@ -922,6 +996,22 @@ defmodule Dextrin.Schema.TypeExpr do
   # (NaN and the infinities as their atoms), or a date, time, datetime,
   # local date-time or duration as a count of days or nanoseconds. A
   # duration with years or months has no place: their length varies.
+  @doc false
+  # Whether `value` has a place in some kind's order: a range's bound.
+  @spec comparable?(term()) :: boolean()
+  def comparable?(value), do: ordinal(value) != :none
+
+  @doc false
+  # Whether `value` is a finite number other than zero: a `multiple-of`.
+  @spec nonzero_number?(term()) :: boolean()
+  def nonzero_number?(value),
+    do: match?({:number, n} when is_number(n) and n != 0, ordinal(value))
+
+  @doc false
+  # Whether `value` is a duration of a fixed length: a `within`.
+  @spec span?(term()) :: boolean()
+  def span?(value), do: match?({:duration, _}, ordinal(value))
+
   defp ordinal(special) when special in [:nan, :positive_infinity, :negative_infinity],
     do: {:number, special}
 

@@ -112,7 +112,10 @@ read, and a refine key now refuses a value it does not apply to. Left
 out: `grammar:` and `check:`, rated low value below. **`format:` done**
 too (DXN.md §4.2a): every format of the row below but `regex`, whose
 answer depends on the engine, plus `datetime`/`local-datetime` in
-DXN's own names for JSON Schema's `date-time`. The encoding keys follow.
+DXN's own names for JSON Schema's `date-time`. **The encoding keys
+done** as well: `encoding`, `media-type`, `content` (reading DXN only:
+a media type no implementation has a reader for would check nothing),
+`encodes` and `encodes-seq`. Group 5 is complete.
 
 | Gap | Proposed |
 |---|---|

@@ -621,7 +621,7 @@ is why DXNS has no `unevaluatedItems`: a list that may go on ends in
 ### 4.2 `refine` constraints
 
 ```toon
-refine_constraints[32]{key,applies_to,meaning}:
+refine_constraints[37]{key,applies_to,meaning}:
   min,"integer/float/decimal/rational/date/time/datetime/local-datetime/duration","value >= given value of the same kind"
   max,"integer/float/decimal/rational/date/time/datetime/local-datetime/duration","value <= given value of the same kind"
   exclusive-min,"integer/float/decimal/rational/date/time/datetime/local-datetime/duration","value > given value of the same kind"
@@ -633,6 +633,11 @@ refine_constraints[32]{key,applies_to,meaning}:
   max-bytes,"string/keyword/symbol","UTF-8 byte count <= given integer"
   pattern,"string/keyword/symbol/bytes","value matches given regex (§1.3's regex type); bytes one character per byte"
   format,string,"the string is in the format named, one of §4.2a's"
+  encoding,string,"the string is valid in RFC 4648's :base64 (padded), :base64url (padded or not), :base32 (padded, upper case) or :base16 (either case)"
+  media-type,string,"what the string holds, type/subtype; checks nothing, but tells content how to read it"
+  content,string,"the string, decoded by its encoding if it has one, is a DXN document whose value matches the given type: .dxnb under application/dxnb, text otherwise"
+  encodes,bytes,"the bytes are a .dxnb document whose value matches the given type (CDDL's .cbor)"
+  encodes-seq,bytes,"the bytes are .dxnb documents back to back, each with its envelope, each matching the given type; none at all too (CDDL's .cborseq)"
   min-count,"list/set/tuple/sorted-set/array","element count >= given integer"
   max-count,"list/set/tuple/sorted-set/array","element count <= given integer"
   contains,"list/set/tuple/sorted-set/array","at least min-contains (1 when not given) and at most max-contains elements match the given type"
@@ -676,6 +681,23 @@ grammar-checked strings and named predicates of the other languages
 (CDDL's `.abnf`, protovalidate's CEL) have no refine key: neither is
 portable without a grammar engine or an expression language in every
 implementation.
+
+**`content` reads only DXN**: a `media-type` other than
+`application/dxn` or `application/dxnb` beside it is a compile error, as
+is `application/dxnb` without an `encoding`, since a string holds no raw
+bytes. Without a `content`, any media type is a name and nothing more.
+A document read for `content`, `encodes` or `encodes-seq` is its own:
+its shared values and string references (§2.4) are not the enclosing
+document's.
+
+**Every argument is checked when the schema compiles**: a count is a
+non-negative integer, a flag `true` or `false`, a bound a number, date,
+time, datetime, local date-time or a duration without years or months,
+`multiple-of` a number other than 0, `pattern` a regex, `version` 4 or
+6, `offsets` a list of `"Z"` or `"±HH:MM"`, `bits` a list of
+non-negative integers, `within` a duration without years or months,
+`media-type` a `type/subtype`. A compile error writes the argument it
+refuses in DXN.
 
 **Every key is one of these**: an unknown key, a misspelt `min-lenght`,
 is a compile error (`schema/compile`), as are `min-contains` and

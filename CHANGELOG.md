@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Every refine argument is checked when the schema compiles**: a
+  count that is no non-negative integer, a flag that is no boolean,
+  `multiple-of: 0`, `bits: 5`, a `pattern` that is no regex and the like
+  are compile errors (`schema/compile`); some raised at check time
+  before. A compile error writes the value it refuses in DXN, not as
+  Elixir's `inspect` shows it.
 - **A refine constraint refuses a value it does not apply to**: a length
   on an integer, a range on a string, `bits` on a negative integer.
   Before, several such checks raised; `finite: false` and
@@ -119,6 +125,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Encoded content** (Jan, 2026-10-20; DXN.md §4.2): `encoding:` (RFC
+  4648's base64, base64url, base32, base16), `media-type:` and
+  `content: T` on strings -- the string, decoded, is a DXN document of
+  type T, `.dxnb` under `application/dxnb` -- and `encodes: T` and
+  `encodes-seq: T` on bytes, CDDL's `.cbor` and `.cborseq`.
+  `Dextrin.Binary.Decoder.decode_sequence/2` reads documents back to
+  back.
 - **`format:`** (Jan, 2026-10-20; DXN.md §4.2a): a string in one of a
   closed set of 22 formats -- `date`, `time`, `datetime`,
   `local-datetime`, `duration`, `uuid`, `ipv4`, `ipv6`, `hostname`,
@@ -238,6 +251,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   action errors below; the DXN parser is regenerated with `ichor` 0.6.
 
 ### Fixed
+
+- **A string's length counts codepoints**, as DXN.md §4.2 says, not
+  graphemes: `"e\u0301"` is two long, as in every other implementation.
+- **A `.dxnb` document read inside another keeps the outer one's state**:
+  the shared-item and stringref tables are put back after it.
 
 - **`@uuid` reads only 8-4-4-4-12 hex digits.** It took 32 bare hex
   digits, or hyphens anywhere, which the other implementations refuse.

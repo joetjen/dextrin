@@ -313,10 +313,13 @@ defmodule Dextrin.Schema.Tree do
   defp type_references({:generic, _params, body}), do: type_references(body)
   defp type_references({:apply, _name, args}), do: Enum.flat_map(args, &type_references/1)
 
-  defp type_references({:refine, type, %{"contains" => contains}}),
-    do: type_references(type) ++ type_references(contains)
+  # A refine's base, and the types its `contains`, `content`, `encodes`
+  # and `encodes-seq` hold.
+  defp type_references({:refine, type, constraints}) do
+    held = for {key, t} <- constraints, key in ~w(contains content encodes encodes-seq), do: t
+    Enum.flat_map([type | held], &type_references/1)
+  end
 
-  defp type_references({:refine, type, _}), do: type_references(type)
   defp type_references({:list_items, particles}), do: Enum.flat_map(particles, &type_references/1)
   defp type_references({:one, type}), do: type_references(type)
 
