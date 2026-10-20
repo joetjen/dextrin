@@ -39,7 +39,7 @@
   --bg: #14131c; --surface: #1c1b27; --ink: #ecebf4; --muted: #a6a3bd; --rule: #2f2d3e;
   --accent: #b9a4f0; --accent-soft: #2c2445; --code-bg: #24222f; --kw: #e2a3cf; --str: #8fd3ad;
   --shape: #8cc9e6; --shape-soft: #1d3340; --type: #e3cf88; --type-soft: #35301c;
-    --warn: #f0a37a; --warn-soft: #3a2218;
+  --warn: #f0a37a; --warn-soft: #3a2218;
   color-scheme: dark;
 }
 *, *::before, *::after { box-sizing: border-box; }
