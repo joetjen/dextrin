@@ -834,3 +834,39 @@ categories[20]{category,raised_when}:
   document/ambiguous,"an update finds a deleted item followed by an inserted one -- a replace, or the two -- and its setting refuses to choose: always, or where the deleted item owns a comment"
   document/not-a-collection,"an edit's path goes into a value that holds no entries"
 ```
+
+## 6. Media types and identification
+
+How a program that receives a body or meets a file names DXN's three
+forms, and decides cheaply whether a body is worth decoding as one. A
+reader MAY offer this; one that does answers as below, so every
+implementation sniffs the same way.
+
+```toon
+forms[3]{form,media_type,extension}:
+  text,application/vnd.dxn,.dxn
+  binary,application/vnd.dxnb,.dxnb
+  schema,application/vnd.dxns,.dxns
+```
+
+**A media type names its form.** The three above name theirs, and any
+media type with a structured `+dxn` suffix (`application/vnd.acme.event+dxn`)
+names text: a document in DXN text whose vocabulary is the type's own.
+There is no `+dxnb` suffix. Media types compare without regard to case;
+parameters (`; charset=...`) are not part of the type, and whoever reads
+the type strips them first. Anything else names no form.
+
+**Identification is a prefix test, not a parse**: *yes* means the body
+is worth decoding as the form, never that it decodes.
+
+- **Binary**: the envelope's magic, `DX`, followed by a version byte
+  (§2.1). Whether the version is one the reader supports is decoding's
+  business.
+- **Text and schemas**: skip whitespace (`ws`, commas included), `#`
+  comments, and an optional header (`@dxn "..."`, with any whitespace
+  and comments around it); then the first character is `%` -- a map
+  (`%{`), a struct (`%Name{`, `%ns/Name[`, `%Name(2){`) or a schema
+  document. Every other body is not identified, **lists and scalars
+  included**: they are DXN, but `[`, `"`, digits, `true` and the rest
+  begin JSON just as well, and telling DXN from JSON in a body that came
+  without a type is what this test is mostly for.
