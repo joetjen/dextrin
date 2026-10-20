@@ -402,6 +402,25 @@ schema whose older readers must keep working **only ever appends**
 fields; reordering, inserting or removing one is for when every reader
 has the new version — deploy readers first (DXN.md §4.8).
 
+### Checking a tree of schemas
+
+`mix dextrin.check` reads every `.dxns` file under a directory as one
+tree: each entry named from its file's path (DXN.md §4.6), the files
+compiled in the order their references need. It prints every problem
+as `file:line: message` and fails -- a file that does not parse, a
+definition that does not compile, a versioned file holding another
+version, and a name that resolves to nothing, such as a typo in
+`acme.comon/Money`:
+
+```sh
+$ mix dextrin.check schemas/
+OK: 7 files, 26 definitions
+```
+
+A name another tree or a provider supplies is allowed by its namespace,
+`--extern google.protobuf`. `Dextrin.Schema.Tree.load/2` is the same
+check, answering the registry it compiled.
+
 ### Checking a change before it ships
 
 `mix dextrin.compat` compares the previous release's schema files with

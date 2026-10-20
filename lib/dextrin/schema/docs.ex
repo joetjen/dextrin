@@ -208,20 +208,15 @@ defmodule Dextrin.Schema.Docs do
 
   # The definitions one file holds, each knowing how to resolve a bare
   # name: an entry beside it, or a name of its own.
-  defp definitions_of(%{stem: stem, entries: entries} = file) do
-    own = List.last(stem)
-    holder = Enum.find(entries, &(&1.key == own))
-    namespace = stem |> Enum.drop(-1) |> Enum.join(".")
-    owner = holder && join(namespace, own)
-
-    names =
-      Map.new(entries, fn %{key: key} ->
-        cond do
-          key == own -> {key, owner}
-          holder -> {key, join(Enum.join(stem, "."), key)}
-          true -> {key, join(Enum.join(stem, "."), key)}
-        end
-      end)
+  #
+  # The names are the ones every reader of a tree gives them
+  # (`Dextrin.Schema.Layout`, DXN.md §4.6).
+  defp definitions_of(%{entries: entries} = file) do
+    layout = Dextrin.Schema.Layout.of(file.file, Enum.map(entries, & &1.key))
+    names = layout.names
+    holder = layout.holder
+    own = holder
+    owner = holder && Map.fetch!(names, holder)
 
     for %{key: key, value: value, doc: doc} <- entries do
       name = Map.fetch!(names, key)
@@ -249,9 +244,6 @@ defmodule Dextrin.Schema.Docs do
       }
     end
   end
-
-  defp join("", name), do: name
-  defp join(namespace, name), do: namespace <> "/" <> name
 
   @doc false
   def namespace_of(name) do

@@ -36,6 +36,17 @@ defmodule Dextrin.Schema do
   end
 
   @doc """
+  `compile/2`, each entry registered under the full name `names` gives
+  its key -- how `Dextrin.Schema.Tree` compiles a file of a tree (DXN.md
+  §4.6) -- and a bare symbol naming a sibling resolving to it.
+  """
+  @spec compile(term(), Registry.t(), %{String.t() => String.t()}) ::
+          {:ok, Registry.t()} | {:error, Dextrin.Error.t()}
+  def compile(schema_doc, base_registry, names) do
+    Dextrin.Schema.Compiler.compile(schema_doc, base_registry, names)
+  end
+
+  @doc """
   Compiles several decoded `.dxns` documents into one registry, in order,
   over `base_registry` -- each document seeing the schemas and named
   types of those before it, as `compile/2` called on each in turn. The
