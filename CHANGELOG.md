@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **HexDocs shows the README's development warning as a warning box**
+  (Jan, 2026-10-20): ExDoc renders no GitHub alert, so `mix docs` gives
+  it the README with `> [!WARNING]` turned into ExDoc's own admonition,
+  written to `doc_src/`; the README itself stays as GitHub shows it, and
+  "View Source" still points at it.
 - **The package description opens with the development warning**
   (Jan, 2026-10-20), "Under heavy development: not for production use
   before 1.0.0.", so the registry's search results show it too.
