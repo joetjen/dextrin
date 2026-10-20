@@ -10,35 +10,178 @@ defmodule Dextrin.Text.Grammar.Native do
     alias Grammar.Native.Runtime.{Parser, Tokenizer}
     alias Grammar.VM.Token
 
-    def lex_token__ANON_4(input) do
+    def lex_expr__1(input) do
       case input do
-        <<"{", rest::binary>> -> {:ok, "{", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__ANON_6(input) do
-      case input do
-        <<"%", rest::binary>> -> {:ok, "%", rest}
+        <<"-", rest::binary>> -> {:ok, "-", rest}
         _ -> :fail
       end
     end
 
     def lex_expr__0(input) do
+      Tokenizer.opt_char(&lex_expr__1/1, input)
+    end
+
+    def lex_expr__3(input) do
+      lex_token__DIGIT(input)
+    end
+
+    def lex_expr__2(input) do
+      Tokenizer.plus_char(&lex_expr__3/1, input)
+    end
+
+    def lex_expr__4(input) do
       case input do
-        <<"\"", rest::binary>> -> {:ok, "\"", rest}
+        <<"/", rest::binary>> -> {:ok, "/", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__3(input) do
-      lex_token__ESCAPE(input)
+    def lex_expr__6(input) do
+      lex_token__DIGIT(input)
     end
 
-    def lex_expr__6(input) do
+    def lex_expr__5(input) do
+      Tokenizer.plus_char(&lex_expr__6/1, input)
+    end
+
+    def lex_token__RATIONAL(input0) do
+      with {:ok, t0, rest0} <- lex_expr__0(input0),
+           {:ok, t1, rest1} <- lex_expr__2(rest0),
+           {:ok, t2, rest2} <- lex_expr__4(rest1),
+           {:ok, t3, rest3} <- lex_expr__5(rest2) do
+        {:ok, t0 <> t1 <> t2 <> t3, rest3}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__7(input) do
+      lex_token__IDENT_START(input)
+    end
+
+    def lex_expr__9(input) do
+      lex_token__IDENT_CONT(input)
+    end
+
+    def lex_expr__8(input) do
+      Tokenizer.star_char(&lex_expr__9/1, input)
+    end
+
+    def lex_expr__12(input) do
+      case input do
+        <<".", rest::binary>> -> {:ok, ".", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__13(input) do
+      lex_token__IDENT_START(input)
+    end
+
+    def lex_expr__15(input) do
+      lex_token__IDENT_CONT(input)
+    end
+
+    def lex_expr__14(input) do
+      Tokenizer.star_char(&lex_expr__15/1, input)
+    end
+
+    def lex_expr__11(input0) do
+      with {:ok, t0, rest0} <- lex_expr__12(input0),
+           {:ok, t1, rest1} <- lex_expr__13(rest0),
+           {:ok, t2, rest2} <- lex_expr__14(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__10(input) do
+      Tokenizer.star_char(&lex_expr__11/1, input)
+    end
+
+    def lex_expr__18(input) do
+      case input do
+        <<"/", rest::binary>> -> {:ok, "/", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__19(input) do
+      lex_token__IDENT_START(input)
+    end
+
+    def lex_expr__21(input) do
+      lex_token__IDENT_CONT(input)
+    end
+
+    def lex_expr__20(input) do
+      Tokenizer.star_char(&lex_expr__21/1, input)
+    end
+
+    def lex_expr__24(input) do
+      case input do
+        <<".", rest::binary>> -> {:ok, ".", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__25(input) do
+      lex_token__IDENT_START(input)
+    end
+
+    def lex_expr__27(input) do
+      lex_token__IDENT_CONT(input)
+    end
+
+    def lex_expr__26(input) do
+      Tokenizer.star_char(&lex_expr__27/1, input)
+    end
+
+    def lex_expr__23(input0) do
+      with {:ok, t0, rest0} <- lex_expr__24(input0),
+           {:ok, t1, rest1} <- lex_expr__25(rest0),
+           {:ok, t2, rest2} <- lex_expr__26(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__22(input) do
+      Tokenizer.star_char(&lex_expr__23/1, input)
+    end
+
+    def lex_expr__17(input0) do
+      with {:ok, t0, rest0} <- lex_expr__18(input0),
+           {:ok, t1, rest1} <- lex_expr__19(rest0),
+           {:ok, t2, rest2} <- lex_expr__20(rest1),
+           {:ok, t3, rest3} <- lex_expr__22(rest2) do
+        {:ok, t0 <> t1 <> t2 <> t3, rest3}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__16(input) do
+      Tokenizer.opt_char(&lex_expr__17/1, input)
+    end
+
+    def lex_token__IDENTIFIER(input0) do
+      with {:ok, t0, rest0} <- lex_expr__7(input0),
+           {:ok, t1, rest1} <- lex_expr__8(rest0),
+           {:ok, t2, rest2} <- lex_expr__10(rest1),
+           {:ok, t3, rest3} <- lex_expr__16(rest2) do
+        {:ok, t0 <> t1 <> t2 <> t3, rest3}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_token__HEX(input) do
       case input do
         <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{34, 34}, {92, 92}]) do
+          if Tokenizer.in_ranges?(c, [{97, 102}, {65, 70}, {48, 57}]) do
             {:ok, <<c::utf8>>, rest}
           else
             :fail
@@ -49,216 +192,112 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def lex_expr__5(input) do
-      Tokenizer.not_pred_char(&lex_expr__6/1, input)
-    end
-
-    def lex_expr__7(input) do
-      case input do
-        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__4(input0) do
-      with {:ok, t0, rest0} <- lex_expr__5(input0), {:ok, t1, rest1} <- lex_expr__7(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__2(input) do
-      Tokenizer.first_char_match([&lex_expr__3/1, &lex_expr__4/1], input)
-    end
-
-    def lex_expr__1(input) do
-      Tokenizer.star_char(&lex_expr__2/1, input)
-    end
-
-    def lex_expr__8(input) do
-      case input do
-        <<"\"", rest::binary>> -> {:ok, "\"", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__STRING(input0) do
-      with {:ok, t0, rest0} <- lex_expr__0(input0),
-           {:ok, t1, rest1} <- lex_expr__1(rest0),
-           {:ok, t2, rest2} <- lex_expr__8(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__9(input) do
-      lex_token__IDENTIFIER(input)
-    end
-
-    def lex_expr__10(input) do
-      case input do
-        <<":", rest::binary>> -> {:ok, ":", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__MAP_KEY(input0) do
-      with {:ok, t0, rest0} <- lex_expr__9(input0), {:ok, t1, rest1} <- lex_expr__10(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__12(input) do
+    def lex_expr__30(input) do
       case input do
         <<"-", rest::binary>> -> {:ok, "-", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__11(input) do
-      Tokenizer.opt_char(&lex_expr__12/1, input)
+    def lex_expr__29(input) do
+      Tokenizer.opt_char(&lex_expr__30/1, input)
     end
 
-    def lex_expr__14(input) do
+    def lex_expr__32(input) do
       lex_token__DIGIT(input)
     end
 
-    def lex_expr__13(input) do
-      Tokenizer.plus_char(&lex_expr__14/1, input)
+    def lex_expr__31(input) do
+      Tokenizer.plus_char(&lex_expr__32/1, input)
     end
 
-    def lex_token__INTEGER(input0) do
-      with {:ok, t0, rest0} <- lex_expr__11(input0), {:ok, t1, rest1} <- lex_expr__13(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__15(input) do
+    def lex_expr__35(input) do
       case input do
-        <<"~D[", rest::binary>> -> {:ok, "~D[", rest}
+        <<".", rest::binary>> -> {:ok, ".", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__19(input) do
-      case input do
-        <<"]", rest::binary>> -> {:ok, "]", rest}
-        _ -> :fail
-      end
+    def lex_expr__37(input) do
+      lex_token__DIGIT(input)
     end
 
-    def lex_expr__18(input) do
-      Tokenizer.not_pred_char(&lex_expr__19/1, input)
+    def lex_expr__36(input) do
+      Tokenizer.plus_char(&lex_expr__37/1, input)
     end
 
-    def lex_expr__20(input) do
-      case input do
-        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
-        _ -> :fail
-      end
+    def lex_expr__39(input) do
+      lex_token__EXPONENT(input)
     end
 
-    def lex_expr__17(input0) do
-      with {:ok, t0, rest0} <- lex_expr__18(input0), {:ok, t1, rest1} <- lex_expr__20(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
+    def lex_expr__38(input) do
+      Tokenizer.opt_char(&lex_expr__39/1, input)
     end
 
-    def lex_expr__16(input) do
-      Tokenizer.star_char(&lex_expr__17/1, input)
-    end
-
-    def lex_expr__21(input) do
-      case input do
-        <<"]", rest::binary>> -> {:ok, "]", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__DATE_SIGIL(input0) do
-      with {:ok, t0, rest0} <- lex_expr__15(input0),
-           {:ok, t1, rest1} <- lex_expr__16(rest0),
-           {:ok, t2, rest2} <- lex_expr__21(rest1) do
+    def lex_expr__34(input0) do
+      with {:ok, t0, rest0} <- lex_expr__35(input0),
+           {:ok, t1, rest1} <- lex_expr__36(rest0),
+           {:ok, t2, rest2} <- lex_expr__38(rest1) do
         {:ok, t0 <> t1 <> t2, rest2}
       else
         :fail -> :fail
       end
     end
 
-    def lex_token__ANON_3(input) do
-      case input do
-        <<"]", rest::binary>> -> {:ok, "]", rest}
-        _ -> :fail
-      end
+    def lex_expr__40(input) do
+      lex_token__EXPONENT(input)
     end
 
-    def lex_expr__22(input) do
-      case input do
-        <<"#", rest::binary>> -> {:ok, "#", rest}
-        _ -> :fail
-      end
+    def lex_expr__33(input) do
+      Tokenizer.first_char_match([&lex_expr__34/1, &lex_expr__40/1], input)
     end
 
-    def lex_expr__26(input) do
-      case input do
-        <<"\n", rest::binary>> -> {:ok, "\n", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__25(input) do
-      Tokenizer.not_pred_char(&lex_expr__26/1, input)
-    end
-
-    def lex_expr__27(input) do
-      case input do
-        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__24(input0) do
-      with {:ok, t0, rest0} <- lex_expr__25(input0), {:ok, t1, rest1} <- lex_expr__27(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__23(input) do
-      Tokenizer.star_char(&lex_expr__24/1, input)
-    end
-
-    def lex_expr__29(input) do
-      case input do
-        <<"\n", rest::binary>> -> {:ok, "\n", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__28(input) do
-      Tokenizer.opt_char(&lex_expr__29/1, input)
-    end
-
-    def lex_token__COMMENT(input0) do
-      with {:ok, t0, rest0} <- lex_expr__22(input0),
-           {:ok, t1, rest1} <- lex_expr__23(rest0),
-           {:ok, t2, rest2} <- lex_expr__28(rest1) do
+    def lex_expr__28(input0) do
+      with {:ok, t0, rest0} <- lex_expr__29(input0),
+           {:ok, t1, rest1} <- lex_expr__31(rest0),
+           {:ok, t2, rest2} <- lex_expr__33(rest1) do
         {:ok, t0 <> t1 <> t2, rest2}
       else
         :fail -> :fail
       end
     end
 
-    def lex_expr__30(input) do
+    def lex_expr__41(input) do
+      case input do
+        <<"NaN", rest::binary>> -> {:ok, "NaN", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__42(input) do
+      case input do
+        <<"Infinity", rest::binary>> -> {:ok, "Infinity", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__43(input) do
+      case input do
+        <<"-Infinity", rest::binary>> -> {:ok, "-Infinity", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_token__FLOAT(input) do
+      Tokenizer.first_char_match(
+        [&lex_expr__28/1, &lex_expr__41/1, &lex_expr__42/1, &lex_expr__43/1],
+        input
+      )
+    end
+
+    def lex_token__ANON_6(input) do
+      case input do
+        <<"%", rest::binary>> -> {:ok, "%", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__44(input) do
       case input do
         <<c::utf8, rest::binary>> ->
           if Tokenizer.in_ranges?(c, [{48, 57}]) do
@@ -272,7 +311,7 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def lex_expr__31(input) do
+    def lex_expr__45(input) do
       case input do
         <<c::utf8, rest::binary>> ->
           if Tokenizer.in_ranges?(c, [{97, 122}, {65, 90}]) do
@@ -287,714 +326,7 @@ defmodule Dextrin.Text.Grammar.Native do
     end
 
     def lex_token__ALNUM(input) do
-      Tokenizer.first_char_match([&lex_expr__30/1, &lex_expr__31/1], input)
-    end
-
-    def lex_token__IDENT_START(input) do
-      case input do
-        <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [
-               {95, 95},
-               {65, 90},
-               {97, 122},
-               {170, 170},
-               {181, 181},
-               {186, 186},
-               {192, 214},
-               {216, 246},
-               {248, 705},
-               {710, 721},
-               {736, 740},
-               {748, 748},
-               {750, 750},
-               {880, 884},
-               {886, 887},
-               {891, 893},
-               {895, 895},
-               {902, 902},
-               {904, 906},
-               {908, 908},
-               {910, 929},
-               {931, 1013},
-               {1015, 1153},
-               {1162, 1327},
-               {1329, 1366},
-               {1369, 1369},
-               {1376, 1416},
-               {1488, 1514},
-               {1519, 1522},
-               {1568, 1610},
-               {1646, 1647},
-               {1649, 1747},
-               {1749, 1749},
-               {1765, 1766},
-               {1774, 1775},
-               {1786, 1788},
-               {1791, 1791},
-               {1808, 1808},
-               {1810, 1839},
-               {1869, 1957},
-               {1969, 1969},
-               {1994, 2026},
-               {2036, 2037},
-               {2042, 2042},
-               {2048, 2069},
-               {2074, 2074},
-               {2084, 2084},
-               {2088, 2088},
-               {2112, 2136},
-               {2144, 2154},
-               {2160, 2183},
-               {2185, 2191},
-               {2208, 2249},
-               {2308, 2361},
-               {2365, 2365},
-               {2384, 2384},
-               {2392, 2401},
-               {2417, 2432},
-               {2437, 2444},
-               {2447, 2448},
-               {2451, 2472},
-               {2474, 2480},
-               {2482, 2482},
-               {2486, 2489},
-               {2493, 2493},
-               {2510, 2510},
-               {2524, 2525},
-               {2527, 2529},
-               {2544, 2545},
-               {2556, 2556},
-               {2565, 2570},
-               {2575, 2576},
-               {2579, 2600},
-               {2602, 2608},
-               {2610, 2611},
-               {2613, 2614},
-               {2616, 2617},
-               {2649, 2652},
-               {2654, 2654},
-               {2674, 2676},
-               {2693, 2701},
-               {2703, 2705},
-               {2707, 2728},
-               {2730, 2736},
-               {2738, 2739},
-               {2741, 2745},
-               {2749, 2749},
-               {2768, 2768},
-               {2784, 2785},
-               {2809, 2809},
-               {2821, 2828},
-               {2831, 2832},
-               {2835, 2856},
-               {2858, 2864},
-               {2866, 2867},
-               {2869, 2873},
-               {2877, 2877},
-               {2908, 2909},
-               {2911, 2913},
-               {2929, 2929},
-               {2947, 2947},
-               {2949, 2954},
-               {2958, 2960},
-               {2962, 2965},
-               {2969, 2970},
-               {2972, 2972},
-               {2974, 2975},
-               {2979, 2980},
-               {2984, 2986},
-               {2990, 3001},
-               {3024, 3024},
-               {3077, 3084},
-               {3086, 3088},
-               {3090, 3112},
-               {3114, 3129},
-               {3133, 3133},
-               {3160, 3162},
-               {3164, 3165},
-               {3168, 3169},
-               {3200, 3200},
-               {3205, 3212},
-               {3214, 3216},
-               {3218, 3240},
-               {3242, 3251},
-               {3253, 3257},
-               {3261, 3261},
-               {3292, 3294},
-               {3296, 3297},
-               {3313, 3314},
-               {3332, 3340},
-               {3342, 3344},
-               {3346, 3386},
-               {3389, 3389},
-               {3406, 3406},
-               {3412, 3414},
-               {3423, 3425},
-               {3450, 3455},
-               {3461, 3478},
-               {3482, 3505},
-               {3507, 3515},
-               {3517, 3517},
-               {3520, 3526},
-               {3585, 3632},
-               {3634, 3634},
-               {3648, 3654},
-               {3713, 3714},
-               {3716, 3716},
-               {3718, 3722},
-               {3724, 3747},
-               {3749, 3749},
-               {3751, 3760},
-               {3762, 3762},
-               {3773, 3773},
-               {3776, 3780},
-               {3782, 3782},
-               {3804, 3807},
-               {3840, 3840},
-               {3904, 3911},
-               {3913, 3948},
-               {3976, 3980},
-               {4096, 4138},
-               {4159, 4159},
-               {4176, 4181},
-               {4186, 4189},
-               {4193, 4193},
-               {4197, 4198},
-               {4206, 4208},
-               {4213, 4225},
-               {4238, 4238},
-               {4256, 4293},
-               {4295, 4295},
-               {4301, 4301},
-               {4304, 4346},
-               {4348, 4680},
-               {4682, 4685},
-               {4688, 4694},
-               {4696, 4696},
-               {4698, 4701},
-               {4704, 4744},
-               {4746, 4749},
-               {4752, 4784},
-               {4786, 4789},
-               {4792, 4798},
-               {4800, 4800},
-               {4802, 4805},
-               {4808, 4822},
-               {4824, 4880},
-               {4882, 4885},
-               {4888, 4954},
-               {4992, 5007},
-               {5024, 5109},
-               {5112, 5117},
-               {5121, 5740},
-               {5743, 5759},
-               {5761, 5786},
-               {5792, 5866},
-               {5870, 5880},
-               {5888, 5905},
-               {5919, 5937},
-               {5952, 5969},
-               {5984, 5996},
-               {5998, 6000},
-               {6016, 6067},
-               {6103, 6103},
-               {6108, 6108},
-               {6176, 6264},
-               {6272, 6312},
-               {6314, 6314},
-               {6320, 6389},
-               {6400, 6430},
-               {6480, 6509},
-               {6512, 6516},
-               {6528, 6571},
-               {6576, 6601},
-               {6656, 6678},
-               {6688, 6740},
-               {6823, 6823},
-               {6917, 6963},
-               {6981, 6988},
-               {7043, 7072},
-               {7086, 7087},
-               {7098, 7141},
-               {7168, 7203},
-               {7245, 7247},
-               {7258, 7293},
-               {7296, 7306},
-               {7312, 7354},
-               {7357, 7359},
-               {7401, 7404},
-               {7406, 7411},
-               {7413, 7414},
-               {7418, 7418},
-               {7424, 7615},
-               {7680, 7957},
-               {7960, 7965},
-               {7968, 8005},
-               {8008, 8013},
-               {8016, 8023},
-               {8025, 8025},
-               {8027, 8027},
-               {8029, 8029},
-               {8031, 8061},
-               {8064, 8116},
-               {8118, 8124},
-               {8126, 8126},
-               {8130, 8132},
-               {8134, 8140},
-               {8144, 8147},
-               {8150, 8155},
-               {8160, 8172},
-               {8178, 8180},
-               {8182, 8188},
-               {8305, 8305},
-               {8319, 8319},
-               {8336, 8348},
-               {8450, 8450},
-               {8455, 8455},
-               {8458, 8467},
-               {8469, 8469},
-               {8472, 8477},
-               {8484, 8484},
-               {8486, 8486},
-               {8488, 8488},
-               {8490, 8505},
-               {8508, 8511},
-               {8517, 8521},
-               {8526, 8526},
-               {8544, 8584},
-               {11264, 11492},
-               {11499, 11502},
-               {11506, 11507},
-               {11520, 11557},
-               {11559, 11559},
-               {11565, 11565},
-               {11568, 11623},
-               {11631, 11631},
-               {11648, 11670},
-               {11680, 11686},
-               {11688, 11694},
-               {11696, 11702},
-               {11704, 11710},
-               {11712, 11718},
-               {11720, 11726},
-               {11728, 11734},
-               {11736, 11742},
-               {12293, 12295},
-               {12321, 12329},
-               {12337, 12341},
-               {12344, 12348},
-               {12353, 12438},
-               {12445, 12447},
-               {12449, 12538},
-               {12540, 12543},
-               {12549, 12591},
-               {12593, 12686},
-               {12704, 12735},
-               {12784, 12799},
-               {13312, 19903},
-               {19968, 42124},
-               {42192, 42237},
-               {42240, 42508},
-               {42512, 42527},
-               {42538, 42539},
-               {42560, 42606},
-               {42623, 42653},
-               {42656, 42735},
-               {42775, 42783},
-               {42786, 42888},
-               {42891, 42972},
-               {42993, 43009},
-               {43011, 43013},
-               {43015, 43018},
-               {43020, 43042},
-               {43072, 43123},
-               {43138, 43187},
-               {43250, 43255},
-               {43259, 43259},
-               {43261, 43262},
-               {43274, 43301},
-               {43312, 43334},
-               {43360, 43388},
-               {43396, 43442},
-               {43471, 43471},
-               {43488, 43492},
-               {43494, 43503},
-               {43514, 43518},
-               {43520, 43560},
-               {43584, 43586},
-               {43588, 43595},
-               {43616, 43638},
-               {43642, 43642},
-               {43646, 43695},
-               {43697, 43697},
-               {43701, 43702},
-               {43705, 43709},
-               {43712, 43712},
-               {43714, 43714},
-               {43739, 43741},
-               {43744, 43754},
-               {43762, 43764},
-               {43777, 43782},
-               {43785, 43790},
-               {43793, 43798},
-               {43808, 43814},
-               {43816, 43822},
-               {43824, 43866},
-               {43868, 43881},
-               {43888, 44002},
-               {44032, 55203},
-               {55216, 55238},
-               {55243, 55291},
-               {63744, 64109},
-               {64112, 64217},
-               {64256, 64262},
-               {64275, 64279},
-               {64285, 64285},
-               {64287, 64296},
-               {64298, 64310},
-               {64312, 64316},
-               {64318, 64318},
-               {64320, 64321},
-               {64323, 64324},
-               {64326, 64433},
-               {64467, 64605},
-               {64612, 64829},
-               {64848, 64911},
-               {64914, 64967},
-               {65008, 65017},
-               {65137, 65137},
-               {65139, 65139},
-               {65143, 65143},
-               {65145, 65145},
-               {65147, 65147},
-               {65149, 65149},
-               {65151, 65276},
-               {65313, 65338},
-               {65345, 65370},
-               {65382, 65437},
-               {65440, 65470},
-               {65474, 65479},
-               {65482, 65487},
-               {65490, 65495},
-               {65498, 65500},
-               {65536, 65547},
-               {65549, 65574},
-               {65576, 65594},
-               {65596, 65597},
-               {65599, 65613},
-               {65616, 65629},
-               {65664, 65786},
-               {65856, 65908},
-               {66176, 66204},
-               {66208, 66256},
-               {66304, 66335},
-               {66349, 66378},
-               {66384, 66421},
-               {66432, 66461},
-               {66464, 66499},
-               {66504, 66511},
-               {66513, 66517},
-               {66560, 66717},
-               {66736, 66771},
-               {66776, 66811},
-               {66816, 66855},
-               {66864, 66915},
-               {66928, 66938},
-               {66940, 66954},
-               {66956, 66962},
-               {66964, 66965},
-               {66967, 66977},
-               {66979, 66993},
-               {66995, 67001},
-               {67003, 67004},
-               {67008, 67059},
-               {67072, 67382},
-               {67392, 67413},
-               {67424, 67431},
-               {67456, 67461},
-               {67463, 67504},
-               {67506, 67514},
-               {67584, 67589},
-               {67592, 67592},
-               {67594, 67637},
-               {67639, 67640},
-               {67644, 67644},
-               {67647, 67669},
-               {67680, 67702},
-               {67712, 67742},
-               {67808, 67826},
-               {67828, 67829},
-               {67840, 67861},
-               {67872, 67897},
-               {67904, 67929},
-               {67968, 68023},
-               {68030, 68031},
-               {68096, 68096},
-               {68112, 68115},
-               {68117, 68119},
-               {68121, 68149},
-               {68192, 68220},
-               {68224, 68252},
-               {68288, 68295},
-               {68297, 68324},
-               {68352, 68405},
-               {68416, 68437},
-               {68448, 68466},
-               {68480, 68497},
-               {68608, 68680},
-               {68736, 68786},
-               {68800, 68850},
-               {68864, 68899},
-               {68938, 68965},
-               {68975, 68997},
-               {69248, 69289},
-               {69296, 69297},
-               {69314, 69319},
-               {69376, 69404},
-               {69415, 69415},
-               {69424, 69445},
-               {69488, 69505},
-               {69552, 69572},
-               {69600, 69622},
-               {69635, 69687},
-               {69745, 69746},
-               {69749, 69749},
-               {69763, 69807},
-               {69840, 69864},
-               {69891, 69926},
-               {69956, 69956},
-               {69959, 69959},
-               {69968, 70002},
-               {70006, 70006},
-               {70019, 70066},
-               {70081, 70084},
-               {70106, 70106},
-               {70108, 70108},
-               {70144, 70161},
-               {70163, 70187},
-               {70207, 70208},
-               {70272, 70278},
-               {70280, 70280},
-               {70282, 70285},
-               {70287, 70301},
-               {70303, 70312},
-               {70320, 70366},
-               {70405, 70412},
-               {70415, 70416},
-               {70419, 70440},
-               {70442, 70448},
-               {70450, 70451},
-               {70453, 70457},
-               {70461, 70461},
-               {70480, 70480},
-               {70493, 70497},
-               {70528, 70537},
-               {70539, 70539},
-               {70542, 70542},
-               {70544, 70581},
-               {70583, 70583},
-               {70609, 70609},
-               {70611, 70611},
-               {70656, 70708},
-               {70727, 70730},
-               {70751, 70753},
-               {70784, 70831},
-               {70852, 70853},
-               {70855, 70855},
-               {71040, 71086},
-               {71128, 71131},
-               {71168, 71215},
-               {71236, 71236},
-               {71296, 71338},
-               {71352, 71352},
-               {71424, 71450},
-               {71488, 71494},
-               {71680, 71723},
-               {71840, 71903},
-               {71935, 71942},
-               {71945, 71945},
-               {71948, 71955},
-               {71957, 71958},
-               {71960, 71983},
-               {71999, 71999},
-               {72001, 72001},
-               {72096, 72103},
-               {72106, 72144},
-               {72161, 72161},
-               {72163, 72163},
-               {72192, 72192},
-               {72203, 72242},
-               {72250, 72250},
-               {72272, 72272},
-               {72284, 72329},
-               {72349, 72349},
-               {72368, 72440},
-               {72640, 72672},
-               {72704, 72712},
-               {72714, 72750},
-               {72768, 72768},
-               {72818, 72847},
-               {72960, 72966},
-               {72968, 72969},
-               {72971, 73008},
-               {73030, 73030},
-               {73056, 73061},
-               {73063, 73064},
-               {73066, 73097},
-               {73112, 73112},
-               {73136, 73179},
-               {73440, 73458},
-               {73474, 73474},
-               {73476, 73488},
-               {73490, 73523},
-               {73648, 73648},
-               {73728, 74649},
-               {74752, 74862},
-               {74880, 75075},
-               {77712, 77808},
-               {77824, 78895},
-               {78913, 78918},
-               {78944, 82938},
-               {82944, 83526},
-               {90368, 90397},
-               {92160, 92728},
-               {92736, 92766},
-               {92784, 92862},
-               {92880, 92909},
-               {92928, 92975},
-               {92992, 92995},
-               {93027, 93047},
-               {93053, 93071},
-               {93504, 93548},
-               {93760, 93823},
-               {93856, 93880},
-               {93883, 93907},
-               {93952, 94026},
-               {94032, 94032},
-               {94099, 94111},
-               {94176, 94177},
-               {94179, 94179},
-               {94194, 94198},
-               {94208, 101_589},
-               {101_631, 101_662},
-               {101_760, 101_874},
-               {110_576, 110_579},
-               {110_581, 110_587},
-               {110_589, 110_590},
-               {110_592, 110_882},
-               {110_898, 110_898},
-               {110_928, 110_930},
-               {110_933, 110_933},
-               {110_948, 110_951},
-               {110_960, 111_355},
-               {113_664, 113_770},
-               {113_776, 113_788},
-               {113_792, 113_800},
-               {113_808, 113_817},
-               {119_808, 119_892},
-               {119_894, 119_964},
-               {119_966, 119_967},
-               {119_970, 119_970},
-               {119_973, 119_974},
-               {119_977, 119_980},
-               {119_982, 119_993},
-               {119_995, 119_995},
-               {119_997, 120_003},
-               {120_005, 120_069},
-               {120_071, 120_074},
-               {120_077, 120_084},
-               {120_086, 120_092},
-               {120_094, 120_121},
-               {120_123, 120_126},
-               {120_128, 120_132},
-               {120_134, 120_134},
-               {120_138, 120_144},
-               {120_146, 120_485},
-               {120_488, 120_512},
-               {120_514, 120_538},
-               {120_540, 120_570},
-               {120_572, 120_596},
-               {120_598, 120_628},
-               {120_630, 120_654},
-               {120_656, 120_686},
-               {120_688, 120_712},
-               {120_714, 120_744},
-               {120_746, 120_770},
-               {120_772, 120_779},
-               {122_624, 122_654},
-               {122_661, 122_666},
-               {122_928, 122_989},
-               {123_136, 123_180},
-               {123_191, 123_197},
-               {123_214, 123_214},
-               {123_536, 123_565},
-               {123_584, 123_627},
-               {124_112, 124_139},
-               {124_368, 124_397},
-               {124_400, 124_400},
-               {124_608, 124_638},
-               {124_640, 124_642},
-               {124_644, 124_645},
-               {124_647, 124_653},
-               {124_656, 124_660},
-               {124_670, 124_671},
-               {124_896, 124_902},
-               {124_904, 124_907},
-               {124_909, 124_910},
-               {124_912, 124_926},
-               {124_928, 125_124},
-               {125_184, 125_251},
-               {125_259, 125_259},
-               {126_464, 126_467},
-               {126_469, 126_495},
-               {126_497, 126_498},
-               {126_500, 126_500},
-               {126_503, 126_503},
-               {126_505, 126_514},
-               {126_516, 126_519},
-               {126_521, 126_521},
-               {126_523, 126_523},
-               {126_530, 126_530},
-               {126_535, 126_535},
-               {126_537, 126_537},
-               {126_539, 126_539},
-               {126_541, 126_543},
-               {126_545, 126_546},
-               {126_548, 126_548},
-               {126_551, 126_551},
-               {126_553, 126_553},
-               {126_555, 126_555},
-               {126_557, 126_557},
-               {126_559, 126_559},
-               {126_561, 126_562},
-               {126_564, 126_564},
-               {126_567, 126_570},
-               {126_572, 126_578},
-               {126_580, 126_583},
-               {126_585, 126_588},
-               {126_590, 126_590},
-               {126_592, 126_601},
-               {126_603, 126_619},
-               {126_625, 126_627},
-               {126_629, 126_633},
-               {126_635, 126_651},
-               {131_072, 173_791},
-               {173_824, 178_205},
-               {178_208, 183_981},
-               {183_984, 191_456},
-               {191_472, 192_093},
-               {194_560, 195_101},
-               {196_608, 201_546},
-               {201_552, 210_041}
-             ]) do
-            {:ok, <<c::utf8>>, rest}
-          else
-            :fail
-          end
-
-        _ ->
-          :fail
-      end
+      Tokenizer.first_char_match([&lex_expr__44/1, &lex_expr__45/1], input)
     end
 
     def lex_token__DIGIT(input) do
@@ -1011,115 +343,17 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def lex_expr__33(input) do
+    def lex_token__ANON_5(input) do
       case input do
-        <<"-", rest::binary>> -> {:ok, "-", rest}
+        <<"}", rest::binary>> -> {:ok, "}", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__32(input) do
-      Tokenizer.opt_char(&lex_expr__33/1, input)
-    end
-
-    def lex_expr__35(input) do
-      lex_token__DIGIT(input)
-    end
-
-    def lex_expr__34(input) do
-      Tokenizer.plus_char(&lex_expr__35/1, input)
-    end
-
-    def lex_expr__38(input) do
-      case input do
-        <<".", rest::binary>> -> {:ok, ".", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__40(input) do
-      lex_token__DIGIT(input)
-    end
-
-    def lex_expr__39(input) do
-      Tokenizer.plus_char(&lex_expr__40/1, input)
-    end
-
-    def lex_expr__37(input0) do
-      with {:ok, t0, rest0} <- lex_expr__38(input0), {:ok, t1, rest1} <- lex_expr__39(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__36(input) do
-      Tokenizer.opt_char(&lex_expr__37/1, input)
-    end
-
-    def lex_expr__41(input) do
-      case input do
-        <<"M", rest::binary>> -> {:ok, "M", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__DECIMAL(input0) do
-      with {:ok, t0, rest0} <- lex_expr__32(input0),
-           {:ok, t1, rest1} <- lex_expr__34(rest0),
-           {:ok, t2, rest2} <- lex_expr__36(rest1),
-           {:ok, t3, rest3} <- lex_expr__41(rest2) do
-        {:ok, t0 <> t1 <> t2 <> t3, rest3}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__43(input) do
-      lex_token__SPACE(input)
-    end
-
-    def lex_expr__44(input) do
-      lex_token__COMMENT(input)
-    end
-
-    def lex_expr__42(input) do
-      Tokenizer.first_char_match([&lex_expr__43/1, &lex_expr__44/1], input)
-    end
-
-    def lex_token__TRIVIA(input) do
-      Tokenizer.star_char(&lex_expr__42/1, input)
-    end
-
-    def lex_token__AT(input) do
-      case input do
-        <<"@", rest::binary>> -> {:ok, "@", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__45(input) do
-      case input do
-        <<"?", rest::binary>> -> {:ok, "?", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__47(input) do
-      lex_token__ESCAPE(input)
-    end
-
-    def lex_expr__48(input) do
-      case input do
-        <<"s", rest::binary>> -> {:ok, "s", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__51(input) do
+    def lex_token__ALPHA(input) do
       case input do
         <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{32, 32}, {9, 9}, {13, 13}, {10, 10}]) do
+          if Tokenizer.in_ranges?(c, [{97, 122}, {65, 90}]) do
             {:ok, <<c::utf8>>, rest}
           else
             :fail
@@ -1130,147 +364,62 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def lex_expr__50(input) do
-      Tokenizer.not_pred_char(&lex_expr__51/1, input)
-    end
-
-    def lex_expr__52(input) do
+    def lex_token__ANON_1(input) do
       case input do
-        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
+        <<"@dxn", rest::binary>> -> {:ok, "@dxn", rest}
         _ -> :fail
-      end
-    end
-
-    def lex_expr__49(input0) do
-      with {:ok, t0, rest0} <- lex_expr__50(input0), {:ok, t1, rest1} <- lex_expr__52(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
       end
     end
 
     def lex_expr__46(input) do
-      Tokenizer.first_char_match([&lex_expr__47/1, &lex_expr__48/1, &lex_expr__49/1], input)
+      lex_token__IDENTIFIER(input)
     end
 
-    def lex_token__CHAR(input0) do
-      with {:ok, t0, rest0} <- lex_expr__45(input0), {:ok, t1, rest1} <- lex_expr__46(rest0) do
+    def lex_expr__47(input) do
+      case input do
+        <<":", rest::binary>> -> {:ok, ":", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_token__MAP_KEY(input0) do
+      with {:ok, t0, rest0} <- lex_expr__46(input0), {:ok, t1, rest1} <- lex_expr__47(rest0) do
         {:ok, t0 <> t1, rest1}
       else
         :fail -> :fail
       end
     end
 
-    def lex_token__NIL(input) do
+    def lex_token__ANON_3(input) do
       case input do
-        <<"nil", rest::binary>> -> {:ok, "nil", rest}
+        <<"]", rest::binary>> -> {:ok, "]", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__55(input) do
+    def lex_expr__48(input) do
       case input do
-        <<"-", rest::binary>> -> {:ok, "-", rest}
-        _ -> :fail
+        <<c::utf8, rest::binary>> ->
+          if Tokenizer.in_ranges?(c, [{32, 32}, {9, 9}, {13, 13}, {10, 10}, {44, 44}]) do
+            {:ok, <<c::utf8>>, rest}
+          else
+            :fail
+          end
+
+        _ ->
+          :fail
       end
     end
 
-    def lex_expr__54(input) do
-      Tokenizer.opt_char(&lex_expr__55/1, input)
+    def lex_token__SPACE(input) do
+      Tokenizer.plus_char(&lex_expr__48/1, input)
     end
 
-    def lex_expr__57(input) do
-      lex_token__DIGIT(input)
-    end
-
-    def lex_expr__56(input) do
-      Tokenizer.plus_char(&lex_expr__57/1, input)
-    end
-
-    def lex_expr__60(input) do
-      case input do
-        <<".", rest::binary>> -> {:ok, ".", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__62(input) do
-      lex_token__DIGIT(input)
-    end
-
-    def lex_expr__61(input) do
-      Tokenizer.plus_char(&lex_expr__62/1, input)
-    end
-
-    def lex_expr__64(input) do
-      lex_token__EXPONENT(input)
-    end
-
-    def lex_expr__63(input) do
-      Tokenizer.opt_char(&lex_expr__64/1, input)
-    end
-
-    def lex_expr__59(input0) do
-      with {:ok, t0, rest0} <- lex_expr__60(input0),
-           {:ok, t1, rest1} <- lex_expr__61(rest0),
-           {:ok, t2, rest2} <- lex_expr__63(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__65(input) do
-      lex_token__EXPONENT(input)
-    end
-
-    def lex_expr__58(input) do
-      Tokenizer.first_char_match([&lex_expr__59/1, &lex_expr__65/1], input)
-    end
-
-    def lex_expr__53(input0) do
-      with {:ok, t0, rest0} <- lex_expr__54(input0),
-           {:ok, t1, rest1} <- lex_expr__56(rest0),
-           {:ok, t2, rest2} <- lex_expr__58(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__66(input) do
-      case input do
-        <<"NaN", rest::binary>> -> {:ok, "NaN", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__67(input) do
-      case input do
-        <<"Infinity", rest::binary>> -> {:ok, "Infinity", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__68(input) do
-      case input do
-        <<"-Infinity", rest::binary>> -> {:ok, "-Infinity", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__FLOAT(input) do
-      Tokenizer.first_char_match(
-        [&lex_expr__53/1, &lex_expr__66/1, &lex_expr__67/1, &lex_expr__68/1],
-        input
-      )
-    end
-
-    def lex_expr__69(input) do
+    def lex_expr__49(input) do
       lex_token__IDENT_START(input)
     end
 
-    def lex_expr__70(input) do
+    def lex_expr__50(input) do
       case input do
         <<c::utf8, rest::binary>> ->
           if Tokenizer.in_ranges?(c, [
@@ -2095,7 +1244,14 @@ defmodule Dextrin.Text.Grammar.Native do
     end
 
     def lex_token__IDENT_CONT(input) do
-      Tokenizer.first_char_match([&lex_expr__69/1, &lex_expr__70/1], input)
+      Tokenizer.first_char_match([&lex_expr__49/1, &lex_expr__50/1], input)
+    end
+
+    def lex_token__TRUE(input) do
+      case input do
+        <<"true", rest::binary>> -> {:ok, "true", rest}
+        _ -> :fail
+      end
     end
 
     def lex_token__FALSE(input) do
@@ -2105,436 +1261,814 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def lex_expr__72(input) do
+    def lex_expr__52(input) do
+      lex_token__SPACE(input)
+    end
+
+    def lex_expr__53(input) do
+      lex_token__COMMENT(input)
+    end
+
+    def lex_expr__51(input) do
+      Tokenizer.first_char_match([&lex_expr__52/1, &lex_expr__53/1], input)
+    end
+
+    def lex_token__TRIVIA(input) do
+      Tokenizer.star_char(&lex_expr__51/1, input)
+    end
+
+    def lex_token__ANON_9(input) do
       case input do
-        <<"-", rest::binary>> -> {:ok, "-", rest}
+        <<")", rest::binary>> -> {:ok, ")", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__71(input) do
-      Tokenizer.opt_char(&lex_expr__72/1, input)
-    end
-
-    def lex_expr__74(input) do
-      lex_token__DIGIT(input)
-    end
-
-    def lex_expr__73(input) do
-      Tokenizer.plus_char(&lex_expr__74/1, input)
-    end
-
-    def lex_expr__75(input) do
+    def lex_expr__54(input) do
       case input do
-        <<"/", rest::binary>> -> {:ok, "/", rest}
+        <<":", rest::binary>> -> {:ok, ":", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__77(input) do
-      lex_token__DIGIT(input)
+    def lex_expr__56(input) do
+      lex_token__IDENTIFIER(input)
     end
 
-    def lex_expr__76(input) do
-      Tokenizer.plus_char(&lex_expr__77/1, input)
+    def lex_expr__57(input) do
+      lex_token__STRING(input)
     end
 
-    def lex_token__RATIONAL(input0) do
-      with {:ok, t0, rest0} <- lex_expr__71(input0),
-           {:ok, t1, rest1} <- lex_expr__73(rest0),
-           {:ok, t2, rest2} <- lex_expr__75(rest1),
-           {:ok, t3, rest3} <- lex_expr__76(rest2) do
-        {:ok, t0 <> t1 <> t2 <> t3, rest3}
+    def lex_expr__55(input) do
+      Tokenizer.first_char_match([&lex_expr__56/1, &lex_expr__57/1], input)
+    end
+
+    def lex_token__KEYWORD(input0) do
+      with {:ok, t0, rest0} <- lex_expr__54(input0), {:ok, t1, rest1} <- lex_expr__55(rest0) do
+        {:ok, t0 <> t1, rest1}
       else
         :fail -> :fail
       end
     end
 
-    def lex_token__ANON_1(input) do
+    def lex_expr__58(input) do
       case input do
-        <<"@dxn", rest::binary>> -> {:ok, "@dxn", rest}
+        <<"~D[", rest::binary>> -> {:ok, "~D[", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__78(input) do
-      case input do
-        <<"~T[", rest::binary>> -> {:ok, "~T[", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__82(input) do
+    def lex_expr__62(input) do
       case input do
         <<"]", rest::binary>> -> {:ok, "]", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__81(input) do
-      Tokenizer.not_pred_char(&lex_expr__82/1, input)
+    def lex_expr__61(input) do
+      Tokenizer.not_pred_char(&lex_expr__62/1, input)
     end
 
-    def lex_expr__83(input) do
+    def lex_expr__63(input) do
       case input do
         <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__80(input0) do
-      with {:ok, t0, rest0} <- lex_expr__81(input0), {:ok, t1, rest1} <- lex_expr__83(rest0) do
+    def lex_expr__60(input0) do
+      with {:ok, t0, rest0} <- lex_expr__61(input0), {:ok, t1, rest1} <- lex_expr__63(rest0) do
         {:ok, t0 <> t1, rest1}
       else
         :fail -> :fail
       end
     end
 
-    def lex_expr__79(input) do
-      Tokenizer.star_char(&lex_expr__80/1, input)
+    def lex_expr__59(input) do
+      Tokenizer.star_char(&lex_expr__60/1, input)
     end
 
-    def lex_expr__84(input) do
+    def lex_expr__64(input) do
       case input do
         <<"]", rest::binary>> -> {:ok, "]", rest}
         _ -> :fail
       end
     end
 
-    def lex_token__TIME_SIGIL(input0) do
-      with {:ok, t0, rest0} <- lex_expr__78(input0),
-           {:ok, t1, rest1} <- lex_expr__79(rest0),
-           {:ok, t2, rest2} <- lex_expr__84(rest1) do
+    def lex_token__DATE_SIGIL(input0) do
+      with {:ok, t0, rest0} <- lex_expr__58(input0),
+           {:ok, t1, rest1} <- lex_expr__59(rest0),
+           {:ok, t2, rest2} <- lex_expr__64(rest1) do
         {:ok, t0 <> t1 <> t2, rest2}
       else
         :fail -> :fail
       end
     end
 
-    def lex_token__AT_DISCARD(input) do
+    def lex_token__ANON_7(input) do
       case input do
-        <<"@_", rest::binary>> -> {:ok, "@_", rest}
+        <<"=>", rest::binary>> -> {:ok, "=>", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__85(input) do
-      lex_token__IDENT_START(input)
-    end
-
-    def lex_expr__87(input) do
-      lex_token__IDENT_CONT(input)
-    end
-
-    def lex_expr__86(input) do
-      Tokenizer.star_char(&lex_expr__87/1, input)
-    end
-
-    def lex_expr__90(input) do
-      case input do
-        <<".", rest::binary>> -> {:ok, ".", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__91(input) do
-      lex_token__IDENT_START(input)
-    end
-
-    def lex_expr__93(input) do
-      lex_token__IDENT_CONT(input)
-    end
-
-    def lex_expr__92(input) do
-      Tokenizer.star_char(&lex_expr__93/1, input)
-    end
-
-    def lex_expr__89(input0) do
-      with {:ok, t0, rest0} <- lex_expr__90(input0),
-           {:ok, t1, rest1} <- lex_expr__91(rest0),
-           {:ok, t2, rest2} <- lex_expr__92(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__88(input) do
-      Tokenizer.star_char(&lex_expr__89/1, input)
-    end
-
-    def lex_expr__96(input) do
-      case input do
-        <<"/", rest::binary>> -> {:ok, "/", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__97(input) do
-      lex_token__IDENT_START(input)
-    end
-
-    def lex_expr__99(input) do
-      lex_token__IDENT_CONT(input)
-    end
-
-    def lex_expr__98(input) do
-      Tokenizer.star_char(&lex_expr__99/1, input)
-    end
-
-    def lex_expr__102(input) do
-      case input do
-        <<".", rest::binary>> -> {:ok, ".", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__103(input) do
-      lex_token__IDENT_START(input)
-    end
-
-    def lex_expr__105(input) do
-      lex_token__IDENT_CONT(input)
-    end
-
-    def lex_expr__104(input) do
-      Tokenizer.star_char(&lex_expr__105/1, input)
-    end
-
-    def lex_expr__101(input0) do
-      with {:ok, t0, rest0} <- lex_expr__102(input0),
-           {:ok, t1, rest1} <- lex_expr__103(rest0),
-           {:ok, t2, rest2} <- lex_expr__104(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__100(input) do
-      Tokenizer.star_char(&lex_expr__101/1, input)
-    end
-
-    def lex_expr__95(input0) do
-      with {:ok, t0, rest0} <- lex_expr__96(input0),
-           {:ok, t1, rest1} <- lex_expr__97(rest0),
-           {:ok, t2, rest2} <- lex_expr__98(rest1),
-           {:ok, t3, rest3} <- lex_expr__100(rest2) do
-        {:ok, t0 <> t1 <> t2 <> t3, rest3}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__94(input) do
-      Tokenizer.opt_char(&lex_expr__95/1, input)
-    end
-
-    def lex_token__IDENTIFIER(input0) do
-      with {:ok, t0, rest0} <- lex_expr__85(input0),
-           {:ok, t1, rest1} <- lex_expr__86(rest0),
-           {:ok, t2, rest2} <- lex_expr__88(rest1),
-           {:ok, t3, rest3} <- lex_expr__94(rest2) do
-        {:ok, t0 <> t1 <> t2 <> t3, rest3}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__106(input) do
-      case input do
-        <<"\\", rest::binary>> -> {:ok, "\\", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__108(input) do
-      case input do
-        <<"\"", rest::binary>> -> {:ok, "\"", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__109(input) do
-      case input do
-        <<"\\", rest::binary>> -> {:ok, "\\", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__110(input) do
-      case input do
-        <<"n", rest::binary>> -> {:ok, "n", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__111(input) do
-      case input do
-        <<"t", rest::binary>> -> {:ok, "t", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__112(input) do
-      case input do
-        <<"r", rest::binary>> -> {:ok, "r", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__113(input) do
-      case input do
-        <<"0", rest::binary>> -> {:ok, "0", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__114(input) do
-      case input do
-        <<"a", rest::binary>> -> {:ok, "a", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__115(input) do
-      case input do
-        <<"b", rest::binary>> -> {:ok, "b", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__116(input) do
-      case input do
-        <<"f", rest::binary>> -> {:ok, "f", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__117(input) do
-      case input do
-        <<"v", rest::binary>> -> {:ok, "v", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__119(input) do
-      case input do
-        <<"x{", rest::binary>> -> {:ok, "x{", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__121(input) do
-      lex_token__HEX(input)
-    end
-
-    def lex_expr__120(input) do
-      Tokenizer.plus_char(&lex_expr__121/1, input)
-    end
-
-    def lex_expr__122(input) do
-      case input do
-        <<"}", rest::binary>> -> {:ok, "}", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__118(input0) do
-      with {:ok, t0, rest0} <- lex_expr__119(input0),
-           {:ok, t1, rest1} <- lex_expr__120(rest0),
-           {:ok, t2, rest2} <- lex_expr__122(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__107(input) do
-      Tokenizer.first_char_match(
-        [
-          &lex_expr__108/1,
-          &lex_expr__109/1,
-          &lex_expr__110/1,
-          &lex_expr__111/1,
-          &lex_expr__112/1,
-          &lex_expr__113/1,
-          &lex_expr__114/1,
-          &lex_expr__115/1,
-          &lex_expr__116/1,
-          &lex_expr__117/1,
-          &lex_expr__118/1
-        ],
-        input
-      )
-    end
-
-    def lex_token__ESCAPE(input0) do
-      with {:ok, t0, rest0} <- lex_expr__106(input0), {:ok, t1, rest1} <- lex_expr__107(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__123(input) do
-      case input do
-        <<"~U[", rest::binary>> -> {:ok, "~U[", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__127(input) do
-      case input do
-        <<"]", rest::binary>> -> {:ok, "]", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__126(input) do
-      Tokenizer.not_pred_char(&lex_expr__127/1, input)
-    end
-
-    def lex_expr__128(input) do
-      case input do
-        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__125(input0) do
-      with {:ok, t0, rest0} <- lex_expr__126(input0), {:ok, t1, rest1} <- lex_expr__128(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__124(input) do
-      Tokenizer.star_char(&lex_expr__125/1, input)
-    end
-
-    def lex_expr__129(input) do
-      case input do
-        <<"]", rest::binary>> -> {:ok, "]", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__INSTANT_SIGIL(input0) do
-      with {:ok, t0, rest0} <- lex_expr__123(input0),
-           {:ok, t1, rest1} <- lex_expr__124(rest0),
-           {:ok, t2, rest2} <- lex_expr__129(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_token__ALPHA(input) do
+    def lex_token__IDENT_START(input) do
       case input do
         <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{97, 122}, {65, 90}]) do
+          if Tokenizer.in_ranges?(c, [
+               {95, 95},
+               {65, 90},
+               {97, 122},
+               {170, 170},
+               {181, 181},
+               {186, 186},
+               {192, 214},
+               {216, 246},
+               {248, 705},
+               {710, 721},
+               {736, 740},
+               {748, 748},
+               {750, 750},
+               {880, 884},
+               {886, 887},
+               {891, 893},
+               {895, 895},
+               {902, 902},
+               {904, 906},
+               {908, 908},
+               {910, 929},
+               {931, 1013},
+               {1015, 1153},
+               {1162, 1327},
+               {1329, 1366},
+               {1369, 1369},
+               {1376, 1416},
+               {1488, 1514},
+               {1519, 1522},
+               {1568, 1610},
+               {1646, 1647},
+               {1649, 1747},
+               {1749, 1749},
+               {1765, 1766},
+               {1774, 1775},
+               {1786, 1788},
+               {1791, 1791},
+               {1808, 1808},
+               {1810, 1839},
+               {1869, 1957},
+               {1969, 1969},
+               {1994, 2026},
+               {2036, 2037},
+               {2042, 2042},
+               {2048, 2069},
+               {2074, 2074},
+               {2084, 2084},
+               {2088, 2088},
+               {2112, 2136},
+               {2144, 2154},
+               {2160, 2183},
+               {2185, 2191},
+               {2208, 2249},
+               {2308, 2361},
+               {2365, 2365},
+               {2384, 2384},
+               {2392, 2401},
+               {2417, 2432},
+               {2437, 2444},
+               {2447, 2448},
+               {2451, 2472},
+               {2474, 2480},
+               {2482, 2482},
+               {2486, 2489},
+               {2493, 2493},
+               {2510, 2510},
+               {2524, 2525},
+               {2527, 2529},
+               {2544, 2545},
+               {2556, 2556},
+               {2565, 2570},
+               {2575, 2576},
+               {2579, 2600},
+               {2602, 2608},
+               {2610, 2611},
+               {2613, 2614},
+               {2616, 2617},
+               {2649, 2652},
+               {2654, 2654},
+               {2674, 2676},
+               {2693, 2701},
+               {2703, 2705},
+               {2707, 2728},
+               {2730, 2736},
+               {2738, 2739},
+               {2741, 2745},
+               {2749, 2749},
+               {2768, 2768},
+               {2784, 2785},
+               {2809, 2809},
+               {2821, 2828},
+               {2831, 2832},
+               {2835, 2856},
+               {2858, 2864},
+               {2866, 2867},
+               {2869, 2873},
+               {2877, 2877},
+               {2908, 2909},
+               {2911, 2913},
+               {2929, 2929},
+               {2947, 2947},
+               {2949, 2954},
+               {2958, 2960},
+               {2962, 2965},
+               {2969, 2970},
+               {2972, 2972},
+               {2974, 2975},
+               {2979, 2980},
+               {2984, 2986},
+               {2990, 3001},
+               {3024, 3024},
+               {3077, 3084},
+               {3086, 3088},
+               {3090, 3112},
+               {3114, 3129},
+               {3133, 3133},
+               {3160, 3162},
+               {3164, 3165},
+               {3168, 3169},
+               {3200, 3200},
+               {3205, 3212},
+               {3214, 3216},
+               {3218, 3240},
+               {3242, 3251},
+               {3253, 3257},
+               {3261, 3261},
+               {3292, 3294},
+               {3296, 3297},
+               {3313, 3314},
+               {3332, 3340},
+               {3342, 3344},
+               {3346, 3386},
+               {3389, 3389},
+               {3406, 3406},
+               {3412, 3414},
+               {3423, 3425},
+               {3450, 3455},
+               {3461, 3478},
+               {3482, 3505},
+               {3507, 3515},
+               {3517, 3517},
+               {3520, 3526},
+               {3585, 3632},
+               {3634, 3634},
+               {3648, 3654},
+               {3713, 3714},
+               {3716, 3716},
+               {3718, 3722},
+               {3724, 3747},
+               {3749, 3749},
+               {3751, 3760},
+               {3762, 3762},
+               {3773, 3773},
+               {3776, 3780},
+               {3782, 3782},
+               {3804, 3807},
+               {3840, 3840},
+               {3904, 3911},
+               {3913, 3948},
+               {3976, 3980},
+               {4096, 4138},
+               {4159, 4159},
+               {4176, 4181},
+               {4186, 4189},
+               {4193, 4193},
+               {4197, 4198},
+               {4206, 4208},
+               {4213, 4225},
+               {4238, 4238},
+               {4256, 4293},
+               {4295, 4295},
+               {4301, 4301},
+               {4304, 4346},
+               {4348, 4680},
+               {4682, 4685},
+               {4688, 4694},
+               {4696, 4696},
+               {4698, 4701},
+               {4704, 4744},
+               {4746, 4749},
+               {4752, 4784},
+               {4786, 4789},
+               {4792, 4798},
+               {4800, 4800},
+               {4802, 4805},
+               {4808, 4822},
+               {4824, 4880},
+               {4882, 4885},
+               {4888, 4954},
+               {4992, 5007},
+               {5024, 5109},
+               {5112, 5117},
+               {5121, 5740},
+               {5743, 5759},
+               {5761, 5786},
+               {5792, 5866},
+               {5870, 5880},
+               {5888, 5905},
+               {5919, 5937},
+               {5952, 5969},
+               {5984, 5996},
+               {5998, 6000},
+               {6016, 6067},
+               {6103, 6103},
+               {6108, 6108},
+               {6176, 6264},
+               {6272, 6312},
+               {6314, 6314},
+               {6320, 6389},
+               {6400, 6430},
+               {6480, 6509},
+               {6512, 6516},
+               {6528, 6571},
+               {6576, 6601},
+               {6656, 6678},
+               {6688, 6740},
+               {6823, 6823},
+               {6917, 6963},
+               {6981, 6988},
+               {7043, 7072},
+               {7086, 7087},
+               {7098, 7141},
+               {7168, 7203},
+               {7245, 7247},
+               {7258, 7293},
+               {7296, 7306},
+               {7312, 7354},
+               {7357, 7359},
+               {7401, 7404},
+               {7406, 7411},
+               {7413, 7414},
+               {7418, 7418},
+               {7424, 7615},
+               {7680, 7957},
+               {7960, 7965},
+               {7968, 8005},
+               {8008, 8013},
+               {8016, 8023},
+               {8025, 8025},
+               {8027, 8027},
+               {8029, 8029},
+               {8031, 8061},
+               {8064, 8116},
+               {8118, 8124},
+               {8126, 8126},
+               {8130, 8132},
+               {8134, 8140},
+               {8144, 8147},
+               {8150, 8155},
+               {8160, 8172},
+               {8178, 8180},
+               {8182, 8188},
+               {8305, 8305},
+               {8319, 8319},
+               {8336, 8348},
+               {8450, 8450},
+               {8455, 8455},
+               {8458, 8467},
+               {8469, 8469},
+               {8472, 8477},
+               {8484, 8484},
+               {8486, 8486},
+               {8488, 8488},
+               {8490, 8505},
+               {8508, 8511},
+               {8517, 8521},
+               {8526, 8526},
+               {8544, 8584},
+               {11264, 11492},
+               {11499, 11502},
+               {11506, 11507},
+               {11520, 11557},
+               {11559, 11559},
+               {11565, 11565},
+               {11568, 11623},
+               {11631, 11631},
+               {11648, 11670},
+               {11680, 11686},
+               {11688, 11694},
+               {11696, 11702},
+               {11704, 11710},
+               {11712, 11718},
+               {11720, 11726},
+               {11728, 11734},
+               {11736, 11742},
+               {12293, 12295},
+               {12321, 12329},
+               {12337, 12341},
+               {12344, 12348},
+               {12353, 12438},
+               {12445, 12447},
+               {12449, 12538},
+               {12540, 12543},
+               {12549, 12591},
+               {12593, 12686},
+               {12704, 12735},
+               {12784, 12799},
+               {13312, 19903},
+               {19968, 42124},
+               {42192, 42237},
+               {42240, 42508},
+               {42512, 42527},
+               {42538, 42539},
+               {42560, 42606},
+               {42623, 42653},
+               {42656, 42735},
+               {42775, 42783},
+               {42786, 42888},
+               {42891, 42972},
+               {42993, 43009},
+               {43011, 43013},
+               {43015, 43018},
+               {43020, 43042},
+               {43072, 43123},
+               {43138, 43187},
+               {43250, 43255},
+               {43259, 43259},
+               {43261, 43262},
+               {43274, 43301},
+               {43312, 43334},
+               {43360, 43388},
+               {43396, 43442},
+               {43471, 43471},
+               {43488, 43492},
+               {43494, 43503},
+               {43514, 43518},
+               {43520, 43560},
+               {43584, 43586},
+               {43588, 43595},
+               {43616, 43638},
+               {43642, 43642},
+               {43646, 43695},
+               {43697, 43697},
+               {43701, 43702},
+               {43705, 43709},
+               {43712, 43712},
+               {43714, 43714},
+               {43739, 43741},
+               {43744, 43754},
+               {43762, 43764},
+               {43777, 43782},
+               {43785, 43790},
+               {43793, 43798},
+               {43808, 43814},
+               {43816, 43822},
+               {43824, 43866},
+               {43868, 43881},
+               {43888, 44002},
+               {44032, 55203},
+               {55216, 55238},
+               {55243, 55291},
+               {63744, 64109},
+               {64112, 64217},
+               {64256, 64262},
+               {64275, 64279},
+               {64285, 64285},
+               {64287, 64296},
+               {64298, 64310},
+               {64312, 64316},
+               {64318, 64318},
+               {64320, 64321},
+               {64323, 64324},
+               {64326, 64433},
+               {64467, 64605},
+               {64612, 64829},
+               {64848, 64911},
+               {64914, 64967},
+               {65008, 65017},
+               {65137, 65137},
+               {65139, 65139},
+               {65143, 65143},
+               {65145, 65145},
+               {65147, 65147},
+               {65149, 65149},
+               {65151, 65276},
+               {65313, 65338},
+               {65345, 65370},
+               {65382, 65437},
+               {65440, 65470},
+               {65474, 65479},
+               {65482, 65487},
+               {65490, 65495},
+               {65498, 65500},
+               {65536, 65547},
+               {65549, 65574},
+               {65576, 65594},
+               {65596, 65597},
+               {65599, 65613},
+               {65616, 65629},
+               {65664, 65786},
+               {65856, 65908},
+               {66176, 66204},
+               {66208, 66256},
+               {66304, 66335},
+               {66349, 66378},
+               {66384, 66421},
+               {66432, 66461},
+               {66464, 66499},
+               {66504, 66511},
+               {66513, 66517},
+               {66560, 66717},
+               {66736, 66771},
+               {66776, 66811},
+               {66816, 66855},
+               {66864, 66915},
+               {66928, 66938},
+               {66940, 66954},
+               {66956, 66962},
+               {66964, 66965},
+               {66967, 66977},
+               {66979, 66993},
+               {66995, 67001},
+               {67003, 67004},
+               {67008, 67059},
+               {67072, 67382},
+               {67392, 67413},
+               {67424, 67431},
+               {67456, 67461},
+               {67463, 67504},
+               {67506, 67514},
+               {67584, 67589},
+               {67592, 67592},
+               {67594, 67637},
+               {67639, 67640},
+               {67644, 67644},
+               {67647, 67669},
+               {67680, 67702},
+               {67712, 67742},
+               {67808, 67826},
+               {67828, 67829},
+               {67840, 67861},
+               {67872, 67897},
+               {67904, 67929},
+               {67968, 68023},
+               {68030, 68031},
+               {68096, 68096},
+               {68112, 68115},
+               {68117, 68119},
+               {68121, 68149},
+               {68192, 68220},
+               {68224, 68252},
+               {68288, 68295},
+               {68297, 68324},
+               {68352, 68405},
+               {68416, 68437},
+               {68448, 68466},
+               {68480, 68497},
+               {68608, 68680},
+               {68736, 68786},
+               {68800, 68850},
+               {68864, 68899},
+               {68938, 68965},
+               {68975, 68997},
+               {69248, 69289},
+               {69296, 69297},
+               {69314, 69319},
+               {69376, 69404},
+               {69415, 69415},
+               {69424, 69445},
+               {69488, 69505},
+               {69552, 69572},
+               {69600, 69622},
+               {69635, 69687},
+               {69745, 69746},
+               {69749, 69749},
+               {69763, 69807},
+               {69840, 69864},
+               {69891, 69926},
+               {69956, 69956},
+               {69959, 69959},
+               {69968, 70002},
+               {70006, 70006},
+               {70019, 70066},
+               {70081, 70084},
+               {70106, 70106},
+               {70108, 70108},
+               {70144, 70161},
+               {70163, 70187},
+               {70207, 70208},
+               {70272, 70278},
+               {70280, 70280},
+               {70282, 70285},
+               {70287, 70301},
+               {70303, 70312},
+               {70320, 70366},
+               {70405, 70412},
+               {70415, 70416},
+               {70419, 70440},
+               {70442, 70448},
+               {70450, 70451},
+               {70453, 70457},
+               {70461, 70461},
+               {70480, 70480},
+               {70493, 70497},
+               {70528, 70537},
+               {70539, 70539},
+               {70542, 70542},
+               {70544, 70581},
+               {70583, 70583},
+               {70609, 70609},
+               {70611, 70611},
+               {70656, 70708},
+               {70727, 70730},
+               {70751, 70753},
+               {70784, 70831},
+               {70852, 70853},
+               {70855, 70855},
+               {71040, 71086},
+               {71128, 71131},
+               {71168, 71215},
+               {71236, 71236},
+               {71296, 71338},
+               {71352, 71352},
+               {71424, 71450},
+               {71488, 71494},
+               {71680, 71723},
+               {71840, 71903},
+               {71935, 71942},
+               {71945, 71945},
+               {71948, 71955},
+               {71957, 71958},
+               {71960, 71983},
+               {71999, 71999},
+               {72001, 72001},
+               {72096, 72103},
+               {72106, 72144},
+               {72161, 72161},
+               {72163, 72163},
+               {72192, 72192},
+               {72203, 72242},
+               {72250, 72250},
+               {72272, 72272},
+               {72284, 72329},
+               {72349, 72349},
+               {72368, 72440},
+               {72640, 72672},
+               {72704, 72712},
+               {72714, 72750},
+               {72768, 72768},
+               {72818, 72847},
+               {72960, 72966},
+               {72968, 72969},
+               {72971, 73008},
+               {73030, 73030},
+               {73056, 73061},
+               {73063, 73064},
+               {73066, 73097},
+               {73112, 73112},
+               {73136, 73179},
+               {73440, 73458},
+               {73474, 73474},
+               {73476, 73488},
+               {73490, 73523},
+               {73648, 73648},
+               {73728, 74649},
+               {74752, 74862},
+               {74880, 75075},
+               {77712, 77808},
+               {77824, 78895},
+               {78913, 78918},
+               {78944, 82938},
+               {82944, 83526},
+               {90368, 90397},
+               {92160, 92728},
+               {92736, 92766},
+               {92784, 92862},
+               {92880, 92909},
+               {92928, 92975},
+               {92992, 92995},
+               {93027, 93047},
+               {93053, 93071},
+               {93504, 93548},
+               {93760, 93823},
+               {93856, 93880},
+               {93883, 93907},
+               {93952, 94026},
+               {94032, 94032},
+               {94099, 94111},
+               {94176, 94177},
+               {94179, 94179},
+               {94194, 94198},
+               {94208, 101_589},
+               {101_631, 101_662},
+               {101_760, 101_874},
+               {110_576, 110_579},
+               {110_581, 110_587},
+               {110_589, 110_590},
+               {110_592, 110_882},
+               {110_898, 110_898},
+               {110_928, 110_930},
+               {110_933, 110_933},
+               {110_948, 110_951},
+               {110_960, 111_355},
+               {113_664, 113_770},
+               {113_776, 113_788},
+               {113_792, 113_800},
+               {113_808, 113_817},
+               {119_808, 119_892},
+               {119_894, 119_964},
+               {119_966, 119_967},
+               {119_970, 119_970},
+               {119_973, 119_974},
+               {119_977, 119_980},
+               {119_982, 119_993},
+               {119_995, 119_995},
+               {119_997, 120_003},
+               {120_005, 120_069},
+               {120_071, 120_074},
+               {120_077, 120_084},
+               {120_086, 120_092},
+               {120_094, 120_121},
+               {120_123, 120_126},
+               {120_128, 120_132},
+               {120_134, 120_134},
+               {120_138, 120_144},
+               {120_146, 120_485},
+               {120_488, 120_512},
+               {120_514, 120_538},
+               {120_540, 120_570},
+               {120_572, 120_596},
+               {120_598, 120_628},
+               {120_630, 120_654},
+               {120_656, 120_686},
+               {120_688, 120_712},
+               {120_714, 120_744},
+               {120_746, 120_770},
+               {120_772, 120_779},
+               {122_624, 122_654},
+               {122_661, 122_666},
+               {122_928, 122_989},
+               {123_136, 123_180},
+               {123_191, 123_197},
+               {123_214, 123_214},
+               {123_536, 123_565},
+               {123_584, 123_627},
+               {124_112, 124_139},
+               {124_368, 124_397},
+               {124_400, 124_400},
+               {124_608, 124_638},
+               {124_640, 124_642},
+               {124_644, 124_645},
+               {124_647, 124_653},
+               {124_656, 124_660},
+               {124_670, 124_671},
+               {124_896, 124_902},
+               {124_904, 124_907},
+               {124_909, 124_910},
+               {124_912, 124_926},
+               {124_928, 125_124},
+               {125_184, 125_251},
+               {125_259, 125_259},
+               {126_464, 126_467},
+               {126_469, 126_495},
+               {126_497, 126_498},
+               {126_500, 126_500},
+               {126_503, 126_503},
+               {126_505, 126_514},
+               {126_516, 126_519},
+               {126_521, 126_521},
+               {126_523, 126_523},
+               {126_530, 126_530},
+               {126_535, 126_535},
+               {126_537, 126_537},
+               {126_539, 126_539},
+               {126_541, 126_543},
+               {126_545, 126_546},
+               {126_548, 126_548},
+               {126_551, 126_551},
+               {126_553, 126_553},
+               {126_555, 126_555},
+               {126_557, 126_557},
+               {126_559, 126_559},
+               {126_561, 126_562},
+               {126_564, 126_564},
+               {126_567, 126_570},
+               {126_572, 126_578},
+               {126_580, 126_583},
+               {126_585, 126_588},
+               {126_590, 126_590},
+               {126_592, 126_601},
+               {126_603, 126_619},
+               {126_625, 126_627},
+               {126_629, 126_633},
+               {126_635, 126_651},
+               {131_072, 173_791},
+               {173_824, 178_205},
+               {178_208, 183_981},
+               {183_984, 191_456},
+               {191_472, 192_093},
+               {194_560, 195_101},
+               {196_608, 201_546},
+               {201_552, 210_041}
+             ]) do
             {:ok, <<c::utf8>>, rest}
           else
             :fail
@@ -2545,7 +2079,451 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def lex_expr__130(input) do
+    def lex_token__AT_DISCARD(input) do
+      case input do
+        <<"@_", rest::binary>> -> {:ok, "@_", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_token__ANON_4(input) do
+      case input do
+        <<"{", rest::binary>> -> {:ok, "{", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__65(input) do
+      case input do
+        <<"\\", rest::binary>> -> {:ok, "\\", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__67(input) do
+      case input do
+        <<"\"", rest::binary>> -> {:ok, "\"", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__68(input) do
+      case input do
+        <<"\\", rest::binary>> -> {:ok, "\\", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__69(input) do
+      case input do
+        <<"n", rest::binary>> -> {:ok, "n", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__70(input) do
+      case input do
+        <<"t", rest::binary>> -> {:ok, "t", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__71(input) do
+      case input do
+        <<"r", rest::binary>> -> {:ok, "r", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__72(input) do
+      case input do
+        <<"0", rest::binary>> -> {:ok, "0", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__73(input) do
+      case input do
+        <<"a", rest::binary>> -> {:ok, "a", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__74(input) do
+      case input do
+        <<"b", rest::binary>> -> {:ok, "b", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__75(input) do
+      case input do
+        <<"f", rest::binary>> -> {:ok, "f", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__76(input) do
+      case input do
+        <<"v", rest::binary>> -> {:ok, "v", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__78(input) do
+      case input do
+        <<"x{", rest::binary>> -> {:ok, "x{", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__80(input) do
+      lex_token__HEX(input)
+    end
+
+    def lex_expr__79(input) do
+      Tokenizer.plus_char(&lex_expr__80/1, input)
+    end
+
+    def lex_expr__81(input) do
+      case input do
+        <<"}", rest::binary>> -> {:ok, "}", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__77(input0) do
+      with {:ok, t0, rest0} <- lex_expr__78(input0),
+           {:ok, t1, rest1} <- lex_expr__79(rest0),
+           {:ok, t2, rest2} <- lex_expr__81(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__66(input) do
+      Tokenizer.first_char_match(
+        [
+          &lex_expr__67/1,
+          &lex_expr__68/1,
+          &lex_expr__69/1,
+          &lex_expr__70/1,
+          &lex_expr__71/1,
+          &lex_expr__72/1,
+          &lex_expr__73/1,
+          &lex_expr__74/1,
+          &lex_expr__75/1,
+          &lex_expr__76/1,
+          &lex_expr__77/1
+        ],
+        input
+      )
+    end
+
+    def lex_token__ESCAPE(input0) do
+      with {:ok, t0, rest0} <- lex_expr__65(input0), {:ok, t1, rest1} <- lex_expr__66(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_token__AT(input) do
+      case input do
+        <<"@", rest::binary>> -> {:ok, "@", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_token__ANON_8(input) do
+      case input do
+        <<"(", rest::binary>> -> {:ok, "(", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_token__NIL(input) do
+      case input do
+        <<"nil", rest::binary>> -> {:ok, "nil", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__82(input) do
+      case input do
+        <<"#", rest::binary>> -> {:ok, "#", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__86(input) do
+      case input do
+        <<"\n", rest::binary>> -> {:ok, "\n", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__85(input) do
+      Tokenizer.not_pred_char(&lex_expr__86/1, input)
+    end
+
+    def lex_expr__87(input) do
+      case input do
+        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__84(input0) do
+      with {:ok, t0, rest0} <- lex_expr__85(input0), {:ok, t1, rest1} <- lex_expr__87(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__83(input) do
+      Tokenizer.star_char(&lex_expr__84/1, input)
+    end
+
+    def lex_expr__89(input) do
+      case input do
+        <<"\n", rest::binary>> -> {:ok, "\n", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__88(input) do
+      Tokenizer.opt_char(&lex_expr__89/1, input)
+    end
+
+    def lex_token__COMMENT(input0) do
+      with {:ok, t0, rest0} <- lex_expr__82(input0),
+           {:ok, t1, rest1} <- lex_expr__83(rest0),
+           {:ok, t2, rest2} <- lex_expr__88(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__90(input) do
+      case input do
+        <<"?", rest::binary>> -> {:ok, "?", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__92(input) do
+      lex_token__ESCAPE(input)
+    end
+
+    def lex_expr__93(input) do
+      case input do
+        <<"s", rest::binary>> -> {:ok, "s", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__96(input) do
+      case input do
+        <<c::utf8, rest::binary>> ->
+          if Tokenizer.in_ranges?(c, [{32, 32}, {9, 9}, {13, 13}, {10, 10}]) do
+            {:ok, <<c::utf8>>, rest}
+          else
+            :fail
+          end
+
+        _ ->
+          :fail
+      end
+    end
+
+    def lex_expr__95(input) do
+      Tokenizer.not_pred_char(&lex_expr__96/1, input)
+    end
+
+    def lex_expr__97(input) do
+      case input do
+        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__94(input0) do
+      with {:ok, t0, rest0} <- lex_expr__95(input0), {:ok, t1, rest1} <- lex_expr__97(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__91(input) do
+      Tokenizer.first_char_match([&lex_expr__92/1, &lex_expr__93/1, &lex_expr__94/1], input)
+    end
+
+    def lex_token__CHAR(input0) do
+      with {:ok, t0, rest0} <- lex_expr__90(input0), {:ok, t1, rest1} <- lex_expr__91(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__98(input) do
+      case input do
+        <<"~T[", rest::binary>> -> {:ok, "~T[", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__102(input) do
+      case input do
+        <<"]", rest::binary>> -> {:ok, "]", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__101(input) do
+      Tokenizer.not_pred_char(&lex_expr__102/1, input)
+    end
+
+    def lex_expr__103(input) do
+      case input do
+        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__100(input0) do
+      with {:ok, t0, rest0} <- lex_expr__101(input0), {:ok, t1, rest1} <- lex_expr__103(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__99(input) do
+      Tokenizer.star_char(&lex_expr__100/1, input)
+    end
+
+    def lex_expr__104(input) do
+      case input do
+        <<"]", rest::binary>> -> {:ok, "]", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_token__TIME_SIGIL(input0) do
+      with {:ok, t0, rest0} <- lex_expr__98(input0),
+           {:ok, t1, rest1} <- lex_expr__99(rest0),
+           {:ok, t2, rest2} <- lex_expr__104(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__106(input) do
+      case input do
+        <<"-", rest::binary>> -> {:ok, "-", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__105(input) do
+      Tokenizer.opt_char(&lex_expr__106/1, input)
+    end
+
+    def lex_expr__108(input) do
+      lex_token__DIGIT(input)
+    end
+
+    def lex_expr__107(input) do
+      Tokenizer.plus_char(&lex_expr__108/1, input)
+    end
+
+    def lex_expr__111(input) do
+      case input do
+        <<".", rest::binary>> -> {:ok, ".", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__113(input) do
+      lex_token__DIGIT(input)
+    end
+
+    def lex_expr__112(input) do
+      Tokenizer.plus_char(&lex_expr__113/1, input)
+    end
+
+    def lex_expr__110(input0) do
+      with {:ok, t0, rest0} <- lex_expr__111(input0), {:ok, t1, rest1} <- lex_expr__112(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__109(input) do
+      Tokenizer.opt_char(&lex_expr__110/1, input)
+    end
+
+    def lex_expr__114(input) do
+      case input do
+        <<"M", rest::binary>> -> {:ok, "M", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_token__DECIMAL(input0) do
+      with {:ok, t0, rest0} <- lex_expr__105(input0),
+           {:ok, t1, rest1} <- lex_expr__107(rest0),
+           {:ok, t2, rest2} <- lex_expr__109(rest1),
+           {:ok, t3, rest3} <- lex_expr__114(rest2) do
+        {:ok, t0 <> t1 <> t2 <> t3, rest3}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_token__ANON_2(input) do
+      case input do
+        <<"[", rest::binary>> -> {:ok, "[", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__116(input) do
+      case input do
+        <<"-", rest::binary>> -> {:ok, "-", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__115(input) do
+      Tokenizer.opt_char(&lex_expr__116/1, input)
+    end
+
+    def lex_expr__118(input) do
+      lex_token__DIGIT(input)
+    end
+
+    def lex_expr__117(input) do
+      Tokenizer.plus_char(&lex_expr__118/1, input)
+    end
+
+    def lex_token__INTEGER(input0) do
+      with {:ok, t0, rest0} <- lex_expr__115(input0), {:ok, t1, rest1} <- lex_expr__117(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__119(input) do
       case input do
         <<c::utf8, rest::binary>> ->
           if Tokenizer.in_ranges?(c, [{101, 101}, {69, 69}]) do
@@ -2559,7 +2537,7 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def lex_expr__132(input) do
+    def lex_expr__121(input) do
       case input do
         <<c::utf8, rest::binary>> ->
           if Tokenizer.in_ranges?(c, [{43, 43}, {45, 45}]) do
@@ -2573,62 +2551,158 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def lex_expr__131(input) do
-      Tokenizer.opt_char(&lex_expr__132/1, input)
+    def lex_expr__120(input) do
+      Tokenizer.opt_char(&lex_expr__121/1, input)
     end
 
-    def lex_expr__134(input) do
+    def lex_expr__123(input) do
       lex_token__DIGIT(input)
     end
 
-    def lex_expr__133(input) do
-      Tokenizer.plus_char(&lex_expr__134/1, input)
+    def lex_expr__122(input) do
+      Tokenizer.plus_char(&lex_expr__123/1, input)
     end
 
     def lex_token__EXPONENT(input0) do
-      with {:ok, t0, rest0} <- lex_expr__130(input0),
-           {:ok, t1, rest1} <- lex_expr__131(rest0),
-           {:ok, t2, rest2} <- lex_expr__133(rest1) do
+      with {:ok, t0, rest0} <- lex_expr__119(input0),
+           {:ok, t1, rest1} <- lex_expr__120(rest0),
+           {:ok, t2, rest2} <- lex_expr__122(rest1) do
         {:ok, t0 <> t1 <> t2, rest2}
       else
         :fail -> :fail
       end
     end
 
-    def lex_token__ANON_2(input) do
+    def lex_expr__124(input) do
       case input do
-        <<"[", rest::binary>> -> {:ok, "[", rest}
+        <<"\"", rest::binary>> -> {:ok, "\"", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__135(input) do
+    def lex_expr__127(input) do
+      lex_token__ESCAPE(input)
+    end
+
+    def lex_expr__130(input) do
       case input do
-        <<"~r/", rest::binary>> -> {:ok, "~r/", rest}
-        _ -> :fail
+        <<c::utf8, rest::binary>> ->
+          if Tokenizer.in_ranges?(c, [{34, 34}, {92, 92}]) do
+            {:ok, <<c::utf8>>, rest}
+          else
+            :fail
+          end
+
+        _ ->
+          :fail
       end
     end
 
-    def lex_expr__139(input) do
-      case input do
-        <<"\\", rest::binary>> -> {:ok, "\\", rest}
-        _ -> :fail
-      end
+    def lex_expr__129(input) do
+      Tokenizer.not_pred_char(&lex_expr__130/1, input)
     end
 
-    def lex_expr__140(input) do
+    def lex_expr__131(input) do
       case input do
         <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__138(input0) do
-      with {:ok, t0, rest0} <- lex_expr__139(input0), {:ok, t1, rest1} <- lex_expr__140(rest0) do
+    def lex_expr__128(input0) do
+      with {:ok, t0, rest0} <- lex_expr__129(input0), {:ok, t1, rest1} <- lex_expr__131(rest0) do
         {:ok, t0 <> t1, rest1}
       else
         :fail -> :fail
       end
+    end
+
+    def lex_expr__126(input) do
+      Tokenizer.first_char_match([&lex_expr__127/1, &lex_expr__128/1], input)
+    end
+
+    def lex_expr__125(input) do
+      Tokenizer.star_char(&lex_expr__126/1, input)
+    end
+
+    def lex_expr__132(input) do
+      case input do
+        <<"\"", rest::binary>> -> {:ok, "\"", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_token__STRING(input0) do
+      with {:ok, t0, rest0} <- lex_expr__124(input0),
+           {:ok, t1, rest1} <- lex_expr__125(rest0),
+           {:ok, t2, rest2} <- lex_expr__132(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__133(input) do
+      case input do
+        <<"~r/", rest::binary>> -> {:ok, "~r/", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__137(input) do
+      case input do
+        <<"\\", rest::binary>> -> {:ok, "\\", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__138(input) do
+      case input do
+        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__136(input0) do
+      with {:ok, t0, rest0} <- lex_expr__137(input0), {:ok, t1, rest1} <- lex_expr__138(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__141(input) do
+      case input do
+        <<"/", rest::binary>> -> {:ok, "/", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__140(input) do
+      Tokenizer.not_pred_char(&lex_expr__141/1, input)
+    end
+
+    def lex_expr__142(input) do
+      case input do
+        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__139(input0) do
+      with {:ok, t0, rest0} <- lex_expr__140(input0), {:ok, t1, rest1} <- lex_expr__142(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__135(input) do
+      Tokenizer.first_char_match([&lex_expr__136/1, &lex_expr__139/1], input)
+    end
+
+    def lex_expr__134(input) do
+      Tokenizer.star_char(&lex_expr__135/1, input)
     end
 
     def lex_expr__143(input) do
@@ -2638,41 +2712,7 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def lex_expr__142(input) do
-      Tokenizer.not_pred_char(&lex_expr__143/1, input)
-    end
-
-    def lex_expr__144(input) do
-      case input do
-        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__141(input0) do
-      with {:ok, t0, rest0} <- lex_expr__142(input0), {:ok, t1, rest1} <- lex_expr__144(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__137(input) do
-      Tokenizer.first_char_match([&lex_expr__138/1, &lex_expr__141/1], input)
-    end
-
-    def lex_expr__136(input) do
-      Tokenizer.star_char(&lex_expr__137/1, input)
-    end
-
     def lex_expr__145(input) do
-      case input do
-        <<"/", rest::binary>> -> {:ok, "/", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__147(input) do
       case input do
         <<c::utf8, rest::binary>> ->
           if Tokenizer.in_ranges?(c, [
@@ -2694,112 +2734,72 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def lex_expr__146(input) do
-      Tokenizer.star_char(&lex_expr__147/1, input)
+    def lex_expr__144(input) do
+      Tokenizer.star_char(&lex_expr__145/1, input)
     end
 
     def lex_token__REGEX_SIGIL(input0) do
-      with {:ok, t0, rest0} <- lex_expr__135(input0),
-           {:ok, t1, rest1} <- lex_expr__136(rest0),
-           {:ok, t2, rest2} <- lex_expr__145(rest1),
-           {:ok, t3, rest3} <- lex_expr__146(rest2) do
+      with {:ok, t0, rest0} <- lex_expr__133(input0),
+           {:ok, t1, rest1} <- lex_expr__134(rest0),
+           {:ok, t2, rest2} <- lex_expr__143(rest1),
+           {:ok, t3, rest3} <- lex_expr__144(rest2) do
         {:ok, t0 <> t1 <> t2 <> t3, rest3}
       else
         :fail -> :fail
       end
     end
 
-    def lex_token__TRUE(input) do
+    def lex_expr__146(input) do
       case input do
-        <<"true", rest::binary>> -> {:ok, "true", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__ANON_7(input) do
-      case input do
-        <<"=>", rest::binary>> -> {:ok, "=>", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__ANON_8(input) do
-      case input do
-        <<"(", rest::binary>> -> {:ok, "(", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__ANON_9(input) do
-      case input do
-        <<")", rest::binary>> -> {:ok, ")", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__148(input) do
-      case input do
-        <<":", rest::binary>> -> {:ok, ":", rest}
+        <<"~U[", rest::binary>> -> {:ok, "~U[", rest}
         _ -> :fail
       end
     end
 
     def lex_expr__150(input) do
-      lex_token__IDENTIFIER(input)
-    end
-
-    def lex_expr__151(input) do
-      lex_token__STRING(input)
+      case input do
+        <<"]", rest::binary>> -> {:ok, "]", rest}
+        _ -> :fail
+      end
     end
 
     def lex_expr__149(input) do
-      Tokenizer.first_char_match([&lex_expr__150/1, &lex_expr__151/1], input)
+      Tokenizer.not_pred_char(&lex_expr__150/1, input)
     end
 
-    def lex_token__KEYWORD(input0) do
-      with {:ok, t0, rest0} <- lex_expr__148(input0), {:ok, t1, rest1} <- lex_expr__149(rest0) do
+    def lex_expr__151(input) do
+      case input do
+        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__148(input0) do
+      with {:ok, t0, rest0} <- lex_expr__149(input0), {:ok, t1, rest1} <- lex_expr__151(rest0) do
         {:ok, t0 <> t1, rest1}
       else
         :fail -> :fail
       end
     end
 
+    def lex_expr__147(input) do
+      Tokenizer.star_char(&lex_expr__148/1, input)
+    end
+
     def lex_expr__152(input) do
       case input do
-        <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{32, 32}, {9, 9}, {13, 13}, {10, 10}, {44, 44}]) do
-            {:ok, <<c::utf8>>, rest}
-          else
-            :fail
-          end
-
-        _ ->
-          :fail
-      end
-    end
-
-    def lex_token__SPACE(input) do
-      Tokenizer.plus_char(&lex_expr__152/1, input)
-    end
-
-    def lex_token__ANON_5(input) do
-      case input do
-        <<"}", rest::binary>> -> {:ok, "}", rest}
+        <<"]", rest::binary>> -> {:ok, "]", rest}
         _ -> :fail
       end
     end
 
-    def lex_token__HEX(input) do
-      case input do
-        <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{97, 102}, {65, 70}, {48, 57}]) do
-            {:ok, <<c::utf8>>, rest}
-          else
-            :fail
-          end
-
-        _ ->
-          :fail
+    def lex_token__INSTANT_SIGIL(input0) do
+      with {:ok, t0, rest0} <- lex_expr__146(input0),
+           {:ok, t1, rest1} <- lex_expr__147(rest0),
+           {:ok, t2, rest2} <- lex_expr__152(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
       end
     end
 
@@ -2978,19 +2978,25 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_rule__(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :NIL) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, NIL: {:token, :NIL, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, NIL: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack, NIL: Ichor.Capture.at({:token, :NIL, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, NIL: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
     def parse_expr__0(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :AT_DISCARD) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, AT_DISCARD: {:token, :AT_DISCARD, text}}
+          {:ok, new_pos, ref_stack,
+           AT_DISCARD: Ichor.Capture.at({:token, :AT_DISCARD, text}, pos, new_pos)}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, AT_DISCARD: capture}
+          {:ok, new_pos, ref_stack, AT_DISCARD: Ichor.Capture.at(capture, pos, new_pos)}
 
         :fail ->
           :fail
@@ -3011,7 +3017,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__3(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3049,7 +3056,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__9(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3070,7 +3078,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__14(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3143,7 +3152,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__20(stream, pos, ref_stack, context) do
       case parse_rule__discard(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, discard: {:rule, :discard, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           discard: Ichor.Capture.at({:rule, :discard, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3164,7 +3174,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__25(stream, pos, ref_stack, context) do
       case parse_rule__discard(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, discard: {:rule, :discard, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           discard: Ichor.Capture.at({:rule, :discard, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3211,7 +3222,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__28(stream, pos, ref_stack, context) do
       case parse_rule__value_body(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, value_body: {:rule, :value_body, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           value_body: Ichor.Capture.at({:rule, :value_body, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3230,9 +3242,15 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_rule__string(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :STRING) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, STRING: {:token, :STRING, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, STRING: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack,
+           STRING: Ichor.Capture.at({:token, :STRING, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, STRING: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -3256,9 +3274,15 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__32(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :STRING) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, version: {:token, :STRING, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, version: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack,
+           version: Ichor.Capture.at({:token, :STRING, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, version: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -3274,17 +3298,27 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__33(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRUE) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, TRUE: {:token, :TRUE, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, TRUE: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack, TRUE: Ichor.Capture.at({:token, :TRUE, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, TRUE: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
     def parse_expr__34(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :FALSE) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, FALSE: {:token, :FALSE, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, FALSE: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack, FALSE: Ichor.Capture.at({:token, :FALSE, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, FALSE: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -3294,9 +3328,14 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_rule__char(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :CHAR) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, CHAR: {:token, :CHAR, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, CHAR: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack, CHAR: Ichor.Capture.at({:token, :CHAR, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, CHAR: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -3321,7 +3360,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__40(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3342,7 +3382,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__45(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3414,19 +3455,26 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__49(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :DECIMAL) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, DECIMAL: {:token, :DECIMAL, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, DECIMAL: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack,
+           DECIMAL: Ichor.Capture.at({:token, :DECIMAL, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, DECIMAL: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
     def parse_expr__50(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :RATIONAL) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, RATIONAL: {:token, :RATIONAL, text}}
+          {:ok, new_pos, ref_stack,
+           RATIONAL: Ichor.Capture.at({:token, :RATIONAL, text}, pos, new_pos)}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, RATIONAL: capture}
+          {:ok, new_pos, ref_stack, RATIONAL: Ichor.Capture.at(capture, pos, new_pos)}
 
         :fail ->
           :fail
@@ -3435,17 +3483,28 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__51(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :FLOAT) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, FLOAT: {:token, :FLOAT, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, FLOAT: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack, FLOAT: Ichor.Capture.at({:token, :FLOAT, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, FLOAT: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
     def parse_expr__52(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :INTEGER) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, INTEGER: {:token, :INTEGER, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, INTEGER: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack,
+           INTEGER: Ichor.Capture.at({:token, :INTEGER, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, INTEGER: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -3462,10 +3521,11 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_rule__symbol(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :IDENTIFIER) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, IDENTIFIER: {:token, :IDENTIFIER, text}}
+          {:ok, new_pos, ref_stack,
+           IDENTIFIER: Ichor.Capture.at({:token, :IDENTIFIER, text}, pos, new_pos)}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, IDENTIFIER: capture}
+          {:ok, new_pos, ref_stack, IDENTIFIER: Ichor.Capture.at(capture, pos, new_pos)}
 
         :fail ->
           :fail
@@ -3475,10 +3535,11 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__53(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :DATE_SIGIL) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, DATE_SIGIL: {:token, :DATE_SIGIL, text}}
+          {:ok, new_pos, ref_stack,
+           DATE_SIGIL: Ichor.Capture.at({:token, :DATE_SIGIL, text}, pos, new_pos)}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, DATE_SIGIL: capture}
+          {:ok, new_pos, ref_stack, DATE_SIGIL: Ichor.Capture.at(capture, pos, new_pos)}
 
         :fail ->
           :fail
@@ -3488,10 +3549,11 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__54(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TIME_SIGIL) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, TIME_SIGIL: {:token, :TIME_SIGIL, text}}
+          {:ok, new_pos, ref_stack,
+           TIME_SIGIL: Ichor.Capture.at({:token, :TIME_SIGIL, text}, pos, new_pos)}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, TIME_SIGIL: capture}
+          {:ok, new_pos, ref_stack, TIME_SIGIL: Ichor.Capture.at(capture, pos, new_pos)}
 
         :fail ->
           :fail
@@ -3501,10 +3563,11 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__55(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :INSTANT_SIGIL) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, INSTANT_SIGIL: {:token, :INSTANT_SIGIL, text}}
+          {:ok, new_pos, ref_stack,
+           INSTANT_SIGIL: Ichor.Capture.at({:token, :INSTANT_SIGIL, text}, pos, new_pos)}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, INSTANT_SIGIL: capture}
+          {:ok, new_pos, ref_stack, INSTANT_SIGIL: Ichor.Capture.at(capture, pos, new_pos)}
 
         :fail ->
           :fail
@@ -3514,10 +3577,11 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__56(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :REGEX_SIGIL) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, REGEX_SIGIL: {:token, :REGEX_SIGIL, text}}
+          {:ok, new_pos, ref_stack,
+           REGEX_SIGIL: Ichor.Capture.at({:token, :REGEX_SIGIL, text}, pos, new_pos)}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, REGEX_SIGIL: capture}
+          {:ok, new_pos, ref_stack, REGEX_SIGIL: Ichor.Capture.at(capture, pos, new_pos)}
 
         :fail ->
           :fail
@@ -3536,16 +3600,23 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_rule__keyword(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :KEYWORD) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, KEYWORD: {:token, :KEYWORD, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, KEYWORD: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack,
+           KEYWORD: Ichor.Capture.at({:token, :KEYWORD, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, KEYWORD: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
     def parse_expr__58(stream, pos, ref_stack, context) do
       case parse_rule__header(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, header: {:rule, :header, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           header: Ichor.Capture.at({:rule, :header, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3570,7 +3641,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__61(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3621,7 +3693,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__66(stream, pos, ref_stack, context) do
       case parse_rule__(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, nil: {:rule, nil, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           nil: Ichor.Capture.at({:rule, nil, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3631,7 +3704,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__67(stream, pos, ref_stack, context) do
       case parse_rule__boolean(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, boolean: {:rule, :boolean, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           boolean: Ichor.Capture.at({:rule, :boolean, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3641,7 +3715,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__68(stream, pos, ref_stack, context) do
       case parse_rule__number(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, number: {:rule, :number, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           number: Ichor.Capture.at({:rule, :number, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3651,7 +3726,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__69(stream, pos, ref_stack, context) do
       case parse_rule__string(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, string: {:rule, :string, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           string: Ichor.Capture.at({:rule, :string, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3661,7 +3737,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__70(stream, pos, ref_stack, context) do
       case parse_rule__char(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, char: {:rule, :char, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           char: Ichor.Capture.at({:rule, :char, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3671,7 +3748,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__71(stream, pos, ref_stack, context) do
       case parse_rule__keyword(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, keyword: {:rule, :keyword, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           keyword: Ichor.Capture.at({:rule, :keyword, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3681,7 +3759,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__72(stream, pos, ref_stack, context) do
       case parse_rule__symbol(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, symbol: {:rule, :symbol, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           symbol: Ichor.Capture.at({:rule, :symbol, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3691,7 +3770,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__73(stream, pos, ref_stack, context) do
       case parse_rule__list(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, list: {:rule, :list, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           list: Ichor.Capture.at({:rule, :list, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3701,7 +3781,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__74(stream, pos, ref_stack, context) do
       case parse_rule__tuple(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, tuple: {:rule, :tuple, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           tuple: Ichor.Capture.at({:rule, :tuple, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3711,7 +3792,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__75(stream, pos, ref_stack, context) do
       case parse_rule__map_lit(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, map_lit: {:rule, :map_lit, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           map_lit: Ichor.Capture.at({:rule, :map_lit, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3721,7 +3803,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__76(stream, pos, ref_stack, context) do
       case parse_rule__struct_lit(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, struct_lit: {:rule, :struct_lit, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           struct_lit: Ichor.Capture.at({:rule, :struct_lit, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3731,7 +3814,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__77(stream, pos, ref_stack, context) do
       case parse_rule__set_lit(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, set_lit: {:rule, :set_lit, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           set_lit: Ichor.Capture.at({:rule, :set_lit, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3741,7 +3825,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__78(stream, pos, ref_stack, context) do
       case parse_rule__sigil(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, sigil: {:rule, :sigil, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           sigil: Ichor.Capture.at({:rule, :sigil, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3751,7 +3836,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__79(stream, pos, ref_stack, context) do
       case parse_rule__tag_form(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, tag_form: {:rule, :tag_form, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           tag_form: Ichor.Capture.at({:rule, :tag_form, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3822,7 +3908,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__88(stream, pos, ref_stack, context) do
       case parse_rule__map_entry(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, map_entry: {:rule, :map_entry, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           map_entry: Ichor.Capture.at({:rule, :map_entry, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3843,7 +3930,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__93(stream, pos, ref_stack, context) do
       case parse_rule__map_entry(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, map_entry: {:rule, :map_entry, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           map_entry: Ichor.Capture.at({:rule, :map_entry, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -3941,9 +4029,15 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__100(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :IDENTIFIER) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, name: {:token, :IDENTIFIER, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, name: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack,
+           name: Ichor.Capture.at({:token, :IDENTIFIER, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, name: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -3978,9 +4072,15 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__108(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :INTEGER) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, version: {:token, :INTEGER, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, version: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack,
+           version: Ichor.Capture.at({:token, :INTEGER, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, version: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -4039,7 +4139,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__115(stream, pos, ref_stack, context) do
       case parse_rule__struct_keyed(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, keyed: {:rule, :struct_keyed, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           keyed: Ichor.Capture.at({:rule, :struct_keyed, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -4049,7 +4150,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__116(stream, pos, ref_stack, context) do
       case parse_rule__struct_positional(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, positional: {:rule, :struct_positional, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           positional: Ichor.Capture.at({:rule, :struct_positional, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -4089,9 +4191,14 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__117(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :AT) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, AT: {:token, :AT, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, AT: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack, AT: Ichor.Capture.at({:token, :AT, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, AT: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -4127,7 +4234,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__125(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -4148,7 +4256,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__130(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -4228,9 +4337,14 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__134(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :AT) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, AT: {:token, :AT, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, AT: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack, AT: Ichor.Capture.at({:token, :AT, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, AT: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -4247,9 +4361,15 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def parse_expr__137(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :IDENTIFIER) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, name: {:token, :IDENTIFIER, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, name: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack,
+           name: Ichor.Capture.at({:token, :IDENTIFIER, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, name: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -4267,7 +4387,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__140(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -4296,10 +4417,11 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__142(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :MAP_KEY) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, short_key: {:token, :MAP_KEY, text}}
+          {:ok, new_pos, ref_stack,
+           short_key: Ichor.Capture.at({:token, :MAP_KEY, text}, pos, new_pos)}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, short_key: capture}
+          {:ok, new_pos, ref_stack, short_key: Ichor.Capture.at(capture, pos, new_pos)}
 
         :fail ->
           :fail
@@ -4320,7 +4442,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__145(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, short_val: {:rule, :value, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           short_val: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -4340,7 +4463,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__147(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, arrow_key: {:rule, :value, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           arrow_key: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -4379,7 +4503,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__153(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, arrow_val: {:rule, :value, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           arrow_val: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -4430,7 +4555,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__159(stream, pos, ref_stack, context) do
       case parse_rule__map_entry(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, map_entry: {:rule, :map_entry, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           map_entry: Ichor.Capture.at({:rule, :map_entry, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -4451,7 +4577,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__164(stream, pos, ref_stack, context) do
       case parse_rule__map_entry(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, map_entry: {:rule, :map_entry, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           map_entry: Ichor.Capture.at({:rule, :map_entry, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -4542,7 +4669,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__174(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -4595,7 +4723,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__184(stream, pos, ref_stack, context) do
       case parse_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -4674,7 +4803,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__193(stream, pos, ref_stack, context) do
       case parse_rule__map_entry(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, map_entry: {:rule, :map_entry, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           map_entry: Ichor.Capture.at({:rule, :map_entry, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -4695,7 +4825,8 @@ defmodule Dextrin.Text.Grammar.Native do
     def parse_expr__198(stream, pos, ref_stack, context) do
       case parse_rule__map_entry(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
-          {:ok, new_pos, new_ref_stack, map_entry: {:rule, :map_entry, sub_captures}}
+          {:ok, new_pos, new_ref_stack,
+           map_entry: Ichor.Capture.at({:rule, :map_entry, sub_captures}, pos, new_pos)}
 
         _fail ->
           :fail
@@ -4787,19 +4918,25 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def lossless_rule__(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :NIL) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, NIL: {:token, :NIL, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, NIL: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack, NIL: Ichor.Capture.at({:token, :NIL, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, NIL: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
     def lossless_expr__0(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :AT_DISCARD) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, AT_DISCARD: {:token, :AT_DISCARD, text}}
+          {:ok, new_pos, ref_stack,
+           AT_DISCARD: Ichor.Capture.at({:token, :AT_DISCARD, text}, pos, new_pos)}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, AT_DISCARD: capture}
+          {:ok, new_pos, ref_stack, AT_DISCARD: Ichor.Capture.at(capture, pos, new_pos)}
 
         :fail ->
           :fail
@@ -4821,7 +4958,9 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(:value, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos), "$syntax": record}
 
         _fail ->
           :fail
@@ -4860,7 +4999,9 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(:value, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos), "$syntax": record}
 
         _fail ->
           :fail
@@ -4882,7 +5023,9 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(:value, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos), "$syntax": record}
 
         _fail ->
           :fail
@@ -4959,7 +5102,8 @@ defmodule Dextrin.Text.Grammar.Native do
             Ichor.Syntax.Record.called(:discard, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           discard: {:rule, :discard, sub_captures}, "$syntax": record}
+           discard: Ichor.Capture.at({:rule, :discard, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -4984,7 +5128,8 @@ defmodule Dextrin.Text.Grammar.Native do
             Ichor.Syntax.Record.called(:discard, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           discard: {:rule, :discard, sub_captures}, "$syntax": record}
+           discard: Ichor.Capture.at({:rule, :discard, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -5035,7 +5180,8 @@ defmodule Dextrin.Text.Grammar.Native do
             Ichor.Syntax.Record.called(:value_body, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           value_body: {:rule, :value_body, sub_captures}, "$syntax": record}
+           value_body: Ichor.Capture.at({:rule, :value_body, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -5054,9 +5200,15 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def lossless_rule__string(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :STRING) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, STRING: {:token, :STRING, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, STRING: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack,
+           STRING: Ichor.Capture.at({:token, :STRING, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, STRING: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -5080,9 +5232,15 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def lossless_expr__32(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :STRING) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, version: {:token, :STRING, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, version: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack,
+           version: Ichor.Capture.at({:token, :STRING, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, version: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -5098,17 +5256,27 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def lossless_expr__33(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TRUE) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, TRUE: {:token, :TRUE, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, TRUE: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack, TRUE: Ichor.Capture.at({:token, :TRUE, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, TRUE: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
     def lossless_expr__34(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :FALSE) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, FALSE: {:token, :FALSE, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, FALSE: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack, FALSE: Ichor.Capture.at({:token, :FALSE, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, FALSE: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -5124,9 +5292,14 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def lossless_rule__char(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :CHAR) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, CHAR: {:token, :CHAR, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, CHAR: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack, CHAR: Ichor.Capture.at({:token, :CHAR, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, CHAR: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -5152,7 +5325,9 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(:value, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos), "$syntax": record}
 
         _fail ->
           :fail
@@ -5174,7 +5349,9 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(:value, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos), "$syntax": record}
 
         _fail ->
           :fail
@@ -5246,19 +5423,26 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def lossless_expr__49(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :DECIMAL) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, DECIMAL: {:token, :DECIMAL, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, DECIMAL: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack,
+           DECIMAL: Ichor.Capture.at({:token, :DECIMAL, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, DECIMAL: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
     def lossless_expr__50(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :RATIONAL) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, RATIONAL: {:token, :RATIONAL, text}}
+          {:ok, new_pos, ref_stack,
+           RATIONAL: Ichor.Capture.at({:token, :RATIONAL, text}, pos, new_pos)}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, RATIONAL: capture}
+          {:ok, new_pos, ref_stack, RATIONAL: Ichor.Capture.at(capture, pos, new_pos)}
 
         :fail ->
           :fail
@@ -5267,17 +5451,28 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def lossless_expr__51(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :FLOAT) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, FLOAT: {:token, :FLOAT, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, FLOAT: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack, FLOAT: Ichor.Capture.at({:token, :FLOAT, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, FLOAT: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
     def lossless_expr__52(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :INTEGER) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, INTEGER: {:token, :INTEGER, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, INTEGER: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack,
+           INTEGER: Ichor.Capture.at({:token, :INTEGER, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, INTEGER: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -5294,10 +5489,11 @@ defmodule Dextrin.Text.Grammar.Native do
     def lossless_rule__symbol(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :IDENTIFIER) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, IDENTIFIER: {:token, :IDENTIFIER, text}}
+          {:ok, new_pos, ref_stack,
+           IDENTIFIER: Ichor.Capture.at({:token, :IDENTIFIER, text}, pos, new_pos)}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, IDENTIFIER: capture}
+          {:ok, new_pos, ref_stack, IDENTIFIER: Ichor.Capture.at(capture, pos, new_pos)}
 
         :fail ->
           :fail
@@ -5307,10 +5503,11 @@ defmodule Dextrin.Text.Grammar.Native do
     def lossless_expr__53(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :DATE_SIGIL) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, DATE_SIGIL: {:token, :DATE_SIGIL, text}}
+          {:ok, new_pos, ref_stack,
+           DATE_SIGIL: Ichor.Capture.at({:token, :DATE_SIGIL, text}, pos, new_pos)}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, DATE_SIGIL: capture}
+          {:ok, new_pos, ref_stack, DATE_SIGIL: Ichor.Capture.at(capture, pos, new_pos)}
 
         :fail ->
           :fail
@@ -5320,10 +5517,11 @@ defmodule Dextrin.Text.Grammar.Native do
     def lossless_expr__54(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :TIME_SIGIL) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, TIME_SIGIL: {:token, :TIME_SIGIL, text}}
+          {:ok, new_pos, ref_stack,
+           TIME_SIGIL: Ichor.Capture.at({:token, :TIME_SIGIL, text}, pos, new_pos)}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, TIME_SIGIL: capture}
+          {:ok, new_pos, ref_stack, TIME_SIGIL: Ichor.Capture.at(capture, pos, new_pos)}
 
         :fail ->
           :fail
@@ -5333,10 +5531,11 @@ defmodule Dextrin.Text.Grammar.Native do
     def lossless_expr__55(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :INSTANT_SIGIL) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, INSTANT_SIGIL: {:token, :INSTANT_SIGIL, text}}
+          {:ok, new_pos, ref_stack,
+           INSTANT_SIGIL: Ichor.Capture.at({:token, :INSTANT_SIGIL, text}, pos, new_pos)}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, INSTANT_SIGIL: capture}
+          {:ok, new_pos, ref_stack, INSTANT_SIGIL: Ichor.Capture.at(capture, pos, new_pos)}
 
         :fail ->
           :fail
@@ -5346,10 +5545,11 @@ defmodule Dextrin.Text.Grammar.Native do
     def lossless_expr__56(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :REGEX_SIGIL) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, REGEX_SIGIL: {:token, :REGEX_SIGIL, text}}
+          {:ok, new_pos, ref_stack,
+           REGEX_SIGIL: Ichor.Capture.at({:token, :REGEX_SIGIL, text}, pos, new_pos)}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, REGEX_SIGIL: capture}
+          {:ok, new_pos, ref_stack, REGEX_SIGIL: Ichor.Capture.at(capture, pos, new_pos)}
 
         :fail ->
           :fail
@@ -5368,9 +5568,15 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def lossless_rule__keyword(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :KEYWORD) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, KEYWORD: {:token, :KEYWORD, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, KEYWORD: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack,
+           KEYWORD: Ichor.Capture.at({:token, :KEYWORD, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, KEYWORD: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -5378,7 +5584,10 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__header(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(:header, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, header: {:rule, :header, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           header: Ichor.Capture.at({:rule, :header, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -5404,7 +5613,9 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(:value, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos), "$syntax": record}
 
         _fail ->
           :fail
@@ -5456,7 +5667,9 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(nil, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, nil: {:rule, nil, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           nil: Ichor.Capture.at({:rule, nil, sub_captures}, pos, new_pos), "$syntax": record}
 
         _fail ->
           :fail
@@ -5470,7 +5683,8 @@ defmodule Dextrin.Text.Grammar.Native do
             Ichor.Syntax.Record.called(:boolean, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           boolean: {:rule, :boolean, sub_captures}, "$syntax": record}
+           boolean: Ichor.Capture.at({:rule, :boolean, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -5481,7 +5695,10 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__number(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(:number, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, number: {:rule, :number, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           number: Ichor.Capture.at({:rule, :number, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -5492,7 +5709,10 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__string(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(:string, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, string: {:rule, :string, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           string: Ichor.Capture.at({:rule, :string, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -5503,7 +5723,9 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__char(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(:char, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, char: {:rule, :char, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           char: Ichor.Capture.at({:rule, :char, sub_captures}, pos, new_pos), "$syntax": record}
 
         _fail ->
           :fail
@@ -5517,7 +5739,8 @@ defmodule Dextrin.Text.Grammar.Native do
             Ichor.Syntax.Record.called(:keyword, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           keyword: {:rule, :keyword, sub_captures}, "$syntax": record}
+           keyword: Ichor.Capture.at({:rule, :keyword, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -5528,7 +5751,10 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__symbol(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(:symbol, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, symbol: {:rule, :symbol, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           symbol: Ichor.Capture.at({:rule, :symbol, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -5539,7 +5765,9 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__list(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(:list, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, list: {:rule, :list, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           list: Ichor.Capture.at({:rule, :list, sub_captures}, pos, new_pos), "$syntax": record}
 
         _fail ->
           :fail
@@ -5550,7 +5778,9 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__tuple(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(:tuple, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, tuple: {:rule, :tuple, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           tuple: Ichor.Capture.at({:rule, :tuple, sub_captures}, pos, new_pos), "$syntax": record}
 
         _fail ->
           :fail
@@ -5564,7 +5794,8 @@ defmodule Dextrin.Text.Grammar.Native do
             Ichor.Syntax.Record.called(:map_lit, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           map_lit: {:rule, :map_lit, sub_captures}, "$syntax": record}
+           map_lit: Ichor.Capture.at({:rule, :map_lit, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -5578,7 +5809,8 @@ defmodule Dextrin.Text.Grammar.Native do
             Ichor.Syntax.Record.called(:struct_lit, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           struct_lit: {:rule, :struct_lit, sub_captures}, "$syntax": record}
+           struct_lit: Ichor.Capture.at({:rule, :struct_lit, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -5592,7 +5824,8 @@ defmodule Dextrin.Text.Grammar.Native do
             Ichor.Syntax.Record.called(:set_lit, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           set_lit: {:rule, :set_lit, sub_captures}, "$syntax": record}
+           set_lit: Ichor.Capture.at({:rule, :set_lit, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -5603,7 +5836,9 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__sigil(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(:sigil, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, sigil: {:rule, :sigil, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           sigil: Ichor.Capture.at({:rule, :sigil, sub_captures}, pos, new_pos), "$syntax": record}
 
         _fail ->
           :fail
@@ -5617,7 +5852,8 @@ defmodule Dextrin.Text.Grammar.Native do
             Ichor.Syntax.Record.called(:tag_form, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           tag_form: {:rule, :tag_form, sub_captures}, "$syntax": record}
+           tag_form: Ichor.Capture.at({:rule, :tag_form, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -5692,7 +5928,8 @@ defmodule Dextrin.Text.Grammar.Native do
             Ichor.Syntax.Record.called(:map_entry, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           map_entry: {:rule, :map_entry, sub_captures}, "$syntax": record}
+           map_entry: Ichor.Capture.at({:rule, :map_entry, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -5717,7 +5954,8 @@ defmodule Dextrin.Text.Grammar.Native do
             Ichor.Syntax.Record.called(:map_entry, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           map_entry: {:rule, :map_entry, sub_captures}, "$syntax": record}
+           map_entry: Ichor.Capture.at({:rule, :map_entry, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -5815,9 +6053,15 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def lossless_expr__100(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :IDENTIFIER) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, name: {:token, :IDENTIFIER, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, name: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack,
+           name: Ichor.Capture.at({:token, :IDENTIFIER, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, name: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -5852,9 +6096,15 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def lossless_expr__108(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :INTEGER) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, version: {:token, :INTEGER, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, version: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack,
+           version: Ichor.Capture.at({:token, :INTEGER, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, version: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -5917,7 +6167,8 @@ defmodule Dextrin.Text.Grammar.Native do
             Ichor.Syntax.Record.called(:struct_keyed, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           keyed: {:rule, :struct_keyed, sub_captures}, "$syntax": record}
+           keyed: Ichor.Capture.at({:rule, :struct_keyed, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -5931,7 +6182,8 @@ defmodule Dextrin.Text.Grammar.Native do
             Ichor.Syntax.Record.called(:struct_positional, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           positional: {:rule, :struct_positional, sub_captures}, "$syntax": record}
+           positional: Ichor.Capture.at({:rule, :struct_positional, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -5977,9 +6229,14 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def lossless_expr__117(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :AT) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, AT: {:token, :AT, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, AT: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack, AT: Ichor.Capture.at({:token, :AT, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, AT: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -6016,7 +6273,9 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(:value, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos), "$syntax": record}
 
         _fail ->
           :fail
@@ -6038,7 +6297,9 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(:value, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos), "$syntax": record}
 
         _fail ->
           :fail
@@ -6118,9 +6379,14 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def lossless_expr__134(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :AT) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, AT: {:token, :AT, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, AT: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack, AT: Ichor.Capture.at({:token, :AT, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, AT: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -6137,9 +6403,15 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def lossless_expr__137(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :IDENTIFIER) do
-        {:ok, new_pos, text, nil} -> {:ok, new_pos, ref_stack, name: {:token, :IDENTIFIER, text}}
-        {:ok, new_pos, _text, capture} -> {:ok, new_pos, ref_stack, name: capture}
-        :fail -> :fail
+        {:ok, new_pos, text, nil} ->
+          {:ok, new_pos, ref_stack,
+           name: Ichor.Capture.at({:token, :IDENTIFIER, text}, pos, new_pos)}
+
+        {:ok, new_pos, _text, capture} ->
+          {:ok, new_pos, ref_stack, name: Ichor.Capture.at(capture, pos, new_pos)}
+
+        :fail ->
+          :fail
       end
     end
 
@@ -6158,7 +6430,9 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(:value, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos), "$syntax": record}
 
         _fail ->
           :fail
@@ -6187,10 +6461,11 @@ defmodule Dextrin.Text.Grammar.Native do
     def lossless_expr__142(stream, pos, ref_stack, _context) do
       case Parser.match_token(stream, pos, :MAP_KEY) do
         {:ok, new_pos, text, nil} ->
-          {:ok, new_pos, ref_stack, short_key: {:token, :MAP_KEY, text}}
+          {:ok, new_pos, ref_stack,
+           short_key: Ichor.Capture.at({:token, :MAP_KEY, text}, pos, new_pos)}
 
         {:ok, new_pos, _text, capture} ->
-          {:ok, new_pos, ref_stack, short_key: capture}
+          {:ok, new_pos, ref_stack, short_key: Ichor.Capture.at(capture, pos, new_pos)}
 
         :fail ->
           :fail
@@ -6214,7 +6489,8 @@ defmodule Dextrin.Text.Grammar.Native do
           {sub_captures, record} = Ichor.Syntax.Record.called(:value, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           short_val: {:rule, :value, sub_captures}, "$syntax": record}
+           short_val: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -6237,7 +6513,8 @@ defmodule Dextrin.Text.Grammar.Native do
           {sub_captures, record} = Ichor.Syntax.Record.called(:value, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           arrow_key: {:rule, :value, sub_captures}, "$syntax": record}
+           arrow_key: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -6279,7 +6556,8 @@ defmodule Dextrin.Text.Grammar.Native do
           {sub_captures, record} = Ichor.Syntax.Record.called(:value, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           arrow_val: {:rule, :value, sub_captures}, "$syntax": record}
+           arrow_val: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -6340,7 +6618,8 @@ defmodule Dextrin.Text.Grammar.Native do
             Ichor.Syntax.Record.called(:map_entry, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           map_entry: {:rule, :map_entry, sub_captures}, "$syntax": record}
+           map_entry: Ichor.Capture.at({:rule, :map_entry, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -6365,7 +6644,8 @@ defmodule Dextrin.Text.Grammar.Native do
             Ichor.Syntax.Record.called(:map_entry, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           map_entry: {:rule, :map_entry, sub_captures}, "$syntax": record}
+           map_entry: Ichor.Capture.at({:rule, :map_entry, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -6457,7 +6737,9 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(:value, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos), "$syntax": record}
 
         _fail ->
           :fail
@@ -6511,7 +6793,9 @@ defmodule Dextrin.Text.Grammar.Native do
       case lossless_rule__value(stream, pos, ref_stack, context) do
         {:ok, new_pos, new_ref_stack, sub_captures} ->
           {sub_captures, record} = Ichor.Syntax.Record.called(:value, pos, new_pos, sub_captures)
-          {:ok, new_pos, new_ref_stack, value: {:rule, :value, sub_captures}, "$syntax": record}
+
+          {:ok, new_pos, new_ref_stack,
+           value: Ichor.Capture.at({:rule, :value, sub_captures}, pos, new_pos), "$syntax": record}
 
         _fail ->
           :fail
@@ -6594,7 +6878,8 @@ defmodule Dextrin.Text.Grammar.Native do
             Ichor.Syntax.Record.called(:map_entry, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           map_entry: {:rule, :map_entry, sub_captures}, "$syntax": record}
+           map_entry: Ichor.Capture.at({:rule, :map_entry, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -6619,7 +6904,8 @@ defmodule Dextrin.Text.Grammar.Native do
             Ichor.Syntax.Record.called(:map_entry, pos, new_pos, sub_captures)
 
           {:ok, new_pos, new_ref_stack,
-           map_entry: {:rule, :map_entry, sub_captures}, "$syntax": record}
+           map_entry: Ichor.Capture.at({:rule, :map_entry, sub_captures}, pos, new_pos),
+           "$syntax": record}
 
         _fail ->
           :fail
@@ -6702,7 +6988,7 @@ defmodule Dextrin.Text.Grammar.Native do
       @spec parse_lossless(String.t(), term()) ::
               {:ok, Ichor.Syntax.Node.t()} | {:error, Ichor.Error.t()}
       def parse_lossless(input, context \\ nil) do
-        with {:ok, tree, _raw_captures} <- lossless_match(input, context) do
+        with {:ok, tree, _raw_captures, _locator} <- lossless_match(input, context) do
           {:ok, tree}
         end
       end
@@ -6711,7 +6997,7 @@ defmodule Dextrin.Text.Grammar.Native do
       @spec run_lossless(String.t(), Ichor.Actions.context()) ::
               {:ok, term(), Ichor.Syntax.Node.t()} | {:error, Ichor.Error.t() | [Ichor.Error.t()]}
       def run_lossless(input, initial_context \\ nil) do
-        with {:ok, tree, raw_captures} <- lossless_match(input, initial_context),
+        with {:ok, tree, raw_captures, locator} <- lossless_match(input, initial_context),
              {:ok, value, _context} <-
                Ichor.Actions.evaluate(
                  :document,
@@ -6741,7 +7027,8 @@ defmodule Dextrin.Text.Grammar.Native do
                    map_entry: MapSet.new([]),
                    struct_keyed: MapSet.new([:map_entry]),
                    struct_positional: MapSet.new([:value, :map_entry])
-                 }
+                 },
+                 locator: locator
                ) do
           {:ok, value, tree}
         end
@@ -6754,7 +7041,9 @@ defmodule Dextrin.Text.Grammar.Native do
           case lossless_rule__document(stream, 0, [0], context) do
             {:ok, pos, _ref_stack, raw_captures} when pos == tuple_size(stream) ->
               {raw_captures, record} = Ichor.Syntax.Record.root(:document, pos, raw_captures)
-              {:ok, Ichor.Syntax.tree(record, tokens, :TRIVIA), raw_captures}
+
+              {:ok, Ichor.Syntax.tree(record, tokens, :TRIVIA), raw_captures,
+               Grammar.Source.Locator.new(stream, input)}
 
             {:ok, pos, _ref_stack, _raw_captures} ->
               {:error, Parser.unexpected_token_error(stream, pos, input)}
@@ -6779,12 +7068,18 @@ defmodule Dextrin.Text.Grammar.Native do
     @spec parse(String.t(), term()) ::
             {:ok, non_neg_integer(), Ichor.Capture.raw_captures()} | {:error, Ichor.Error.t()}
     def parse(input, context \\ nil) do
+      with {:ok, pos, raw_captures, _locator} <- match(input, context) do
+        {:ok, pos, Ichor.Capture.plain(raw_captures)}
+      end
+    end
+
+    def match(input, context) do
       with {:ok, tokens} <- tokenize(input, context) do
         stream = tokens |> Grammar.Source.trimmed(:TRIVIA) |> List.to_tuple()
 
         case parse_rule__document(stream, 0, [0], context) do
           {:ok, pos, _ref_stack, raw_captures} when pos == tuple_size(stream) ->
-            {:ok, pos, raw_captures}
+            {:ok, pos, raw_captures, Grammar.Source.Locator.new(stream, input)}
 
           {:ok, pos, _ref_stack, _raw_captures} ->
             {:error, Parser.unexpected_token_error(stream, pos, input)}
@@ -6808,7 +7103,7 @@ defmodule Dextrin.Text.Grammar.Native do
     @spec run(String.t(), Ichor.Actions.context()) ::
             {:ok, term()} | {:error, Ichor.Error.t() | [Ichor.Error.t()]}
     def run(input, initial_context \\ nil) do
-      with {:ok, _pos, raw_captures} <- parse(input, initial_context),
+      with {:ok, _pos, raw_captures, locator} <- match(input, initial_context),
            {:ok, value, _context} <-
              Ichor.Actions.evaluate(
                :document,
@@ -6838,7 +7133,8 @@ defmodule Dextrin.Text.Grammar.Native do
                  map_entry: MapSet.new([]),
                  struct_keyed: MapSet.new([:map_entry]),
                  struct_positional: MapSet.new([:value, :map_entry])
-               }
+               },
+               locator: locator
              ) do
         {:ok, value}
       end
@@ -6850,11 +7146,12 @@ defmodule Dextrin.Text.Grammar.Native do
             | {:error, Ichor.Error.t() | [Ichor.Error.t()]}
     def run_sequence(input, initial_context) do
       with {:ok, tokens} <- tokenize(input, initial_context) do
-        do_run_sequence(List.to_tuple(tokens), 0, initial_context, [])
+        stream = List.to_tuple(tokens)
+        do_run_sequence(stream, 0, initial_context, [], Grammar.Source.Locator.new(stream, input))
       end
     end
 
-    def do_run_sequence(stream, pos, ctx, acc) do
+    def do_run_sequence(stream, pos, ctx, acc, locator) do
       pos = Parser.skip_leading_trivia(stream, pos, :TRIVIA)
 
       if pos >= tuple_size(stream) do
@@ -6862,32 +7159,43 @@ defmodule Dextrin.Text.Grammar.Native do
       else
         case parse_rule__document(stream, pos, [0], ctx) do
           {:ok, new_pos, _ref_stack, raw_captures} ->
-            case Ichor.Actions.evaluate(:document, raw_captures, Dextrin.Text.Actions, ctx, %{
-                   nil: MapSet.new([]),
-                   discard: MapSet.new([]),
-                   list: MapSet.new([:value]),
-                   value: MapSet.new([:discard]),
-                   string: MapSet.new([]),
-                   header: MapSet.new([]),
-                   boolean: MapSet.new([]),
-                   char: MapSet.new([]),
-                   tuple: MapSet.new([:value]),
-                   number: MapSet.new([]),
-                   symbol: MapSet.new([]),
-                   sigil: MapSet.new([]),
-                   keyword: MapSet.new([]),
-                   document: MapSet.new([]),
-                   value_body: MapSet.new([]),
-                   map_lit: MapSet.new([:map_entry]),
-                   struct_lit: MapSet.new([]),
-                   set_lit: MapSet.new([:value]),
-                   tag_form: MapSet.new([]),
-                   map_entry: MapSet.new([]),
-                   struct_keyed: MapSet.new([:map_entry]),
-                   struct_positional: MapSet.new([:value, :map_entry])
-                 }) do
-              {:ok, value, new_ctx} -> do_run_sequence(stream, new_pos, new_ctx, [value | acc])
-              {:error, _} = err -> err
+            case Ichor.Actions.evaluate(
+                   :document,
+                   raw_captures,
+                   Dextrin.Text.Actions,
+                   ctx,
+                   %{
+                     nil: MapSet.new([]),
+                     discard: MapSet.new([]),
+                     list: MapSet.new([:value]),
+                     value: MapSet.new([:discard]),
+                     string: MapSet.new([]),
+                     header: MapSet.new([]),
+                     boolean: MapSet.new([]),
+                     char: MapSet.new([]),
+                     tuple: MapSet.new([:value]),
+                     number: MapSet.new([]),
+                     symbol: MapSet.new([]),
+                     sigil: MapSet.new([]),
+                     keyword: MapSet.new([]),
+                     document: MapSet.new([]),
+                     value_body: MapSet.new([]),
+                     map_lit: MapSet.new([:map_entry]),
+                     struct_lit: MapSet.new([]),
+                     set_lit: MapSet.new([:value]),
+                     tag_form: MapSet.new([]),
+                     map_entry: MapSet.new([]),
+                     struct_keyed: MapSet.new([:map_entry]),
+                     struct_positional: MapSet.new([:value, :map_entry])
+                   },
+                   locator: locator,
+                   range: {pos, new_pos}
+                 ) do
+              {:ok, value, new_ctx} ->
+                do_run_sequence(stream, new_pos, new_ctx, [value | acc], locator)
+
+              {:error, _} = err ->
+                err
             end
 
           _fail ->
