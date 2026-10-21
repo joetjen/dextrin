@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`bench/schema_validation.exs`**: times a schema check over a million
+  generated data sets, good and bad, against a schema set using most of
+  DXNS (Jan, 2026-10-21).
+
 ### Documentation
 
 - **DXN.md's reference tables are Markdown tables**, no longer TOON

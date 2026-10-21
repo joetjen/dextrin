@@ -397,6 +397,15 @@ produced at `dextrin`'s own compile time (that's also what keeps
 `only: :dev, runtime: false` — only the small `ichor_runtime` package
 ships in a release) — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
+Two benchmarks live in `bench/`: `mix run bench/format_sizes.exs`
+measures the sizes in the comparison above, and
+`mix run bench/schema_validation.exs [count] [seed]` times
+`Dextrin.Schema.check/3` on a schema set that uses most of DXNS --
+recursion, a generic, shapes, cases, list items, formats -- over a
+million generated data sets, about 30% of them with one error each, and
+reports the total, mean, minimum, median, percentiles and maximum for
+the good ones, the bad ones and each kind of error.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes, and
 [CHANGELOG.md](CHANGELOG.md) for release history.
 
