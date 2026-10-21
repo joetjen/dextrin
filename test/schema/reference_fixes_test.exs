@@ -113,6 +113,8 @@ defmodule Dextrin.Schema.ReferenceFixesTest do
 
     test "the docs show a value whose annotations are no map, and do not crash" do
       root = Path.join(System.tmp_dir!(), "dextrin-fix-#{System.unique_integer([:positive])}")
+      File.rm_rf!(root)
+      on_exit(fn -> File.rm_rf!(root) end)
       File.mkdir_p!(root)
       File.write!(Path.join(root, "c.dxns"), "%{C: {:doc {:enum :a} %{values: %{:a => 5}}}}")
       assert {:ok, _pages} = Dextrin.Schema.Docs.site(root, title: "T")

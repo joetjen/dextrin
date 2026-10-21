@@ -10,9 +10,9 @@ defmodule Dextrin.Text.Grammar.Native do
     alias Grammar.Native.Runtime.{Parser, Tokenizer}
     alias Grammar.VM.Token
 
-    def lex_token__ANON_2(input) do
+    def lex_token__ANON_1(input) do
       case input do
-        <<"[", rest::binary>> -> {:ok, "[", rest}
+        <<"@dxn", rest::binary>> -> {:ok, "@dxn", rest}
         _ -> :fail
       end
     end
@@ -36,296 +36,63 @@ defmodule Dextrin.Text.Grammar.Native do
       Tokenizer.plus_char(&lex_expr__3/1, input)
     end
 
-    def lex_expr__4(input) do
-      case input do
-        <<"/", rest::binary>> -> {:ok, "/", rest}
-        _ -> :fail
-      end
-    end
-
     def lex_expr__6(input) do
-      lex_token__DIGIT(input)
-    end
-
-    def lex_expr__5(input) do
-      Tokenizer.plus_char(&lex_expr__6/1, input)
-    end
-
-    def lex_token__RATIONAL(input0) do
-      with {:ok, t0, rest0} <- lex_expr__0(input0),
-           {:ok, t1, rest1} <- lex_expr__2(rest0),
-           {:ok, t2, rest2} <- lex_expr__4(rest1),
-           {:ok, t3, rest3} <- lex_expr__5(rest2) do
-        {:ok, t0 <> t1 <> t2 <> t3, rest3}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__7(input) do
       case input do
-        <<"\\", rest::binary>> -> {:ok, "\\", rest}
+        <<".", rest::binary>> -> {:ok, ".", rest}
         _ -> :fail
-      end
-    end
-
-    def lex_expr__9(input) do
-      case input do
-        <<"\"", rest::binary>> -> {:ok, "\"", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__10(input) do
-      case input do
-        <<"\\", rest::binary>> -> {:ok, "\\", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__11(input) do
-      case input do
-        <<"n", rest::binary>> -> {:ok, "n", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__12(input) do
-      case input do
-        <<"t", rest::binary>> -> {:ok, "t", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__13(input) do
-      case input do
-        <<"r", rest::binary>> -> {:ok, "r", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__14(input) do
-      case input do
-        <<"0", rest::binary>> -> {:ok, "0", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__15(input) do
-      case input do
-        <<"a", rest::binary>> -> {:ok, "a", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__16(input) do
-      case input do
-        <<"b", rest::binary>> -> {:ok, "b", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__17(input) do
-      case input do
-        <<"f", rest::binary>> -> {:ok, "f", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__18(input) do
-      case input do
-        <<"v", rest::binary>> -> {:ok, "v", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__20(input) do
-      case input do
-        <<"x{", rest::binary>> -> {:ok, "x{", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__22(input) do
-      lex_token__HEX(input)
-    end
-
-    def lex_expr__21(input) do
-      Tokenizer.plus_char(&lex_expr__22/1, input)
-    end
-
-    def lex_expr__23(input) do
-      case input do
-        <<"}", rest::binary>> -> {:ok, "}", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__19(input0) do
-      with {:ok, t0, rest0} <- lex_expr__20(input0),
-           {:ok, t1, rest1} <- lex_expr__21(rest0),
-           {:ok, t2, rest2} <- lex_expr__23(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
       end
     end
 
     def lex_expr__8(input) do
-      Tokenizer.first_char_match(
-        [
-          &lex_expr__9/1,
-          &lex_expr__10/1,
-          &lex_expr__11/1,
-          &lex_expr__12/1,
-          &lex_expr__13/1,
-          &lex_expr__14/1,
-          &lex_expr__15/1,
-          &lex_expr__16/1,
-          &lex_expr__17/1,
-          &lex_expr__18/1,
-          &lex_expr__19/1
-        ],
-        input
-      )
+      lex_token__DIGIT(input)
     end
 
-    def lex_token__ESCAPE(input0) do
-      with {:ok, t0, rest0} <- lex_expr__7(input0), {:ok, t1, rest1} <- lex_expr__8(rest0) do
+    def lex_expr__7(input) do
+      Tokenizer.plus_char(&lex_expr__8/1, input)
+    end
+
+    def lex_expr__5(input0) do
+      with {:ok, t0, rest0} <- lex_expr__6(input0), {:ok, t1, rest1} <- lex_expr__7(rest0) do
         {:ok, t0 <> t1, rest1}
       else
         :fail -> :fail
       end
     end
 
-    def lex_expr__24(input) do
-      lex_token__IDENT_START(input)
+    def lex_expr__4(input) do
+      Tokenizer.opt_char(&lex_expr__5/1, input)
     end
 
-    def lex_expr__26(input) do
-      lex_token__IDENT_CONT(input)
-    end
-
-    def lex_expr__25(input) do
-      Tokenizer.star_char(&lex_expr__26/1, input)
-    end
-
-    def lex_expr__29(input) do
+    def lex_expr__9(input) do
       case input do
-        <<".", rest::binary>> -> {:ok, ".", rest}
+        <<"M", rest::binary>> -> {:ok, "M", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__30(input) do
-      lex_token__IDENT_START(input)
-    end
-
-    def lex_expr__32(input) do
-      lex_token__IDENT_CONT(input)
-    end
-
-    def lex_expr__31(input) do
-      Tokenizer.star_char(&lex_expr__32/1, input)
-    end
-
-    def lex_expr__28(input0) do
-      with {:ok, t0, rest0} <- lex_expr__29(input0),
-           {:ok, t1, rest1} <- lex_expr__30(rest0),
-           {:ok, t2, rest2} <- lex_expr__31(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__27(input) do
-      Tokenizer.star_char(&lex_expr__28/1, input)
-    end
-
-    def lex_expr__35(input) do
-      case input do
-        <<"/", rest::binary>> -> {:ok, "/", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__36(input) do
-      lex_token__IDENT_START(input)
-    end
-
-    def lex_expr__38(input) do
-      lex_token__IDENT_CONT(input)
-    end
-
-    def lex_expr__37(input) do
-      Tokenizer.star_char(&lex_expr__38/1, input)
-    end
-
-    def lex_expr__41(input) do
-      case input do
-        <<".", rest::binary>> -> {:ok, ".", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__42(input) do
-      lex_token__IDENT_START(input)
-    end
-
-    def lex_expr__44(input) do
-      lex_token__IDENT_CONT(input)
-    end
-
-    def lex_expr__43(input) do
-      Tokenizer.star_char(&lex_expr__44/1, input)
-    end
-
-    def lex_expr__40(input0) do
-      with {:ok, t0, rest0} <- lex_expr__41(input0),
-           {:ok, t1, rest1} <- lex_expr__42(rest0),
-           {:ok, t2, rest2} <- lex_expr__43(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__39(input) do
-      Tokenizer.star_char(&lex_expr__40/1, input)
-    end
-
-    def lex_expr__34(input0) do
-      with {:ok, t0, rest0} <- lex_expr__35(input0),
-           {:ok, t1, rest1} <- lex_expr__36(rest0),
-           {:ok, t2, rest2} <- lex_expr__37(rest1),
-           {:ok, t3, rest3} <- lex_expr__39(rest2) do
+    def lex_token__DECIMAL(input0) do
+      with {:ok, t0, rest0} <- lex_expr__0(input0),
+           {:ok, t1, rest1} <- lex_expr__2(rest0),
+           {:ok, t2, rest2} <- lex_expr__4(rest1),
+           {:ok, t3, rest3} <- lex_expr__9(rest2) do
         {:ok, t0 <> t1 <> t2 <> t3, rest3}
       else
         :fail -> :fail
       end
     end
 
-    def lex_expr__33(input) do
-      Tokenizer.opt_char(&lex_expr__34/1, input)
-    end
-
-    def lex_token__IDENTIFIER(input0) do
-      with {:ok, t0, rest0} <- lex_expr__24(input0),
-           {:ok, t1, rest1} <- lex_expr__25(rest0),
-           {:ok, t2, rest2} <- lex_expr__27(rest1),
-           {:ok, t3, rest3} <- lex_expr__33(rest2) do
-        {:ok, t0 <> t1 <> t2 <> t3, rest3}
-      else
-        :fail -> :fail
+    def lex_token__AT(input) do
+      case input do
+        <<"@", rest::binary>> -> {:ok, "@", rest}
+        _ -> :fail
       end
     end
 
-    def lex_expr__45(input) do
+    def lex_expr__10(input) do
       lex_token__IDENT_START(input)
     end
 
-    def lex_expr__46(input) do
+    def lex_expr__11(input) do
       case input do
         <<c::utf8, rest::binary>> ->
           if Tokenizer.in_ranges?(c, [
@@ -1150,222 +917,31 @@ defmodule Dextrin.Text.Grammar.Native do
     end
 
     def lex_token__IDENT_CONT(input) do
-      Tokenizer.first_char_match([&lex_expr__45/1, &lex_expr__46/1], input)
+      Tokenizer.first_char_match([&lex_expr__10/1, &lex_expr__11/1], input)
     end
 
-    def lex_token__TRUE(input) do
+    def lex_expr__12(input) do
       case input do
-        <<"true", rest::binary>> -> {:ok, "true", rest}
+        <<"?", rest::binary>> -> {:ok, "?", rest}
         _ -> :fail
       end
     end
 
-    def lex_token__ANON_1(input) do
-      case input do
-        <<"@dxn", rest::binary>> -> {:ok, "@dxn", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__AT(input) do
-      case input do
-        <<"@", rest::binary>> -> {:ok, "@", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__ANON_5(input) do
-      case input do
-        <<"}", rest::binary>> -> {:ok, "}", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__48(input) do
-      case input do
-        <<"-", rest::binary>> -> {:ok, "-", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__47(input) do
-      Tokenizer.opt_char(&lex_expr__48/1, input)
-    end
-
-    def lex_expr__50(input) do
-      lex_token__DIGIT(input)
-    end
-
-    def lex_expr__49(input) do
-      Tokenizer.plus_char(&lex_expr__50/1, input)
-    end
-
-    def lex_token__INTEGER(input0) do
-      with {:ok, t0, rest0} <- lex_expr__47(input0), {:ok, t1, rest1} <- lex_expr__49(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_token__ANON_8(input) do
-      case input do
-        <<"(", rest::binary>> -> {:ok, "(", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__ANON_4(input) do
-      case input do
-        <<"{", rest::binary>> -> {:ok, "{", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__52(input) do
-      case input do
-        <<"-", rest::binary>> -> {:ok, "-", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__51(input) do
-      Tokenizer.opt_char(&lex_expr__52/1, input)
-    end
-
-    def lex_expr__54(input) do
-      lex_token__DIGIT(input)
-    end
-
-    def lex_expr__53(input) do
-      Tokenizer.plus_char(&lex_expr__54/1, input)
-    end
-
-    def lex_expr__57(input) do
-      case input do
-        <<".", rest::binary>> -> {:ok, ".", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__59(input) do
-      lex_token__DIGIT(input)
-    end
-
-    def lex_expr__58(input) do
-      Tokenizer.plus_char(&lex_expr__59/1, input)
-    end
-
-    def lex_expr__56(input0) do
-      with {:ok, t0, rest0} <- lex_expr__57(input0), {:ok, t1, rest1} <- lex_expr__58(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__55(input) do
-      Tokenizer.opt_char(&lex_expr__56/1, input)
-    end
-
-    def lex_expr__60(input) do
-      case input do
-        <<"M", rest::binary>> -> {:ok, "M", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__DECIMAL(input0) do
-      with {:ok, t0, rest0} <- lex_expr__51(input0),
-           {:ok, t1, rest1} <- lex_expr__53(rest0),
-           {:ok, t2, rest2} <- lex_expr__55(rest1),
-           {:ok, t3, rest3} <- lex_expr__60(rest2) do
-        {:ok, t0 <> t1 <> t2 <> t3, rest3}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_token__ANON_3(input) do
-      case input do
-        <<"]", rest::binary>> -> {:ok, "]", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__ANON_6(input) do
-      case input do
-        <<"%", rest::binary>> -> {:ok, "%", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__61(input) do
-      case input do
-        <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{32, 32}, {9, 9}, {13, 13}, {10, 10}, {44, 44}]) do
-            {:ok, <<c::utf8>>, rest}
-          else
-            :fail
-          end
-
-        _ ->
-          :fail
-      end
-    end
-
-    def lex_token__SPACE(input) do
-      Tokenizer.plus_char(&lex_expr__61/1, input)
-    end
-
-    def lex_expr__62(input) do
-      lex_token__IDENTIFIER(input)
-    end
-
-    def lex_expr__63(input) do
-      case input do
-        <<":", rest::binary>> -> {:ok, ":", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__MAP_KEY(input0) do
-      with {:ok, t0, rest0} <- lex_expr__62(input0), {:ok, t1, rest1} <- lex_expr__63(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_token__ANON_9(input) do
-      case input do
-        <<")", rest::binary>> -> {:ok, ")", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__FALSE(input) do
-      case input do
-        <<"false", rest::binary>> -> {:ok, "false", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__64(input) do
-      case input do
-        <<"\"", rest::binary>> -> {:ok, "\"", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__67(input) do
+    def lex_expr__14(input) do
       lex_token__ESCAPE(input)
     end
 
-    def lex_expr__70(input) do
+    def lex_expr__15(input) do
+      case input do
+        <<"s", rest::binary>> -> {:ok, "s", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__18(input) do
       case input do
         <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{34, 34}, {92, 92}]) do
+          if Tokenizer.in_ranges?(c, [{32, 32}, {9, 9}, {13, 13}, {10, 10}]) do
             {:ok, <<c::utf8>>, rest}
           else
             :fail
@@ -1376,144 +952,35 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def lex_expr__69(input) do
-      Tokenizer.not_pred_char(&lex_expr__70/1, input)
+    def lex_expr__17(input) do
+      Tokenizer.not_pred_char(&lex_expr__18/1, input)
     end
 
-    def lex_expr__71(input) do
+    def lex_expr__19(input) do
       case input do
         <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__68(input0) do
-      with {:ok, t0, rest0} <- lex_expr__69(input0), {:ok, t1, rest1} <- lex_expr__71(rest0) do
+    def lex_expr__16(input0) do
+      with {:ok, t0, rest0} <- lex_expr__17(input0), {:ok, t1, rest1} <- lex_expr__19(rest0) do
         {:ok, t0 <> t1, rest1}
       else
         :fail -> :fail
       end
     end
 
-    def lex_expr__66(input) do
-      Tokenizer.first_char_match([&lex_expr__67/1, &lex_expr__68/1], input)
+    def lex_expr__13(input) do
+      Tokenizer.first_char_match([&lex_expr__14/1, &lex_expr__15/1, &lex_expr__16/1], input)
     end
 
-    def lex_expr__65(input) do
-      Tokenizer.star_char(&lex_expr__66/1, input)
-    end
-
-    def lex_expr__72(input) do
-      case input do
-        <<"\"", rest::binary>> -> {:ok, "\"", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_token__STRING(input0) do
-      with {:ok, t0, rest0} <- lex_expr__64(input0),
-           {:ok, t1, rest1} <- lex_expr__65(rest0),
-           {:ok, t2, rest2} <- lex_expr__72(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_token__ALPHA(input) do
-      case input do
-        <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{97, 122}, {65, 90}]) do
-            {:ok, <<c::utf8>>, rest}
-          else
-            :fail
-          end
-
-        _ ->
-          :fail
-      end
-    end
-
-    def lex_expr__73(input) do
-      case input do
-        <<":", rest::binary>> -> {:ok, ":", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__75(input) do
-      lex_token__IDENTIFIER(input)
-    end
-
-    def lex_expr__76(input) do
-      lex_token__STRING(input)
-    end
-
-    def lex_expr__74(input) do
-      Tokenizer.first_char_match([&lex_expr__75/1, &lex_expr__76/1], input)
-    end
-
-    def lex_token__KEYWORD(input0) do
-      with {:ok, t0, rest0} <- lex_expr__73(input0), {:ok, t1, rest1} <- lex_expr__74(rest0) do
+    def lex_token__CHAR(input0) do
+      with {:ok, t0, rest0} <- lex_expr__12(input0), {:ok, t1, rest1} <- lex_expr__13(rest0) do
         {:ok, t0 <> t1, rest1}
       else
         :fail -> :fail
       end
-    end
-
-    def lex_token__NIL(input) do
-      case input do
-        <<"nil", rest::binary>> -> {:ok, "nil", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__78(input) do
-      lex_token__SPACE(input)
-    end
-
-    def lex_expr__79(input) do
-      lex_token__COMMENT(input)
-    end
-
-    def lex_expr__77(input) do
-      Tokenizer.first_char_match([&lex_expr__78/1, &lex_expr__79/1], input)
-    end
-
-    def lex_token__TRIVIA(input) do
-      Tokenizer.star_char(&lex_expr__77/1, input)
-    end
-
-    def lex_expr__80(input) do
-      case input do
-        <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{48, 57}]) do
-            {:ok, <<c::utf8>>, rest}
-          else
-            :fail
-          end
-
-        _ ->
-          :fail
-      end
-    end
-
-    def lex_expr__81(input) do
-      case input do
-        <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{97, 122}, {65, 90}]) do
-            {:ok, <<c::utf8>>, rest}
-          else
-            :fail
-          end
-
-        _ ->
-          :fail
-      end
-    end
-
-    def lex_token__ALNUM(input) do
-      Tokenizer.first_char_match([&lex_expr__80/1, &lex_expr__81/1], input)
     end
 
     def lex_token__IDENT_START(input) do
@@ -2223,59 +1690,81 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def lex_expr__82(input) do
+    def lex_token__HEX(input) do
       case input do
-        <<"#", rest::binary>> -> {:ok, "#", rest}
+        <<c::utf8, rest::binary>> ->
+          if Tokenizer.in_ranges?(c, [{97, 102}, {65, 70}, {48, 57}]) do
+            {:ok, <<c::utf8>>, rest}
+          else
+            :fail
+          end
+
+        _ ->
+          :fail
+      end
+    end
+
+    def lex_token__NIL(input) do
+      case input do
+        <<"nil", rest::binary>> -> {:ok, "nil", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__86(input) do
+    def lex_token__AT_DISCARD(input) do
       case input do
-        <<"\n", rest::binary>> -> {:ok, "\n", rest}
+        <<"@_", rest::binary>> -> {:ok, "@_", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__85(input) do
-      Tokenizer.not_pred_char(&lex_expr__86/1, input)
-    end
-
-    def lex_expr__87(input) do
+    def lex_token__ANON_4(input) do
       case input do
-        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
+        <<"{", rest::binary>> -> {:ok, "{", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__84(input0) do
-      with {:ok, t0, rest0} <- lex_expr__85(input0), {:ok, t1, rest1} <- lex_expr__87(rest0) do
-        {:ok, t0 <> t1, rest1}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__83(input) do
-      Tokenizer.star_char(&lex_expr__84/1, input)
-    end
-
-    def lex_expr__89(input) do
+    def lex_expr__21(input) do
       case input do
-        <<"\n", rest::binary>> -> {:ok, "\n", rest}
+        <<"-", rest::binary>> -> {:ok, "-", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__88(input) do
-      Tokenizer.opt_char(&lex_expr__89/1, input)
+    def lex_expr__20(input) do
+      Tokenizer.opt_char(&lex_expr__21/1, input)
     end
 
-    def lex_token__COMMENT(input0) do
-      with {:ok, t0, rest0} <- lex_expr__82(input0),
-           {:ok, t1, rest1} <- lex_expr__83(rest0),
-           {:ok, t2, rest2} <- lex_expr__88(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
+    def lex_expr__23(input) do
+      lex_token__DIGIT(input)
+    end
+
+    def lex_expr__22(input) do
+      Tokenizer.plus_char(&lex_expr__23/1, input)
+    end
+
+    def lex_expr__24(input) do
+      case input do
+        <<"/", rest::binary>> -> {:ok, "/", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__26(input) do
+      lex_token__DIGIT(input)
+    end
+
+    def lex_expr__25(input) do
+      Tokenizer.plus_char(&lex_expr__26/1, input)
+    end
+
+    def lex_token__RATIONAL(input0) do
+      with {:ok, t0, rest0} <- lex_expr__20(input0),
+           {:ok, t1, rest1} <- lex_expr__22(rest0),
+           {:ok, t2, rest2} <- lex_expr__24(rest1),
+           {:ok, t3, rest3} <- lex_expr__25(rest2) do
+        {:ok, t0 <> t1 <> t2 <> t3, rest3}
       else
         :fail -> :fail
       end
@@ -2288,148 +1777,98 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def lex_token__AT_DISCARD(input) do
+    def lex_token__ANON_3(input) do
       case input do
-        <<"@_", rest::binary>> -> {:ok, "@_", rest}
+        <<"]", rest::binary>> -> {:ok, "]", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__90(input) do
-      case input do
-        <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{101, 101}, {69, 69}]) do
-            {:ok, <<c::utf8>>, rest}
-          else
-            :fail
-          end
-
-        _ ->
-          :fail
-      end
-    end
-
-    def lex_expr__92(input) do
-      case input do
-        <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{43, 43}, {45, 45}]) do
-            {:ok, <<c::utf8>>, rest}
-          else
-            :fail
-          end
-
-        _ ->
-          :fail
-      end
-    end
-
-    def lex_expr__91(input) do
-      Tokenizer.opt_char(&lex_expr__92/1, input)
-    end
-
-    def lex_expr__94(input) do
-      lex_token__DIGIT(input)
-    end
-
-    def lex_expr__93(input) do
-      Tokenizer.plus_char(&lex_expr__94/1, input)
-    end
-
-    def lex_token__EXPONENT(input0) do
-      with {:ok, t0, rest0} <- lex_expr__90(input0),
-           {:ok, t1, rest1} <- lex_expr__91(rest0),
-           {:ok, t2, rest2} <- lex_expr__93(rest1) do
-        {:ok, t0 <> t1 <> t2, rest2}
-      else
-        :fail -> :fail
-      end
-    end
-
-    def lex_expr__97(input) do
+    def lex_expr__29(input) do
       case input do
         <<"-", rest::binary>> -> {:ok, "-", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__96(input) do
-      Tokenizer.opt_char(&lex_expr__97/1, input)
+    def lex_expr__28(input) do
+      Tokenizer.opt_char(&lex_expr__29/1, input)
     end
 
-    def lex_expr__99(input) do
+    def lex_expr__31(input) do
       lex_token__DIGIT(input)
     end
 
-    def lex_expr__98(input) do
-      Tokenizer.plus_char(&lex_expr__99/1, input)
+    def lex_expr__30(input) do
+      Tokenizer.plus_char(&lex_expr__31/1, input)
     end
 
-    def lex_expr__102(input) do
+    def lex_expr__34(input) do
       case input do
         <<".", rest::binary>> -> {:ok, ".", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__104(input) do
+    def lex_expr__36(input) do
       lex_token__DIGIT(input)
     end
 
-    def lex_expr__103(input) do
-      Tokenizer.plus_char(&lex_expr__104/1, input)
+    def lex_expr__35(input) do
+      Tokenizer.plus_char(&lex_expr__36/1, input)
     end
 
-    def lex_expr__106(input) do
+    def lex_expr__38(input) do
       lex_token__EXPONENT(input)
     end
 
-    def lex_expr__105(input) do
-      Tokenizer.opt_char(&lex_expr__106/1, input)
+    def lex_expr__37(input) do
+      Tokenizer.opt_char(&lex_expr__38/1, input)
     end
 
-    def lex_expr__101(input0) do
-      with {:ok, t0, rest0} <- lex_expr__102(input0),
-           {:ok, t1, rest1} <- lex_expr__103(rest0),
-           {:ok, t2, rest2} <- lex_expr__105(rest1) do
+    def lex_expr__33(input0) do
+      with {:ok, t0, rest0} <- lex_expr__34(input0),
+           {:ok, t1, rest1} <- lex_expr__35(rest0),
+           {:ok, t2, rest2} <- lex_expr__37(rest1) do
         {:ok, t0 <> t1 <> t2, rest2}
       else
         :fail -> :fail
       end
     end
 
-    def lex_expr__107(input) do
+    def lex_expr__39(input) do
       lex_token__EXPONENT(input)
     end
 
-    def lex_expr__100(input) do
-      Tokenizer.first_char_match([&lex_expr__101/1, &lex_expr__107/1], input)
+    def lex_expr__32(input) do
+      Tokenizer.first_char_match([&lex_expr__33/1, &lex_expr__39/1], input)
     end
 
-    def lex_expr__95(input0) do
-      with {:ok, t0, rest0} <- lex_expr__96(input0),
-           {:ok, t1, rest1} <- lex_expr__98(rest0),
-           {:ok, t2, rest2} <- lex_expr__100(rest1) do
+    def lex_expr__27(input0) do
+      with {:ok, t0, rest0} <- lex_expr__28(input0),
+           {:ok, t1, rest1} <- lex_expr__30(rest0),
+           {:ok, t2, rest2} <- lex_expr__32(rest1) do
         {:ok, t0 <> t1 <> t2, rest2}
       else
         :fail -> :fail
       end
     end
 
-    def lex_expr__108(input) do
+    def lex_expr__40(input) do
       case input do
         <<"NaN", rest::binary>> -> {:ok, "NaN", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__109(input) do
+    def lex_expr__41(input) do
       case input do
         <<"Infinity", rest::binary>> -> {:ok, "Infinity", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__110(input) do
+    def lex_expr__42(input) do
       case input do
         <<"-Infinity", rest::binary>> -> {:ok, "-Infinity", rest}
         _ -> :fail
@@ -2438,9 +1877,226 @@ defmodule Dextrin.Text.Grammar.Native do
 
     def lex_token__FLOAT(input) do
       Tokenizer.first_char_match(
-        [&lex_expr__95/1, &lex_expr__108/1, &lex_expr__109/1, &lex_expr__110/1],
+        [&lex_expr__27/1, &lex_expr__40/1, &lex_expr__41/1, &lex_expr__42/1],
         input
       )
+    end
+
+    def lex_token__ANON_2(input) do
+      case input do
+        <<"[", rest::binary>> -> {:ok, "[", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_token__ANON_5(input) do
+      case input do
+        <<"}", rest::binary>> -> {:ok, "}", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__43(input) do
+      case input do
+        <<c::utf8, rest::binary>> ->
+          if Tokenizer.in_ranges?(c, [{48, 57}]) do
+            {:ok, <<c::utf8>>, rest}
+          else
+            :fail
+          end
+
+        _ ->
+          :fail
+      end
+    end
+
+    def lex_expr__44(input) do
+      case input do
+        <<c::utf8, rest::binary>> ->
+          if Tokenizer.in_ranges?(c, [{97, 122}, {65, 90}]) do
+            {:ok, <<c::utf8>>, rest}
+          else
+            :fail
+          end
+
+        _ ->
+          :fail
+      end
+    end
+
+    def lex_token__ALNUM(input) do
+      Tokenizer.first_char_match([&lex_expr__43/1, &lex_expr__44/1], input)
+    end
+
+    def lex_expr__45(input) do
+      lex_token__IDENT_START(input)
+    end
+
+    def lex_expr__47(input) do
+      lex_token__IDENT_CONT(input)
+    end
+
+    def lex_expr__46(input) do
+      Tokenizer.star_char(&lex_expr__47/1, input)
+    end
+
+    def lex_expr__50(input) do
+      case input do
+        <<".", rest::binary>> -> {:ok, ".", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__51(input) do
+      lex_token__IDENT_START(input)
+    end
+
+    def lex_expr__53(input) do
+      lex_token__IDENT_CONT(input)
+    end
+
+    def lex_expr__52(input) do
+      Tokenizer.star_char(&lex_expr__53/1, input)
+    end
+
+    def lex_expr__49(input0) do
+      with {:ok, t0, rest0} <- lex_expr__50(input0),
+           {:ok, t1, rest1} <- lex_expr__51(rest0),
+           {:ok, t2, rest2} <- lex_expr__52(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__48(input) do
+      Tokenizer.star_char(&lex_expr__49/1, input)
+    end
+
+    def lex_expr__56(input) do
+      case input do
+        <<"/", rest::binary>> -> {:ok, "/", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__57(input) do
+      lex_token__IDENT_START(input)
+    end
+
+    def lex_expr__59(input) do
+      lex_token__IDENT_CONT(input)
+    end
+
+    def lex_expr__58(input) do
+      Tokenizer.star_char(&lex_expr__59/1, input)
+    end
+
+    def lex_expr__62(input) do
+      case input do
+        <<".", rest::binary>> -> {:ok, ".", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__63(input) do
+      lex_token__IDENT_START(input)
+    end
+
+    def lex_expr__65(input) do
+      lex_token__IDENT_CONT(input)
+    end
+
+    def lex_expr__64(input) do
+      Tokenizer.star_char(&lex_expr__65/1, input)
+    end
+
+    def lex_expr__61(input0) do
+      with {:ok, t0, rest0} <- lex_expr__62(input0),
+           {:ok, t1, rest1} <- lex_expr__63(rest0),
+           {:ok, t2, rest2} <- lex_expr__64(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__60(input) do
+      Tokenizer.star_char(&lex_expr__61/1, input)
+    end
+
+    def lex_expr__55(input0) do
+      with {:ok, t0, rest0} <- lex_expr__56(input0),
+           {:ok, t1, rest1} <- lex_expr__57(rest0),
+           {:ok, t2, rest2} <- lex_expr__58(rest1),
+           {:ok, t3, rest3} <- lex_expr__60(rest2) do
+        {:ok, t0 <> t1 <> t2 <> t3, rest3}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__54(input) do
+      Tokenizer.opt_char(&lex_expr__55/1, input)
+    end
+
+    def lex_token__IDENTIFIER(input0) do
+      with {:ok, t0, rest0} <- lex_expr__45(input0),
+           {:ok, t1, rest1} <- lex_expr__46(rest0),
+           {:ok, t2, rest2} <- lex_expr__48(rest1),
+           {:ok, t3, rest3} <- lex_expr__54(rest2) do
+        {:ok, t0 <> t1 <> t2 <> t3, rest3}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_token__ANON_9(input) do
+      case input do
+        <<")", rest::binary>> -> {:ok, ")", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_token__ANON_8(input) do
+      case input do
+        <<"(", rest::binary>> -> {:ok, "(", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_token__TRUE(input) do
+      case input do
+        <<"true", rest::binary>> -> {:ok, "true", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__66(input) do
+      case input do
+        <<":", rest::binary>> -> {:ok, ":", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__68(input) do
+      lex_token__IDENTIFIER(input)
+    end
+
+    def lex_expr__69(input) do
+      lex_token__STRING(input)
+    end
+
+    def lex_expr__67(input) do
+      Tokenizer.first_char_match([&lex_expr__68/1, &lex_expr__69/1], input)
+    end
+
+    def lex_token__KEYWORD(input0) do
+      with {:ok, t0, rest0} <- lex_expr__66(input0), {:ok, t1, rest1} <- lex_expr__67(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
     end
 
     def lex_token__DIGIT(input) do
@@ -2457,77 +2113,421 @@ defmodule Dextrin.Text.Grammar.Native do
       end
     end
 
-    def lex_token__HEX(input) do
-      case input do
-        <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{97, 102}, {65, 70}, {48, 57}]) do
-            {:ok, <<c::utf8>>, rest}
-          else
-            :fail
-          end
-
-        _ ->
-          :fail
-      end
+    def lex_expr__70(input) do
+      lex_token__IDENTIFIER(input)
     end
 
-    def lex_expr__111(input) do
+    def lex_expr__71(input) do
       case input do
-        <<"?", rest::binary>> -> {:ok, "?", rest}
+        <<":", rest::binary>> -> {:ok, ":", rest}
         _ -> :fail
       end
     end
 
-    def lex_expr__113(input) do
-      lex_token__ESCAPE(input)
-    end
-
-    def lex_expr__114(input) do
-      case input do
-        <<"s", rest::binary>> -> {:ok, "s", rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__117(input) do
-      case input do
-        <<c::utf8, rest::binary>> ->
-          if Tokenizer.in_ranges?(c, [{32, 32}, {9, 9}, {13, 13}, {10, 10}]) do
-            {:ok, <<c::utf8>>, rest}
-          else
-            :fail
-          end
-
-        _ ->
-          :fail
-      end
-    end
-
-    def lex_expr__116(input) do
-      Tokenizer.not_pred_char(&lex_expr__117/1, input)
-    end
-
-    def lex_expr__118(input) do
-      case input do
-        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
-        _ -> :fail
-      end
-    end
-
-    def lex_expr__115(input0) do
-      with {:ok, t0, rest0} <- lex_expr__116(input0), {:ok, t1, rest1} <- lex_expr__118(rest0) do
+    def lex_token__MAP_KEY(input0) do
+      with {:ok, t0, rest0} <- lex_expr__70(input0), {:ok, t1, rest1} <- lex_expr__71(rest0) do
         {:ok, t0 <> t1, rest1}
       else
         :fail -> :fail
       end
     end
 
-    def lex_expr__112(input) do
-      Tokenizer.first_char_match([&lex_expr__113/1, &lex_expr__114/1, &lex_expr__115/1], input)
+    def lex_expr__72(input) do
+      case input do
+        <<"#", rest::binary>> -> {:ok, "#", rest}
+        _ -> :fail
+      end
     end
 
-    def lex_token__CHAR(input0) do
-      with {:ok, t0, rest0} <- lex_expr__111(input0), {:ok, t1, rest1} <- lex_expr__112(rest0) do
+    def lex_expr__76(input) do
+      case input do
+        <<"\n", rest::binary>> -> {:ok, "\n", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__75(input) do
+      Tokenizer.not_pred_char(&lex_expr__76/1, input)
+    end
+
+    def lex_expr__77(input) do
+      case input do
+        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__74(input0) do
+      with {:ok, t0, rest0} <- lex_expr__75(input0), {:ok, t1, rest1} <- lex_expr__77(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__73(input) do
+      Tokenizer.star_char(&lex_expr__74/1, input)
+    end
+
+    def lex_expr__79(input) do
+      case input do
+        <<"\n", rest::binary>> -> {:ok, "\n", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__78(input) do
+      Tokenizer.opt_char(&lex_expr__79/1, input)
+    end
+
+    def lex_token__COMMENT(input0) do
+      with {:ok, t0, rest0} <- lex_expr__72(input0),
+           {:ok, t1, rest1} <- lex_expr__73(rest0),
+           {:ok, t2, rest2} <- lex_expr__78(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_token__ALPHA(input) do
+      case input do
+        <<c::utf8, rest::binary>> ->
+          if Tokenizer.in_ranges?(c, [{97, 122}, {65, 90}]) do
+            {:ok, <<c::utf8>>, rest}
+          else
+            :fail
+          end
+
+        _ ->
+          :fail
+      end
+    end
+
+    def lex_expr__81(input) do
+      case input do
+        <<"-", rest::binary>> -> {:ok, "-", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__80(input) do
+      Tokenizer.opt_char(&lex_expr__81/1, input)
+    end
+
+    def lex_expr__83(input) do
+      lex_token__DIGIT(input)
+    end
+
+    def lex_expr__82(input) do
+      Tokenizer.plus_char(&lex_expr__83/1, input)
+    end
+
+    def lex_token__INTEGER(input0) do
+      with {:ok, t0, rest0} <- lex_expr__80(input0), {:ok, t1, rest1} <- lex_expr__82(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__85(input) do
+      lex_token__SPACE(input)
+    end
+
+    def lex_expr__86(input) do
+      lex_token__COMMENT(input)
+    end
+
+    def lex_expr__84(input) do
+      Tokenizer.first_char_match([&lex_expr__85/1, &lex_expr__86/1], input)
+    end
+
+    def lex_token__TRIVIA(input) do
+      Tokenizer.star_char(&lex_expr__84/1, input)
+    end
+
+    def lex_token__ANON_6(input) do
+      case input do
+        <<"%", rest::binary>> -> {:ok, "%", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__87(input) do
+      case input do
+        <<"\"", rest::binary>> -> {:ok, "\"", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__90(input) do
+      lex_token__ESCAPE(input)
+    end
+
+    def lex_expr__93(input) do
+      case input do
+        <<c::utf8, rest::binary>> ->
+          if Tokenizer.in_ranges?(c, [{34, 34}, {92, 92}]) do
+            {:ok, <<c::utf8>>, rest}
+          else
+            :fail
+          end
+
+        _ ->
+          :fail
+      end
+    end
+
+    def lex_expr__92(input) do
+      Tokenizer.not_pred_char(&lex_expr__93/1, input)
+    end
+
+    def lex_expr__94(input) do
+      case input do
+        <<c::utf8, rest::binary>> -> {:ok, <<c::utf8>>, rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__91(input0) do
+      with {:ok, t0, rest0} <- lex_expr__92(input0), {:ok, t1, rest1} <- lex_expr__94(rest0) do
+        {:ok, t0 <> t1, rest1}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__89(input) do
+      Tokenizer.first_char_match([&lex_expr__90/1, &lex_expr__91/1], input)
+    end
+
+    def lex_expr__88(input) do
+      Tokenizer.star_char(&lex_expr__89/1, input)
+    end
+
+    def lex_expr__95(input) do
+      case input do
+        <<"\"", rest::binary>> -> {:ok, "\"", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_token__STRING(input0) do
+      with {:ok, t0, rest0} <- lex_expr__87(input0),
+           {:ok, t1, rest1} <- lex_expr__88(rest0),
+           {:ok, t2, rest2} <- lex_expr__95(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_token__FALSE(input) do
+      case input do
+        <<"false", rest::binary>> -> {:ok, "false", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__96(input) do
+      case input do
+        <<c::utf8, rest::binary>> ->
+          if Tokenizer.in_ranges?(c, [{101, 101}, {69, 69}]) do
+            {:ok, <<c::utf8>>, rest}
+          else
+            :fail
+          end
+
+        _ ->
+          :fail
+      end
+    end
+
+    def lex_expr__98(input) do
+      case input do
+        <<c::utf8, rest::binary>> ->
+          if Tokenizer.in_ranges?(c, [{43, 43}, {45, 45}]) do
+            {:ok, <<c::utf8>>, rest}
+          else
+            :fail
+          end
+
+        _ ->
+          :fail
+      end
+    end
+
+    def lex_expr__97(input) do
+      Tokenizer.opt_char(&lex_expr__98/1, input)
+    end
+
+    def lex_expr__100(input) do
+      lex_token__DIGIT(input)
+    end
+
+    def lex_expr__99(input) do
+      Tokenizer.plus_char(&lex_expr__100/1, input)
+    end
+
+    def lex_token__EXPONENT(input0) do
+      with {:ok, t0, rest0} <- lex_expr__96(input0),
+           {:ok, t1, rest1} <- lex_expr__97(rest0),
+           {:ok, t2, rest2} <- lex_expr__99(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__101(input) do
+      case input do
+        <<c::utf8, rest::binary>> ->
+          if Tokenizer.in_ranges?(c, [{32, 32}, {9, 9}, {13, 13}, {10, 10}, {44, 44}]) do
+            {:ok, <<c::utf8>>, rest}
+          else
+            :fail
+          end
+
+        _ ->
+          :fail
+      end
+    end
+
+    def lex_token__SPACE(input) do
+      Tokenizer.plus_char(&lex_expr__101/1, input)
+    end
+
+    def lex_expr__102(input) do
+      case input do
+        <<"\\", rest::binary>> -> {:ok, "\\", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__104(input) do
+      case input do
+        <<"\"", rest::binary>> -> {:ok, "\"", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__105(input) do
+      case input do
+        <<"\\", rest::binary>> -> {:ok, "\\", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__106(input) do
+      case input do
+        <<"n", rest::binary>> -> {:ok, "n", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__107(input) do
+      case input do
+        <<"t", rest::binary>> -> {:ok, "t", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__108(input) do
+      case input do
+        <<"r", rest::binary>> -> {:ok, "r", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__109(input) do
+      case input do
+        <<"0", rest::binary>> -> {:ok, "0", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__110(input) do
+      case input do
+        <<"a", rest::binary>> -> {:ok, "a", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__111(input) do
+      case input do
+        <<"b", rest::binary>> -> {:ok, "b", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__112(input) do
+      case input do
+        <<"f", rest::binary>> -> {:ok, "f", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__113(input) do
+      case input do
+        <<"v", rest::binary>> -> {:ok, "v", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__115(input) do
+      case input do
+        <<"x{", rest::binary>> -> {:ok, "x{", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__117(input) do
+      lex_token__HEX(input)
+    end
+
+    def lex_expr__116(input) do
+      Tokenizer.plus_char(&lex_expr__117/1, input)
+    end
+
+    def lex_expr__118(input) do
+      case input do
+        <<"}", rest::binary>> -> {:ok, "}", rest}
+        _ -> :fail
+      end
+    end
+
+    def lex_expr__114(input0) do
+      with {:ok, t0, rest0} <- lex_expr__115(input0),
+           {:ok, t1, rest1} <- lex_expr__116(rest0),
+           {:ok, t2, rest2} <- lex_expr__118(rest1) do
+        {:ok, t0 <> t1 <> t2, rest2}
+      else
+        :fail -> :fail
+      end
+    end
+
+    def lex_expr__103(input) do
+      Tokenizer.first_char_match(
+        [
+          &lex_expr__104/1,
+          &lex_expr__105/1,
+          &lex_expr__106/1,
+          &lex_expr__107/1,
+          &lex_expr__108/1,
+          &lex_expr__109/1,
+          &lex_expr__110/1,
+          &lex_expr__111/1,
+          &lex_expr__112/1,
+          &lex_expr__113/1,
+          &lex_expr__114/1
+        ],
+        input
+      )
+    end
+
+    def lex_token__ESCAPE(input0) do
+      with {:ok, t0, rest0} <- lex_expr__102(input0), {:ok, t1, rest1} <- lex_expr__103(rest0) do
         {:ok, t0 <> t1, rest1}
       else
         :fail -> :fail
@@ -4623,6 +4623,24 @@ defmodule Dextrin.Text.Grammar.Native do
       else
         _fail -> :fail
       end
+    end
+
+    def describe_token(name) do
+      Map.get(
+        %{
+          ANON_1: "\"@dxn\"",
+          ANON_2: "\"[\"",
+          ANON_3: "\"]\"",
+          ANON_4: "\"{\"",
+          ANON_5: "\"}\"",
+          ANON_6: "\"%\"",
+          ANON_7: "\"=>\"",
+          ANON_8: "\"(\"",
+          ANON_9: "\")\""
+        },
+        name,
+        Atom.to_string(name)
+      )
     end
 
     (
@@ -6770,28 +6788,41 @@ defmodule Dextrin.Text.Grammar.Native do
         with {:ok, tokens} <- tokenize(input, context) do
           stream = tokens |> Grammar.Source.trimmed(:TRIVIA) |> List.to_tuple()
 
-          case lossless_rule__document(stream, 0, [0], context) do
-            {:ok, pos, _ref_stack, raw_captures} when pos == tuple_size(stream) ->
-              {raw_captures, record} = Ichor.Syntax.Record.root(:document, pos, raw_captures)
+          (
+            previous = Grammar.Furthest.start()
+            answer = lossless_rule__document(stream, 0, [0], context)
+            record = Grammar.Furthest.finish(previous)
 
-              {:ok, Ichor.Syntax.tree(record, tokens, :TRIVIA), raw_captures,
-               Grammar.Source.Locator.new(stream, input)}
+            case answer do
+              {:ok, pos, _ref_stack, raw_captures} when pos == tuple_size(stream) ->
+                {raw_captures, record} = Ichor.Syntax.Record.root(:document, pos, raw_captures)
 
-            {:ok, pos, _ref_stack, _raw_captures} ->
-              {:error, Parser.unexpected_token_error(stream, pos, input)}
+                {:ok, Ichor.Syntax.tree(record, tokens, :TRIVIA), raw_captures,
+                 Grammar.Source.Locator.new(stream, input)}
 
-            _fail ->
-              {line, column} = Grammar.Source.position(stream, 0, input)
+              {:ok, pos, _ref_stack, _raw_captures} ->
+                left = Parser.skip_leading_trivia(stream, pos, :TRIVIA)
 
-              {:error,
-               Ichor.Error.new(
-                 message: "input does not match #{inspect(:document)}",
-                 stage: :parser,
-                 line: line,
-                 column: column,
-                 source: input
-               )}
-          end
+                {:error,
+                 Grammar.Furthest.error(record, stream, input, left, :TRIVIA, &describe_token/1) ||
+                   Parser.unexpected_token_error(stream, left, input)}
+
+              _fail ->
+                {:error,
+                 Grammar.Furthest.error(record, stream, input, nil, :TRIVIA, &describe_token/1) ||
+                   (
+                     {line, column} = Grammar.Source.position(stream, 0, input)
+
+                     Ichor.Error.new(
+                       message: "input does not match #{inspect(:document)}",
+                       stage: :parser,
+                       line: line,
+                       column: column,
+                       source: input
+                     )
+                   )}
+            end
+          )
         end
       end
     )
@@ -6809,25 +6840,38 @@ defmodule Dextrin.Text.Grammar.Native do
       with {:ok, tokens} <- tokenize(input, context) do
         stream = tokens |> Grammar.Source.trimmed(:TRIVIA) |> List.to_tuple()
 
-        case parse_rule__document(stream, 0, [0], context) do
-          {:ok, pos, _ref_stack, raw_captures} when pos == tuple_size(stream) ->
-            {:ok, pos, raw_captures, Grammar.Source.Locator.new(stream, input)}
+        (
+          previous = Grammar.Furthest.start()
+          answer = parse_rule__document(stream, 0, [0], context)
+          record = Grammar.Furthest.finish(previous)
 
-          {:ok, pos, _ref_stack, _raw_captures} ->
-            {:error, Parser.unexpected_token_error(stream, pos, input)}
+          case answer do
+            {:ok, pos, _ref_stack, raw_captures} when pos == tuple_size(stream) ->
+              {:ok, pos, raw_captures, Grammar.Source.Locator.new(stream, input)}
 
-          _fail ->
-            {line, column} = Grammar.Source.position(stream, 0, input)
+            {:ok, pos, _ref_stack, _raw_captures} ->
+              left = Parser.skip_leading_trivia(stream, pos, :TRIVIA)
 
-            {:error,
-             Ichor.Error.new(
-               message: "input does not match #{inspect(:document)}",
-               stage: :parser,
-               line: line,
-               column: column,
-               source: input
-             )}
-        end
+              {:error,
+               Grammar.Furthest.error(record, stream, input, left, :TRIVIA, &describe_token/1) ||
+                 Parser.unexpected_token_error(stream, left, input)}
+
+            _fail ->
+              {:error,
+               Grammar.Furthest.error(record, stream, input, nil, :TRIVIA, &describe_token/1) ||
+                 (
+                   {line, column} = Grammar.Source.position(stream, 0, input)
+
+                   Ichor.Error.new(
+                     message: "input does not match #{inspect(:document)}",
+                     stage: :parser,
+                     line: line,
+                     column: column,
+                     source: input
+                   )
+                 )}
+          end
+        )
       end
     end
 
@@ -6888,7 +6932,11 @@ defmodule Dextrin.Text.Grammar.Native do
       if pos >= tuple_size(stream) do
         {:ok, Enum.reverse(acc), ctx}
       else
-        case parse_rule__document(stream, pos, [0], ctx) do
+        previous = Grammar.Furthest.start()
+        answer = parse_rule__document(stream, pos, [0], ctx)
+        record = Grammar.Furthest.finish(previous)
+
+        case answer do
           {:ok, new_pos, _ref_stack, raw_captures} ->
             case Ichor.Actions.evaluate(
                    :document,
@@ -6930,10 +6978,18 @@ defmodule Dextrin.Text.Grammar.Native do
 
           _fail ->
             {:error,
-             Ichor.Error.new(
-               message: "input does not match #{inspect(:document)}",
-               stage: :parser
-             )}
+             Grammar.Furthest.error(
+               record,
+               stream,
+               locator.input,
+               nil,
+               :TRIVIA,
+               &describe_token/1
+             ) ||
+               Ichor.Error.new(
+                 message: "input does not match #{inspect(:document)}",
+                 stage: :parser
+               )}
         end
       end
     end

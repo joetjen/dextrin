@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **ichor_runtime 0.6** (ichor 0.7 for `mix ichor.gen`), the parser
+  regenerated with it: a syntax error names the line and token where the
+  parse broke and what was expected there, not the document's start;
+  `mix dextrin.check` reports that line.
 - **DXN.md says a pattern PCRE does not compile is `syntax`**, as every
   implementation with PCRE already refused it, and names Node's limit:
   without PCRE, it reads any pattern.

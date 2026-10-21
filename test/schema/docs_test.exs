@@ -14,8 +14,13 @@ defmodule Dextrin.Schema.DocsTest do
   doctest Comments
   doctest Markdown
 
+  # Each site in a directory of its own, emptied first and removed after:
+  # `unique_integer` is unique within one run only, so a directory an
+  # earlier run left behind would lend this one its files.
   defp site(files) do
     root = Path.join(System.tmp_dir!(), "dextrin-docs-#{System.unique_integer([:positive])}")
+    File.rm_rf!(root)
+    on_exit(fn -> File.rm_rf!(root) end)
 
     for {path, source} <- files do
       File.mkdir_p!(Path.dirname(Path.join(root, path)))
