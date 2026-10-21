@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **DXN.md's reference tables are Markdown tables**, no longer TOON
   (Jan, 2026-10-21); the `canonical` table said 32 rows and had 33.
 
+### Changed
+
+- **ichor_runtime 0.6.1** (ichor 0.7.1 for `mix ichor.gen`), the parser
+  regenerated with it: lexing a 5 KB document takes 2.0 ms instead of
+  12.4, decoding it 4.2 ms instead of 14.2 (Ichor's character classes
+  were a linear scan; found by the schema-validation benchmark).
+
 ## [0.3.0] - 2026-10-21
 
 One way to write a value, nanoseconds, `@objectid` and `@ip`, the
