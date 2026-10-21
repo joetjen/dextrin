@@ -1,7 +1,7 @@
 defmodule Dextrin.Schema.StructReferenceTest do
   @moduledoc """
   B6 of `design/implementation-plan.md`: a value matches only its
-  declared type, and nothing is converted to make it match (DXN.md §4.7).
+  declared type, and nothing is converted to make it match (DXNS.md §7).
   A field typed `User` accepts only a `User` struct; a map is not a
   struct.
   """

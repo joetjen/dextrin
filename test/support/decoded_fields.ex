@@ -3,7 +3,7 @@ defmodule Dextrin.Test.Support.DecodedFields do
   A decode result's struct, as its field map -- for tests about what a
   schema accepts, which care about the checked fields and not about the
   generic `Dextrin.Struct` a schema with no materializer decodes to
-  (DXN.md §4.8).
+  (DXNS.md §8).
   """
 
   @doc """

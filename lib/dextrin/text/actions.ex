@@ -283,7 +283,7 @@ defmodule Dextrin.Text.Actions do
 
   defp field_name(_), do: :error
 
-  # `%Name(3){...}`: the schema version, a positive integer (DXN.md §4.8).
+  # `%Name(3){...}`: the schema version, a positive integer (DXNS.md §8).
   defp struct_version(%{version: version_cap}, ctx) do
     with {:ok, version, ctx} <- version_cap.eval.(ctx) do
       if version > 0,

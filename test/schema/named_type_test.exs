@@ -103,7 +103,7 @@ defmodule Dextrin.Schema.NamedTypeTest do
     assert reason =~ "Broken"
   end
 
-  # Until 2026-10-20 a sibling was not visible (DXN.md §4.5 left it
+  # Until 2026-10-20 a sibling was not visible (DXNS.md §5 left it
   # implementation-defined, and this implementation refused it, the bare
   # symbol falling back to a struct reference). Shapes need siblings
   # (design/shapes-and-case.md), so every named type now sees every other.

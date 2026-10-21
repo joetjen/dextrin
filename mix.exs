@@ -152,6 +152,10 @@ defmodule Dextrin.MixProject do
       "guides/dxn/DXN.md",
       "guides/dxn/DXN_EXAMPLES.md",
       "guides/dxn/DXN_CHEATSHEET.md",
+      {"guides/dxns/TUTORIAL.md", filename: "dxns-tutorial", title: "DXNS Tutorial"},
+      "guides/dxns/DXNS.md",
+      "guides/dxns/DXNS_EXAMPLES.md",
+      "guides/dxns/DXNS_CHEATSHEET.md",
       "CHANGELOG.md",
       "CONTRIBUTING.md",
       "LICENSE"
@@ -177,6 +181,7 @@ defmodule Dextrin.MixProject do
     [
       Guides: ["guides/TUTORIAL.md", "guides/EXAMPLES.md", "guides/CHEATSHEET.md"],
       "DXN Format": Path.wildcard("guides/dxn/*.md"),
+      "DXNS Schemas": Path.wildcard("guides/dxns/*.md"),
       Project: ["CHANGELOG.md", "CONTRIBUTING.md", "LICENSE"]
     ]
   end

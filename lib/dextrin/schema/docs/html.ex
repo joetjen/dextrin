@@ -383,7 +383,7 @@ defmodule Dextrin.Schema.Docs.Html do
     """
   end
 
-  # ---- annotations, {:doc T %{...}} (DXN.md §4.1b) ---------------------------
+  # ---- annotations, {:doc T %{...}} (DXNS.md §1b) ---------------------------
 
   # What a definition's page says about it before its body: the doc's
   # description, the comments, examples and meta -- each only when there

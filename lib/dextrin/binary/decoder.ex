@@ -51,7 +51,7 @@ defmodule Dextrin.Binary.Decoder do
   @doc """
   `bin` read as `.dxnb` documents back to back, each with its own
   envelope -- a CBOR sequence of documents, as a schema's `encodes-seq:`
-  reads one (DXN.md §4.2); no bytes at all are no documents.
+  reads one (DXNS.md §2); no bytes at all are no documents.
   """
   @spec decode_sequence(binary(), keyword()) :: {:ok, [term()]} | {:error, Dextrin.Error.t()}
   def decode_sequence(bin, opts \\ []), do: sequence(bin, opts, [])

@@ -134,7 +134,7 @@ defmodule Dextrin.Schema.EncodeValidationTest do
          %{
            registry: registry
          } do
-      # A value matches only its declared type (DXN.md §4.7): with no
+      # A value matches only its declared type (DXNS.md §7): with no
       # module registered for "Address", nothing says this struct is one.
       wrong = %{"home" => struct(TestCompany, ein: "1")}
       assert {:error, _} = Dextrin.Schema.validate_encode(wrong, registry, "Person")

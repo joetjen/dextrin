@@ -1,7 +1,7 @@
 defmodule Dextrin.Schema.TypeExpr do
   @moduledoc """
   Internal, compiled representation of a `.dxns` type expression — the
-  vocabulary of DXN.md §4.1 (`any`, `never`, `primitive`, `reference`,
+  vocabulary of DXNS.md §1 (`any`, `never`, `primitive`, `reference`,
   `list-of`, `list-items`, `set-of`, `tuple-of`, `tuple-of-all`, `map-of`, `array-of`, `tagged`, `doc`, `if`,
   `ordered-map-of`, `sorted-set-of`, `enum`, `one-of`, `any-of`,
   `all-of`, `not`, `nilable`, `refine`, `struct`, and `shape` and `case`,
@@ -33,7 +33,7 @@ defmodule Dextrin.Schema.TypeExpr do
 
   alias Dextrin.Schema.Validated
 
-  # A refine's keys whose argument is a type (DXN.md §4.2).
+  # A refine's keys whose argument is a type (DXNS.md §2).
   @type_keys ~w(contains content encodes encodes-seq)
 
   @type t ::
@@ -70,7 +70,7 @@ defmodule Dextrin.Schema.TypeExpr do
   @typedoc """
   One of a `{:list-items}`'s items: a type for exactly one item, or a
   repeat of a group of them, `most` nil when there is no upper bound
-  (DXN.md §4.1a).
+  (DXNS.md §1a).
   """
   @type particle ::
           {:one, t()}
@@ -141,7 +141,7 @@ defmodule Dextrin.Schema.TypeExpr do
   def conform({:reference, name}, %Validated{name: validated_name} = value, _context),
     do: when_true(validated_name == name, value)
 
-  # A struct is matched only by a struct (DXN.md §4.7): past a struct or
+  # A struct is matched only by a struct (DXNS.md §7): past a struct or
   # checked value of the right name, only the application struct
   # registered for `name` is one. A plain map, or any other value, is not
   # a struct, however much it looks like one -- nothing is converted to
@@ -165,7 +165,7 @@ defmodule Dextrin.Schema.TypeExpr do
     end
   end
 
-  # A recursive named type's reference to itself (DXN.md §4.5), looked
+  # A recursive named type's reference to itself (DXNS.md §5), looked
   # up when it is checked; with no registry there is nothing to look in.
   def conform(
         {:named, name},
@@ -396,7 +396,7 @@ defmodule Dextrin.Schema.TypeExpr do
   # `particles` matched against the front of `left`, then `rest` against
   # what they leave: the items conformed, in order, or `:error`. A repeat
   # takes as many items as it can while the rest still matches, and
-  # gives back one at a time until it does (DXN.md §4.1a).
+  # gives back one at a time until it does (DXNS.md §1a).
   defp items([], left, _context, rest), do: rest.(left)
   defp items([{:one, _type} | _], [], _context, _rest), do: :error
 
@@ -632,7 +632,7 @@ defmodule Dextrin.Schema.TypeExpr do
   defp primitive_matches?("bytes", value),
     do: match?(%Bytes{data: data} when is_binary(data), value)
 
-  # Bits and bytes are one value space (DXN.md §4.1): `:bits` takes both.
+  # Bits and bytes are one value space (DXNS.md §1): `:bits` takes both.
   defp primitive_matches?("bits", value), do: match?(%Bytes{}, value)
   defp primitive_matches?("regex", value), do: match?(%Regex{}, value)
   defp primitive_matches?(_name, _value), do: false
@@ -814,7 +814,7 @@ defmodule Dextrin.Schema.TypeExpr do
   # What the string holds; it checks nothing more (`content` reads it).
   defp satisfies_constraint?("media-type", _media, value), do: is_binary(value)
 
-  # One of DXN.md §4.2a's formats, checked as `Dextrin.Schema.Format` says.
+  # One of DXNS.md §2a's formats, checked as `Dextrin.Schema.Format` says.
   defp satisfies_constraint?("format", name, value) when is_binary(value),
     do: Dextrin.Schema.Format.valid?(name, value)
 
@@ -894,7 +894,7 @@ defmodule Dextrin.Schema.TypeExpr do
   defp length_of(%Bytes{data: data}, _base), do: div(bit_size(data) + 7, 8)
   defp length_of(_value, _base), do: nil
 
-  # Codepoints, not graphemes: `"e\u0301"` is two (DXN.md §4.2).
+  # Codepoints, not graphemes: `"e\u0301"` is two (DXNS.md §2).
   defp codepoints(text), do: text |> String.to_charlist() |> length()
 
   defp utf8_size(value) when is_binary(value), do: byte_size(value)

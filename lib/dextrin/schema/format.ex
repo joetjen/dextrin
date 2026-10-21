@@ -1,6 +1,6 @@
 defmodule Dextrin.Schema.Format do
   @moduledoc """
-  The formats a refine's `format:` names (DXN.md §4.2a, Jan,
+  The formats a refine's `format:` names (DXNS.md §2a, Jan,
   2026-10-20): a closed set, each checked the same way in every
   implementation. A format DXN has a tag for is read by that tag's
   reader; every other one by a grammar written as a regular expression

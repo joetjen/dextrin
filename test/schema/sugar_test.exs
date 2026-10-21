@@ -3,7 +3,7 @@ defmodule Dextrin.Schema.SugarTest do
   Sugar, the superset's group 9 (design/schema-superset.md, Jan,
   2026-10-20): protobuf's and MongoDB's sized numbers, `:number`,
   `{:const v}` and `{:if I T E}`. Each says nothing a longer form does
-  not; DXN.md §4.1 gives the form each stands for.
+  not; DXNS.md §1 gives the form each stands for.
   """
 
   use ExUnit.Case, async: true

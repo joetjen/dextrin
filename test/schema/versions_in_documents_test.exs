@@ -3,7 +3,7 @@ defmodule Dextrin.Schema.VersionsInDocumentsTest do
   B2 of `design/implementation-plan.md`: every struct written against a
   schema carries the version it was written with -- `%Point(2){...}` in
   text and the type name `"Point(2)"` in binary -- and that version is
-  always the latest one loaded (DXN.md §4.8).
+  always the latest one loaded (DXNS.md §8).
   """
 
   use ExUnit.Case, async: true

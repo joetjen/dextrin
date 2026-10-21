@@ -85,7 +85,7 @@ Protobuf, I is Ion Schema, and Y is YAML, TOML or MessagePack.
 
 ### 4. Lists and sequences (J C I Y)
 
-**Done** (Jan, 2026-10-20; DXN.md §4.1a, §4.2), as proposed below except
+**Done** (Jan, 2026-10-20; DXNS.md §1a, §4.2), as proposed below except
 `unevaluated`: `{:list-items}` closes a list already, every item taken
 by one of its parts, so `unevaluatedItems: false` is the list-items
 itself and an open list ends in `{:repeat :any 0 nil}`. What was wrong
@@ -105,12 +105,12 @@ refine keys became a compile error on the way.
 ### 5. Scalar constraints: new refine keys (J M C I P Y)
 
 **Lengths, patterns, decimals, `float32`, `bits` and temporal ranges
-done** (Jan, 2026-10-20; DXN.md §4.2). Two changes from the proposal:
+done** (Jan, 2026-10-20; DXNS.md §2). Two changes from the proposal:
 a temporal's precision is `resolution: :millisecond` (no part finer),
 since a DXN time carries no written precision for a `min-precision` to
 read, and a refine key now refuses a value it does not apply to. Left
 out: `grammar:` and `check:`, rated low value below. **`format:` done**
-too (DXN.md §4.2a): every format of the row below but `regex`, whose
+too (DXNS.md §2a): every format of the row below but `regex`, whose
 answer depends on the engine, plus `datetime`/`local-datetime` in
 DXN's own names for JSON Schema's `date-time`. **The encoding keys
 done** as well: `encoding`, `media-type`, `content` (reading DXN only:
@@ -148,14 +148,14 @@ ISL says it never does.
 |---|---|
 | A custom tag by name with a typed value (YAML local tags, MessagePack ext, BSON user binary, CBOR tags, Ion clob) | `{:tagged acme.money {:tuple-of :decimal :string}}` |
 
-**Done** (Jan, 2026-10-20; DXN.md §4.1). ObjectId left the row: it is
+**Done** (Jan, 2026-10-20; DXNS.md §1). ObjectId left the row: it is
 a built-in tag now, `:objectid`, and a built-in tag's name is refused
 in `{:tagged}`. An application's value matches as its registered tag
 encoder writes it.
 
 ### 8. Annotations and metadata (J C I P)
 
-**Done** (Jan, 2026-10-20; DXN.md §4.1b) as one form, `{:doc T %{...}}`,
+**Done** (Jan, 2026-10-20; DXNS.md §1b) as one form, `{:doc T %{...}}`,
 in place of three of the rows below. What was wrong with them: the
 schema header map, `%schema(3, %{...})`, would have changed the grammar
 of every struct header for one use, where `{:doc %schema(3){...}
@@ -178,7 +178,7 @@ field's type, one place for every annotation.
 `{:const v}`, `{:if I T E}`. Built-in named types and forms; nothing
 they say is new.
 
-**Done** (Jan, 2026-10-20; DXN.md §4.1), with `:float32` beside the
+**Done** (Jan, 2026-10-20; DXNS.md §1), with `:float32` beside the
 integers for protobuf's `float`, and `{:if I T}` leaving out the else.
 With it every group Jan accepted is in; group 3 was declined, and
 closing a type is not supported.

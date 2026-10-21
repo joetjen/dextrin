@@ -79,7 +79,7 @@ defmodule Dextrin.Schema.FileResolverTest do
              DecodedFields.of(Dextrin.decode("%Money{amount: 5M}", registry: registry))
   end
 
-  # --- DXN.md §4.6: versions, and dotted names --------------------------
+  # --- DXNS.md §6: versions, and dotted names --------------------------
 
   defp write(dir, relative, source) do
     path = Path.join(dir, relative)
@@ -126,7 +126,7 @@ defmodule Dextrin.Schema.FileResolverTest do
   end
 
   # Every version found is loaded, so an older struct reaches the
-  # materializer rather than being read as the latest (DXN.md §4.8).
+  # materializer rather than being read as the latest (DXNS.md §8).
   @tag :tmp_dir
   test "every version is loaded, so an older struct reaches the materializer", %{tmp_dir: dir} do
     write(dir, "Foo/Bar/Baz-v1.dxns", "%{Baz: %schema{a: :integer}}")

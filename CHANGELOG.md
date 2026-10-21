@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- **DXNS has guides of its own** (Jan, 2026-10-21), in `guides/dxns/`: a
+  tutorial, the reference (`DXNS.md`, DXN.md's old §4, its sections
+  renumbered 1 to 8 -- "DXNS.md §2" is the old "DXN.md §4.2"), examples
+  and a cheatsheet. Every schema and every good and bad value in the
+  tutorial, the examples and the cheatsheet is checked by the test suite.
+
 ### Added
 
 - **`bench/schema_validation.exs`**: for ten minutes, times decoding
@@ -110,11 +118,11 @@ compiles.
   (218 time, 219 datetime, 220 duration, 217 local date-time); 0.2's
   microsecond tags (1, 210, 211, 212) are still read, as what they
   meant, and never written, so a tag never changes its meaning.
-- **Refine keys `finite:` and `offsets:`** (DXN.md §4.2), and **NaN lies
+- **Refine keys `finite:` and `offsets:`** (DXNS.md §2), and **NaN lies
   outside every range**: `min`, `max` and both exclusive bounds refuse it.
 - **The README's size table is measured again**: the pretty layout and
   the datetime spelling both changed it.
-- **A named type sees the named types beside it** (DXN.md §4.5): a
+- **A named type sees the named types beside it** (DXNS.md §5): a
   reference to a sibling in the same document resolves, in any order,
   where it used to fall back to a struct reference; a named type that
   reaches itself is refused (`schema/compile`).
@@ -162,7 +170,7 @@ compiles.
   the caller's atoms where they exist (`String.to_existing_atom/1` --
   never a new atom).
 - **A field typed with a namespaced reference takes a struct of that
-  name** (DXN.md §4.7): a field typed `geo/Address` accepts
+  name** (DXNS.md §7): a field typed `geo/Address` accepts
   `%geo/Address{...}`, and refuses `%Address{...}`. It was the other way
   round, because a schema `FileResolver` found as `geo/Address` kept the
   name its file gave it, `Address`. Breaking for documents that wrote the
@@ -191,10 +199,10 @@ compiles.
 - **The README compares DXNS with the other schema languages**, says
   why a DXNS type is never closed, and how to change a schema across
   services that deploy one at a time.
-- **Sugar** (Jan, 2026-10-20; DXN.md §4.1; the superset's group 9):
+- **Sugar** (Jan, 2026-10-20; DXNS.md §1; the superset's group 9):
   `:int32`, `:int64`, `:uint32`, `:uint64` and `:float32`, `:number`,
   `{:const v}`, and `{:if I T E}` (JSON Schema's if/then/else).
-- **Annotations, `{:doc T %{...}}`** (Jan, 2026-10-20; DXN.md §4.1b;
+- **Annotations, `{:doc T %{...}}`** (Jan, 2026-10-20; DXNS.md §1b;
   the superset's group 8): a `title`, `description`, `examples`,
   `read-only`, `write-only`, `deprecated` and free `meta` on any type,
   around a whole schema, named type or generic too, and `values:` for an
@@ -204,17 +212,17 @@ compiles.
   description, examples, meta and an enum's values beside the
   definition, deprecated, read-only and write-only as chips; the example
   tree carries a few.
-- **`{:tagged name T}`** (Jan, 2026-10-20; DXN.md §4.1; the superset's
+- **`{:tagged name T}`** (Jan, 2026-10-20; DXNS.md §1; the superset's
   group 7): a custom tag of that name whose value is a `T` -- or an
   application's value its registered tag encoder writes as one.
-- **Encoded content** (Jan, 2026-10-20; DXN.md §4.2): `encoding:` (RFC
+- **Encoded content** (Jan, 2026-10-20; DXNS.md §2): `encoding:` (RFC
   4648's base64, base64url, base32, base16), `media-type:` and
   `content: T` on strings -- the string, decoded, is a DXN document of
   type T, `.dxnb` under `application/dxnb` -- and `encodes: T` and
   `encodes-seq: T` on bytes, CDDL's `.cbor` and `.cborseq`.
   `Dextrin.Binary.Decoder.decode_sequence/2` reads documents back to
   back.
-- **`format:`** (Jan, 2026-10-20; DXN.md §4.2a): a string in one of a
+- **`format:`** (Jan, 2026-10-20; DXNS.md §2a): a string in one of a
   closed set of 22 formats -- `date`, `time`, `datetime`,
   `local-datetime`, `duration`, `uuid`, `ipv4`, `ipv6`, `hostname`,
   `idn-hostname`, `email`, `idn-email`, `uri`, `uri-reference`, `iri`,
@@ -222,7 +230,7 @@ compiles.
   `relative-json-pointer`, `semver`, `mac`, `host-port` --
   `Dextrin.Schema.Format`. A format DXN has a tag for is read by that
   tag's reader; every other one by a grammar the spec gives.
-- **Refine keys on scalars** (Jan, 2026-10-20; DXN.md §4.2; the
+- **Refine keys on scalars** (Jan, 2026-10-20; DXNS.md §2; the
   superset's group 5): `min-length`/`max-length` on keywords, symbols,
   bytes (in bytes) and bits (in bits, under `:bits`); `min-bytes`/
   `max-bytes` (UTF-8); `pattern` on keywords, symbols and bytes;
@@ -232,7 +240,7 @@ compiles.
   and durations; `before-now`, `after-now`, `within: @duration "PT1H"`;
   `resolution: :millisecond`.
 - **A list's items in order, and lists' refine keys** (Jan, 2026-10-20;
-  DXN.md §4.1a, §4.2; the superset's group 4). `{:list-items :string
+  DXNS.md §1a, §4.2; the superset's group 4). `{:list-items :string
   {:repeat :integer 0 nil}}` is a list item by item: a type for one item,
   `{:repeat p min max}` for several (`max` `nil` for no bound), and
   `{:repeat {:group a b} min max}` for several together; a repeat takes
@@ -253,23 +261,23 @@ compiles.
   value**, now said in DXN.md §2.2.
 - **`mix dextrin.check` and `Dextrin.Schema.Tree`** (Jan, 2026-10-20): a
   tree of `.dxns` files read as one -- every entry named from its path
-  (DXN.md §4.6, `Dextrin.Schema.Layout`), the files compiled in the order
+  (DXNS.md §6, `Dextrin.Schema.Layout`), the files compiled in the order
   their references need -- with every problem reported as `file:line`:
   syntax, compiling, a versioned file holding another version, one
   version in two files, files needing each other, and a name resolving
   to nothing unless its namespace is `--extern`. `Dextrin.Schema.compile/3`
   takes the full names a tree gives a file's entries.
-- **Generic named types** (DXN.md §4.5, Jan, 2026-10-20):
+- **Generic named types** (DXNS.md §5, Jan, 2026-10-20):
   `Page: {:generic [t] %shape{items: {:list-of t}}}` declares a named
   type with parameters, and `{:of Page Order}` uses it. A generic may use
   itself, guarded; a `%schema` cannot be generic, since a struct has one
   name on the wire.
-- **Recursive named types** (DXN.md §4.5, Jan, 2026-10-20): a named type
+- **Recursive named types** (DXNS.md §5, Jan, 2026-10-20): a named type
   or shape may refer to itself, directly or through others, when the
   cycle passes a field or a collection's elements -- `Comment:
   %shape{replies?: {:list-of Comment}}`, a JSON-like value type. A cycle
   with no such guard, `A: {:nilable A}`, is a compile error.
-- **`%shape{...}` and `{:case field %{...}}`** (DXN.md §4.4a, Jan,
+- **`%shape{...}` and `{:case field %{...}}`** (DXNS.md §4a, Jan,
   2026-10-20; design/shapes-and-case.md): a shape is a named, unversioned
   plain-map type with a `%schema` body, which fills its missing fields'
   defaults when it decodes; a case chooses a field's type by its sibling
@@ -288,11 +296,11 @@ compiles.
   definitions in full; the pages a directory tree, one `index.html` per
   namespace; every reference a link, every version shown, a field's
   position in the binary form; light or dark, the reader's choice kept
-  in localStorage. Names come from the file paths (DXN.md §4.6); a
+  in localStorage. Names come from the file paths (DXNS.md §6); a
   definition's documentation is the comment block directly above it and
   the comment on its line, in a small Markdown subset. `example/` holds
   a schema set using every kind of definition, and its generated `doc/`.
-- **New type forms** (DXN.md §4.1): `{:not t}`, `:never` (JSON
+- **New type forms** (DXNS.md §1): `{:not t}`, `:never` (JSON
   Schema's `false`), and element types for the collections that had
   none: `{:array-of t}`, `{:ordered-map-of k v}`, `{:sorted-set-of t}`.
 - **`Dextrin.Format`** (DXN.md §6, ASCO's proposal): `media_type/1`,
@@ -311,11 +319,11 @@ compiles.
   `%Foo.Bar/Baz{...}`, `acme.billing/invoice`, `:a.b`, `a.b: 1` -- for
   structs, symbols, keywords and map keys alike. A name with two `/`, or
   an empty segment, is refused. The parser is regenerated.
-- DXN.md §4.6 states the file convention a reader that resolves names to
+- DXNS.md §6 states the file convention a reader that resolves names to
   files follows -- `Foo.Bar/Baz(N)` in `Foo/Bar/Baz-vN.dxns`,
   `Foo/Bar/Baz/vN.dxns` or `Foo.Bar.Baz-vN.dxns` (`-v1` optional), or the
   entry `Baz` in `Foo.Bar.dxns` -- with a version found twice refused.
-- **`Dextrin.Schema.FileResolver` follows DXN.md §4.6**: the four
+- **`Dextrin.Schema.FileResolver` follows DXNS.md §6**: the four
   layouts, the first search path that has the name deciding, a file's
   version its schema's, one version found once, and every version found
   loaded, so an older struct reaches the materializer. The old
@@ -358,7 +366,7 @@ compiles.
 - **A hostname's 253 are codepoints**, not graphemes; an unknown type's
   compile error writes it in DXN.
 
-- **A string's length counts codepoints**, as DXN.md §4.2 says, not
+- **A string's length counts codepoints**, as DXNS.md §2 says, not
   graphemes: `"e\u0301"` is two long, as in every other implementation.
 - **A `.dxnb` document read inside another keeps the outer one's state**:
   the shared-item and stringref tables are put back after it.
@@ -370,7 +378,7 @@ compiles.
   Erlang's `:inet.ntoa` wrote a link-local address with a non-zero second
   group (`fe80:1::1`) as `fe80::1%01`, which no reader takes, and its
   parser took `+1.2.3.4`. Found by node-dextrin's port.
-- **A field naming another file's named type resolves** (DXN.md §4.6):
+- **A field naming another file's named type resolves** (DXNS.md §6):
   `Dextrin.Schema.FileResolver` compiled each file on its own, so
   `discount: acme.common/Percentage` named a struct that never came and
   refused every decimal. A file is now compiled with its full names, over

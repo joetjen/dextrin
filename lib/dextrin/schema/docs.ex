@@ -12,7 +12,7 @@ defmodule Dextrin.Schema.Docs do
   ## Names
 
   A definition's name comes from where its file lies under the root, by
-  the conventions of DXN.md §4.6:
+  the conventions of DXNS.md §6:
 
   - `acme/shop/Customer-v2.dxns`, `acme/shop/Order/v1.dxns` and
     `acme.shop.Product.dxns` each hold one definition, the entry named
@@ -210,7 +210,7 @@ defmodule Dextrin.Schema.Docs do
   # name: an entry beside it, or a name of its own.
   #
   # The names are the ones every reader of a tree gives them
-  # (`Dextrin.Schema.Layout`, DXN.md §4.6).
+  # (`Dextrin.Schema.Layout`, DXNS.md §6).
   defp definitions_of(%{entries: entries} = file) do
     layout = Dextrin.Schema.Layout.of(file.file, Enum.map(entries, & &1.key))
     names = layout.names
@@ -249,7 +249,7 @@ defmodule Dextrin.Schema.Docs do
 
   @doc """
   A value node without the `{:doc T %{...}}` around it, and what the doc
-  says (DXN.md §4.1b): its annotations by name, each value decoded --
+  says (DXNS.md §1b): its annotations by name, each value decoded --
   `%{}` for a value without one.
   """
   @spec undoc(Node.t() | nil) :: {Node.t() | nil, %{optional(String.t()) => term()}}

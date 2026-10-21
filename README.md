@@ -193,7 +193,7 @@ implementation is held to that by the
 
 A `.dxns` schema is DXN data. It is meant to say everything the schema
 languages of the formats above can say, except what has no value or no
-meaning in DXN ([`design/schema-superset.md`](design/schema-superset.md)
+meaning in DXN ([`design/schema-superset.md`](https://github.com/joetjen/dextrin/blob/develop/design/schema-superset.md)
 goes through them construct by construct). YAML, TOML and MessagePack
 have no schema language of their own; people use JSON Schema for them.
 
@@ -242,7 +242,7 @@ switch, for two reasons:
   schema serves both, so whether unknown fields are refused belongs to
   the decode: `Dextrin.decode(text, registry: r, strict: true)` refuses
   them (`schema/undeclared-field`), and without `strict:` they are kept
-  -- in `.dxnb` as one trailing item (DXN.md §4.7) -- and written back out.
+  -- in `.dxnb` as one trailing item (DXNS.md §7) -- and written back out.
 - **A closed type breaks the next version.** Adding a field to a closed
   type makes every older reader refuse every newer message, which turns
   each compatible change into a breaking one. DXN's versions (below)
@@ -256,7 +256,7 @@ the application knows what it means.
 
 Several services reading and writing the same schema never all deploy
 at once. DXNS makes that safe with versions, not with compatibility
-modes (DXN.md §4.8):
+modes (DXNS.md §8):
 
 - **Every schema has a version**, `%schema(3){...}`, and every version
   stays loadable beside the others. A writer always writes the latest it
