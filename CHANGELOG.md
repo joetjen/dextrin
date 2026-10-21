@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- **DXN.md's reference tables are Markdown tables**, no longer TOON
+  (Jan, 2026-10-21); the `canonical` table said 32 rows and had 33.
+
 ## [0.3.0] - 2026-10-21
 
 One way to write a value, nanoseconds, `@objectid` and `@ip`, the
