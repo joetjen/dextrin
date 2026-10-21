@@ -399,12 +399,16 @@ ships in a release) — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Two benchmarks live in `bench/`: `mix run bench/format_sizes.exs`
 measures the sizes in the comparison above, and
-`mix run bench/schema_validation.exs [count] [seed]` times
-`Dextrin.Schema.check/3` on a schema set that uses most of DXNS --
-recursion, a generic, shapes, cases, list items, formats -- over a
-million generated data sets, about 30% of them with one error each, and
-reports the total, mean, minimum, median, percentiles and maximum for
-the good ones, the bad ones and each kind of error.
+`mix run bench/schema_validation.exs [seconds] [seed]` times decoding --
+lexing, parsing, building -- and `Dextrin.Schema.check/3`, data set by
+data set for ten minutes, against a schema set more complex than any
+real one (`bench/schemas/universe.dxns`: recursion, generics, cases,
+documents inside documents), about 30% of the data sets carrying one
+error. It reports each stage's total, mean, minimum, median,
+percentiles and maximum, good against bad and by kind of error, and
+writes the fastest, slowest and average data sets to
+`tmp/bench/schema-validation/`. `bench/generate_universes.exs` writes
+the same data sets for the Node and PHP implementations' benchmarks.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes, and
 [CHANGELOG.md](CHANGELOG.md) for release history.

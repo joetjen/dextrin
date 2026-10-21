@@ -9,9 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`bench/schema_validation.exs`**: times a schema check over a million
-  generated data sets, good and bad, against a schema set using most of
-  DXNS (Jan, 2026-10-21).
+- **`bench/schema_validation.exs`**: for ten minutes, times decoding
+  stage by stage and the schema check, data set by data set, against a
+  schema set more complex than any real one, `bench/schemas/universe.dxns`
+  (Jan, 2026-10-21). `bench/generate_universes.exs` writes the same data
+  sets for the Node and PHP benchmarks.
 
 ### Documentation
 
