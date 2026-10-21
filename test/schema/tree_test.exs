@@ -102,13 +102,12 @@ defmodule Dextrin.Schema.TreeTest do
   end
 
   describe "problems" do
-    # The line is the parser's: today the document's start, where its
-    # parse failed as a whole, not the bracket that broke it.
-    test "a syntax error, with the line its parser gives" do
+    # The line is the parser's: since ichor 0.7 the furthest it got, the
+    # bracket that broke the list, not the document's start.
+    test "a syntax error, with the line where the parse broke" do
       root = tree(%{"a.dxns" => "%{\n  A: :integer\n  B: [\n}\n"})
-      assert {:error, [%{file: "a.dxns", line: line, message: message}]} = Tree.load([root])
-      assert is_integer(line) and line >= 1
-      assert message =~ "does not match"
+      assert {:error, [%{file: "a.dxns", line: 4, message: message}]} = Tree.load([root])
+      assert message =~ ~s|unexpected "}"|
     end
 
     test "a definition that does not compile, with its line" do
