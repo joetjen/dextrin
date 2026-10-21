@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **DXN.md says a pattern PCRE does not compile is `syntax`**, as every
+  implementation with PCRE already refused it, and names Node's limit:
+  without PCRE, it reads any pattern.
 - **Every refine argument is checked when the schema compiles**: a
   count that is no non-negative integer, a flag that is no boolean,
   `multiple-of: 0`, `bits: 5`, a `pattern` that is no regex and the like

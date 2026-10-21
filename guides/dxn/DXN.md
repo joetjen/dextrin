@@ -137,6 +137,13 @@ first does, and is a different value (its pattern differs). A pattern is
 an ordinary string, so a backslash in it is written `\\`. A header on
 any tag but `regex` is `syntax`, and so is a flag given twice.
 
+**A pattern that PCRE does not compile is `syntax`** (Jan, 2026-10-21):
+`@regex "a("` is no regex. An implementation without a PCRE engine
+cannot tell every pattern apart, and says so: the Node implementation
+reads any pattern, since JavaScript's own engine refuses valid PCRE --
+inline modifiers such as `(?im)`, atomic groups, `\\A` -- and so cannot
+stand in for it. That is a documented limit of the platform, not of DXN.
+
 Tag resolution: an `identifier` immediately following `@` is matched
 against the built-in tag table (§1.3) first; any name not found there is
 a **custom tag** — parses identically (`@tag value`), decodes to an
