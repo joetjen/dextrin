@@ -16,11 +16,11 @@ defmodule Dextrin.Struct do
   schema in hand — there's nothing to compare field-by-field yet.
 
   `version` is the schema version the struct was written with
-  (`%Name(3){...}`, DXN.md §4.8), or `nil` when it was written without
+  (`%Name(3){...}`, DXNS.md §8), or `nil` when it was written without
   one, which a reader takes as the latest version it has loaded.
 
   `extra` holds the fields a struct carries beyond its declared ones
-  (DXN.md §4.7), as `{key, value}` pairs in the order they were written:
+  (DXNS.md §7), as `{key, value}` pairs in the order they were written:
   a name for a named field, any other map key (§1.6) as itself. In text
   they are entries after the fields or the items; in `.dxnb`, one
   trailing tag-215 map. Code relying on a struct is guaranteed only its
@@ -111,7 +111,7 @@ defmodule Dextrin.Struct do
   The extra fields an application struct carries at run time: the keys
   of `value` its module's own `defstruct` does not declare, as named
   extras. An Elixir struct is a map, so a key put on it after the fact
-  is the struct carrying more than it declares (DXN.md §4.7).
+  is the struct carrying more than it declares (DXNS.md §7).
   """
   @spec runtime_extra(struct()) :: [{String.t(), term()}]
   def runtime_extra(%module{} = value) do

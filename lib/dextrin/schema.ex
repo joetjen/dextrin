@@ -130,7 +130,7 @@ defmodule Dextrin.Schema do
 
   @doc """
   What the `{:doc ... %{...}}` around the schema or named type `name`
-  says about it (DXN.md §4.1b): its annotations by name, `%{}` when it
+  says about it (DXNS.md §1b): its annotations by name, `%{}` when it
   has none, `:error` when there is no such name. A schema answers for
   its latest version.
 

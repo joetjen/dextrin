@@ -48,7 +48,7 @@ task and not an incident.
    (`lib/dextrin/schema/type_expr.ex:90`) returns `true` for every value
    that is not a `Dextrin.Struct`, a `Validated` or a registered struct
    module, so an integer or a plain map passes a field declared as
-   `User`. DXN.md §4.7 requires that "every present field's value matches
+   `User`. DXNS.md §7 requires that "every present field's value matches
    its declared `type_expr`". Seen in ASCO: validating an `Event` value
    whose `user` is an integer succeeds. (On the decode path the nested
    struct is usually already a `Validated`, which hides the hole.)
@@ -72,7 +72,7 @@ task and not an incident.
 
 ## Design
 
-### 1. The evolution rule (spec, new DXN.md §4.8)
+### 1. The evolution rule (spec, new DXNS.md §8)
 
 A struct schema evolves **append-only at the end, with optional fields
 only**:

@@ -2,7 +2,7 @@ defmodule Mix.Tasks.Dextrin.Check do
   @moduledoc """
   Checks a tree of `.dxns` schemas (`Dextrin.Schema.Tree`): every file
   under `SCHEMAS` -- files or directories, searched recursively -- read,
-  every entry named from its path (DXN.md §4.6) and compiled in the order
+  every entry named from its path (DXNS.md §6) and compiled in the order
   its references need. Every problem is printed as `file:line: message`
   and the task exits non-zero, so CI can run it:
 

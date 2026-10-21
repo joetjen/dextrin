@@ -2,7 +2,7 @@ defmodule Dextrin.Schema.DocsTest do
   @moduledoc """
   `Dextrin.Schema.Docs` and `mix dextrin.docs` (Jan, 2026-10-20): a
   directory of `.dxns` files as a small HTML site -- names from file
-  paths (DXN.md §4.6), a definition's comments as its documentation,
+  paths (DXNS.md §6), a definition's comments as its documentation,
   references as links, every version shown.
   """
 
@@ -168,7 +168,7 @@ defmodule Dextrin.Schema.DocsTest do
     assert length(pages) == 6
   end
 
-  describe "annotations, {:doc T %{...}} (DXN.md §4.1b)" do
+  describe "annotations, {:doc T %{...}} (DXNS.md §1b)" do
     @annotated """
     %{
       Order: {:doc %schema(2){

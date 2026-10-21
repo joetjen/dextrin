@@ -369,7 +369,7 @@ defmodule Dextrin.Text.Printer do
   defp escape_char(cp), do: <<cp::utf8>>
 
   # The version a struct is written with: the latest loaded version of
-  # its schema, or its own when there is no schema (DXN.md §4.8).
+  # its schema, or its own when there is no schema (DXNS.md §8).
   @doc false
   @spec written_version(Struct.t(), keyword()) :: pos_integer() | nil
   def written_version(struct, opts),

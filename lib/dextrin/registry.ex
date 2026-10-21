@@ -24,7 +24,7 @@ defmodule Dextrin.Registry do
   @type tag_decoder :: (Dextrin.Value.t() -> {:ok, term()} | {:error, term()})
   @type tag_encoder :: (struct() -> {:ok, Dextrin.Value.t()} | {:error, term()})
   @typedoc """
-  A schema's materializer (DXN.md §4.8): called for every decoded struct
+  A schema's materializer (DXNS.md §8): called for every decoded struct
   of its schema, whatever the version, with the schema's name, the
   version the fields were read with and the fields keyed by string. It
   answers the application's latest-version value, which is checked
@@ -113,7 +113,7 @@ defmodule Dextrin.Registry do
   @doc """
   Marks this registry as decoding *strictly*: a schema-backed struct
   that carries a field its schema does not declare is refused
-  (`schema/undeclared-field`, DXN.md §4.7) instead of keeping it as an
+  (`schema/undeclared-field`, DXNS.md §7) instead of keeping it as an
   extra field. A config loader decodes strictly, to catch a typo in a
   hand-written file; a message consumer does not, so a newer producer's
   fields pass through. `Dextrin.decode/2`/`decode_binary/2` take it as
@@ -171,7 +171,7 @@ defmodule Dextrin.Registry do
   Loads `compiled` as a new version of the schema `name`.
 
   Loading a version that is already loaded is a `schema/duplicate-version`
-  error (DXN.md §4.8): two documents both claiming to be `User` v3 is a
+  error (DXNS.md §8): two documents both claiming to be `User` v3 is a
   mistake, not an update. Replacing a version on purpose -- a hot swap in
   a running system -- is `replace_struct_schema/3`.
   """
@@ -252,7 +252,7 @@ defmodule Dextrin.Registry do
 
   @doc """
   `struct` as it is written here: carrying the latest loaded version of
-  its schema (DXN.md §4.8), whatever version it says itself. A struct
+  its schema (DXNS.md §8), whatever version it says itself. A struct
   whose name has no schema keeps its own version, or none.
 
   Every writer goes through this -- text, the formatter and binary -- so
@@ -311,7 +311,7 @@ defmodule Dextrin.Registry do
         {:ok, compiled, put_struct_schema(registry, name, compiled)}
 
       # Every version found is loaded, so an older struct reaches the
-      # materializer (DXN.md §4.6, §4.8); the latest is what a miss asked for.
+      # materializer (DXNS.md §6, §4.8); the latest is what a miss asked for.
       {:ok, [_ | _] = all} ->
         registry = Enum.reduce(all, registry, &put_struct_schema(&2, name, &1))
         {:ok, Enum.max_by(all, & &1.version), registry}

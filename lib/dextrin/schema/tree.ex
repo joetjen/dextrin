@@ -1,7 +1,7 @@
 defmodule Dextrin.Schema.Tree do
   @moduledoc """
   A tree of `.dxns` files read as one (Jan, 2026-10-20): every entry
-  named from where its file lies (DXN.md §4.6, `Dextrin.Schema.Layout`),
+  named from where its file lies (DXNS.md §6, `Dextrin.Schema.Layout`),
   the files compiled in the order their references need -- so a
   reference to another file's named type resolves whatever order the
   files sort in -- and every problem reported with its file and line:
@@ -135,7 +135,7 @@ defmodule Dextrin.Schema.Tree do
             problem(
               file.file,
               entry_line(file, holder),
-              "holds #{holder} as version #{version_of(schema)}, but its name says version #{version} (DXN.md §4.6)"
+              "holds #{holder} as version #{version_of(schema)}, but its name says version #{version} (DXNS.md §6)"
             )
 
       _other ->
@@ -180,7 +180,7 @@ defmodule Dextrin.Schema.Tree do
       problem(
         first,
         1,
-        "#{what} is in two files, #{Enum.join(files, " and ")}; it is found once (DXN.md §4.6)"
+        "#{what} is in two files, #{Enum.join(files, " and ")}; it is found once (DXNS.md §6)"
       )
     end
   end

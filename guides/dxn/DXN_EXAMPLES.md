@@ -84,93 +84,10 @@ for the Elixir-API-level equivalents of several of these.
 }
 ```
 
-## A schema document (`.dxns`)
+## Schemas
 
-```
-%{
-  Percentage: {:refine :float %{min: 0.0, max: 100.0}}
-  Tag:        {:refine :string %{min-length: 1, max-length: 20}}
-
-  Address: %schema{
-      street: :string
-      city:   :string
-      zip?:   :string
-    }
-
-  Customer: %schema{
-      name:    :string
-      address: Address
-      loyalty: Percentage
-      tags?:   {:list-of Tag}
-    }
-}
-```
-
-Note `Percentage` and `Tag` aren't `%schema{}` entries — they're named
-types, reusable named shorthand for a combination of the fixed
-type_expr vocabulary, referenced from `Customer`'s own fields exactly
-like a struct name (a bare symbol).
-
-## Cross-file schema references
-
-Given `Address.dxns`:
-
-```
-%{
-  Address: %schema{ street: :string, city: :string }
-}
-```
-
-`Customer.dxns` can reference it by namespaced name:
-
-```
-%{
-  Customer: %schema{
-      name: :string
-      home: Address/Address
-    }
-}
-```
-
-`Address/Address` is a bare (namespaced) symbol — the identifier
-grammar already supports `Namespace/Name` directly; a reader's own
-file-resolution convention decides what "Address" maps to on disk
-(one reasonable default: `Address/Address` -> `<search-path>/Address.dxns`,
-entry `Address`).
-
-## A schema, version by version
-
-Each `.dxns` document describes one version of a schema, in its header.
-The fields are the body, in order:
-
-```
-# user-v1.dxns
-%{
-  User: %schema{
-    name: :string
-    email: :string
-  }
-}
-
-# user-v2.dxns
-%{
-  User: %schema(2){
-    name: :string
-    email: :string
-    id?: :uuid
-  }
-}
-```
-
-The first has no header, so it is version 1. Load both and a reader
-keeps `User` v1 and v2 side by side; loading `user-v2.dxns` a second
-time is an error (`schema/duplicate-version`), because two documents
-claiming to be `User` v2 is a mistake rather than an update. A struct
-can say which version it was written with:
-
-```
-%User(2){name: "Ada", email: "ada@example.com"}
-```
+Whole schemas, from a configuration file to an expression language, are
+in [DXNS_EXAMPLES.md](../dxns/DXNS_EXAMPLES.md).
 
 ## Value sharing in `.dxnb` (binary-only, described in text)
 
