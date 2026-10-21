@@ -79,7 +79,7 @@ defmodule Dextrin.Schema.Provider do
 
       # some_lib's own mix.exs
       defp deps do
-        [{:dextrin, "~> 0.2", optional: true}]
+        [{:dextrin, "~> 0.3", optional: true}]
       end
 
   Mix's optional-dependency resolution means this never forces

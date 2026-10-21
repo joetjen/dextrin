@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-21
+
+One way to write a value, nanoseconds, `@objectid` and `@ip`, the
+smallest `.dxnb`, and DXNS as a superset of the schema languages DXN is
+compared with. Breaking: sigils are gone, `.dxnb` gains tags a 0.2
+reader does not know, and a schema that misused a refine key no longer
+compiles.
+
+### Migrating from 0.2.x
+
+- **Text: sigils are gone.** Rewrite `~D[2026-10-20]` as
+  `@date "2026-10-20"`, `~T[14:30:00]` as `@time "14:30:00"`,
+  `~U[2026-10-20 14:30:00Z]` as `@datetime "2026-10-20T14:30:00Z"`, a
+  naive date-time as `@local-datetime "2026-10-20T14:30:00"`, and
+  `~r/^a/i` as `@regex(i) "^a"`. A sigil is now `syntax`.
+- **Binary: deploy readers first.** 0.3 writes times, datetimes, local
+  date-times and durations in nanoseconds under tags 217-220,
+  `@objectid` and `@ip` under 221, 52 and 54, and a float in half or
+  single precision when that holds it exactly. A 0.2 reader refuses all
+  of these; a 0.3 reader still reads everything 0.2 wrote.
+- **`Dextrin.Duration`'s seconds are `nanoseconds`**, one field for the
+  seconds and their fraction; a time or datetime finer than a
+  microsecond decodes to a `Dextrin.Nanos`.
+- **`:timestamp` is a datetime in UTC**, `{:refine :datetime %{offsets:
+  ["Z"]}}`; a schema naming it keeps working.
+- **Schemas are checked harder.** An unknown refine key, a refine
+  argument of the wrong kind, `min-contains` without `contains`, and an
+  unknown `format:` are compile errors; a constraint on a value it does
+  not apply to refuses the value instead of raising; `{:enum 1}` no
+  longer takes `1.0`.
+- **A trusted decode keeps six keywords** -- `:nan`,
+  `:positive_infinity`, `:negative_infinity`, `:nil`, `:true`, `:false`
+  -- as `Dextrin.Keyword`, since their atoms are already values.
+- **`@uuid` reads only 8-4-4-4-12 hex digits.**
+- **ichor_runtime 0.6** is the runtime dependency.
+
 ### Changed
 
 - **ichor_runtime 0.6** (ichor 0.7 for `mix ichor.gen`), the parser
