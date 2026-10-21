@@ -17,10 +17,7 @@ informational: a reader MUST accept any `1.x` and MAY refuse another
 major version. The `.dxnb` envelope's version byte (§2.1) counts major
 versions and is `1`.
 
-Grammar is ISO/IEC 14977 EBNF. Reference tables are [TOON](https://toon.sh)
-(`name[N]{fields}:` header, one comma-separated row per record) for
-token-efficient machine parsing; a cell containing a comma or quote is
-wrapped in `"..."` with internal `"` doubled, same as CSV.
+Grammar is ISO/IEC 14977 EBNF. Reference tables are Markdown tables.
 
 ---
 
@@ -158,42 +155,41 @@ space before its value (`@ordered %{...}`, `@uuid "..."`).
 
 ### 1.3 Type reference
 
-```toon
-types[33]{type,category,dxn_syntax,notes}:
-  nil,scalar,nil,""
-  boolean,scalar,"true | false",""
-  integer,scalar,"-?[0-9]+","arbitrary precision"
-  float,scalar,"-?[0-9]+(.[0-9]+)?([eE][+-]?[0-9]+)? | NaN | Infinity | -Infinity","IEEE 754 double"
-  decimal,scalar,"[0-9]+(.[0-9]+)?M","exact fixed-point"
-  rational,scalar,"int/uint","exact ratio"
-  string,scalar,"""...""","UTF-8"
-  char,scalar,"?c","Unicode codepoint"
-  symbol,scalar,"bare identifier","unevaluated reference, e.g. type name"
-  keyword,scalar,":name | :""..."" | name: (key pos.)","Elixir atom"
-  list,collection,"[ ... ]",""
-  tuple,collection,"{ ... }",""
-  map,collection,"%{ ... }","no ordering guarantee"
-  ordered-map,collection,"@ordered %{ ... }","order is part of value identity"
-  set,collection,"@{ ... }",""
-  sorted-set,collection,"@sorted-set @{ ... }",""
-  struct-keyed,collection,"%Name{ ... }","requires schema to fully interpret"
-  struct-positional,collection,"%Name[ ... ]","field order per schema; both struct forms parse equal"
-  array,collection,"@array[ ... ]","fixed-size/indexed"
-  date,temporal,"@date ""YYYY-MM-DD""","ISO 8601"
-  time,temporal,"@time ""HH:MM:SS(.f{1,9})?""","ISO 8601, nanoseconds"
-  datetime,temporal,"@datetime ""YYYY-MM-DDTHH:MM:SS(.f{1,9})?(Z|±HH:MM)""","ISO 8601, an instant with its offset; Z is UTC"
-  local-datetime,temporal,"@local-datetime ""YYYY-MM-DDTHH:MM:SS(.f{1,9})?""","ISO 8601, no offset: a wall-clock time"
-  duration,temporal,"@duration ""P...""","ISO 8601 duration, nanoseconds"
-  uuid,extended,"@uuid ""...""","RFC 4122"
-  objectid,extended,"@objectid ""<24 hex digits>""","BSON's ObjectId: 12 bytes"
-  ip,extended,"@ip ""192.0.2.1"" | ""10.0.0.0/8"" | ""2001:db8::1"" | ""2001:db8::/32""","an IPv4 or IPv6 address, or a prefix (RFC 9164)"
-  uri,extended,"@uri ""...""","RFC 3986"
-  bytes,extended,"@bytes ""...""","base64"
-  bits,extended,"@bits {""..."" n}","base64 and a bit count: a run of bits that is not whole bytes"
-  regex,extended,"@regex ""pattern"" | @regex(flags) ""pattern""","PCRE-style via Erlang :re"
-  custom-tag,extended,"@tag value","open extension point, any unrecognized tag name"
-  header,meta,"@dxn ""1.0""","optional, first form only; the format version (see the introduction)"
-```
+| Type | Category | DXN syntax | Notes |
+|---|---|---|---|
+| `nil` | scalar | `nil` |  |
+| `boolean` | scalar | `true \| false` |  |
+| `integer` | scalar | `-?[0-9]+` | arbitrary precision |
+| `float` | scalar | `-?[0-9]+(.[0-9]+)?([eE][+-]?[0-9]+)? \| NaN \| Infinity \| -Infinity` | IEEE 754 double |
+| `decimal` | scalar | `[0-9]+(.[0-9]+)?M` | exact fixed-point |
+| `rational` | scalar | `int/uint` | exact ratio |
+| `string` | scalar | `"..."` | UTF-8 |
+| `char` | scalar | `?c` | Unicode codepoint |
+| `symbol` | scalar | `bare identifier` | unevaluated reference, e.g. type name |
+| `keyword` | scalar | `:name \| :"..." \| name: (key pos.)` | Elixir atom |
+| `list` | collection | `[ ... ]` |  |
+| `tuple` | collection | `{ ... }` |  |
+| `map` | collection | `%{ ... }` | no ordering guarantee |
+| `ordered-map` | collection | `@ordered %{ ... }` | order is part of value identity |
+| `set` | collection | `@{ ... }` |  |
+| `sorted-set` | collection | `@sorted-set @{ ... }` |  |
+| `struct-keyed` | collection | `%Name{ ... }` | requires schema to fully interpret |
+| `struct-positional` | collection | `%Name[ ... ]` | field order per schema; both struct forms parse equal |
+| `array` | collection | `@array[ ... ]` | fixed-size/indexed |
+| `date` | temporal | `@date "YYYY-MM-DD"` | ISO 8601 |
+| `time` | temporal | `@time "HH:MM:SS(.f{1,9})?"` | ISO 8601, nanoseconds |
+| `datetime` | temporal | `@datetime "YYYY-MM-DDTHH:MM:SS(.f{1,9})?(Z\|±HH:MM)"` | ISO 8601, an instant with its offset; Z is UTC |
+| `local-datetime` | temporal | `@local-datetime "YYYY-MM-DDTHH:MM:SS(.f{1,9})?"` | ISO 8601, no offset: a wall-clock time |
+| `duration` | temporal | `@duration "P..."` | ISO 8601 duration, nanoseconds |
+| `uuid` | extended | `@uuid "..."` | RFC 4122 |
+| `objectid` | extended | `@objectid "<24 hex digits>"` | BSON's ObjectId: 12 bytes |
+| `ip` | extended | `@ip "192.0.2.1" \| "10.0.0.0/8" \| "2001:db8::1" \| "2001:db8::/32"` | an IPv4 or IPv6 address, or a prefix (RFC 9164) |
+| `uri` | extended | `@uri "..."` | RFC 3986 |
+| `bytes` | extended | `@bytes "..."` | base64 |
+| `bits` | extended | `@bits {"..." n}` | base64 and a bit count: a run of bits that is not whole bytes |
+| `regex` | extended | `@regex "pattern" \| @regex(flags) "pattern"` | PCRE-style via Erlang :re |
+| `custom-tag` | extended | `@tag value` | open extension point, any unrecognized tag name |
+| `header` | meta | `@dxn "1.0"` | optional, first form only; the format version (see the introduction) |
 
 ### 1.4 Semantic notes not expressible in grammar alone
 
@@ -242,42 +238,41 @@ General rules:
 
 Per type:
 
-```toon
-canonical[32]{type,form}:
-  nil,"nil"
-  boolean,"true | false"
-  integer,"optional -, then decimal digits without leading zeros"
-  float,"see the float rules below"
-  decimal,"as given: the coefficient with exactly scale fractional digits and its sign, negative zero included, then M; a positive exponent, which text cannot write, is written out with zeros"
-  rational,"numerator/denominator as held, not reduced; the sign on the numerator, the denominator positive"
-  string,"see the string rules below"
-  char,"? then the character; ?s for space; \\ escape forms for \\, whitespace and control characters"
-  symbol,"the identifier"
-  keyword,":name when name is an identifier and not reserved, else :""..."" with string escaping"
-  list,"[ items ]"
-  tuple,"{ items }"
-  array,"@array[ items ]"
-  map,"%{ entries } in canonical order of their keys"
-  ordered-map,"@ordered %{ entries } in held order"
-  set,"@{ items } in canonical order"
-  sorted-set,"@sorted-set @{ items } in canonical order"
-  struct,"%Name(N){ entries } keyed, or %Name(N)[ items ] positional, as held; (N) when the version is known; keyed entries in held order, since in a %schema body the order is the field order"
-  map entry,"name: value when the key is a keyword whose name is an identifier and not reserved, else key => value"
-  date,"@date ""YYYY-MM-DD"""
-  time,"@time ""HH:MM:SS"" then .fraction with trailing zeros removed, omitted when zero"
-  datetime,"@datetime ""YYYY-MM-DDTHH:MM:SS"" with the fraction as for time, then Z when the offset is zero, else ±HH:MM"
-  local-datetime,"@local-datetime ""YYYY-MM-DDTHH:MM:SS"" with the fraction as for time"
-  duration,"@duration ""P..."" with fields in the order of §2.3, zero fields omitted, PT0S when all are zero"
-  uuid,"@uuid ""8-4-4-4-12"" in lowercase hex"
-  objectid,"@objectid ""..."" in 24 lowercase hex digits"
-  ip,"@ip ""..."": IPv4 in dotted decimal, IPv6 as RFC 5952 writes it (lowercase, the longest run of zero groups as ::), then /length for a prefix"
-  uri,"@uri ""..."" as held, with string escaping"
-  bytes,"@bytes ""..."" in standard base64 with padding"
-  bits,"@bits {""..."" n}: the bits in standard base64 with padding, the unused low bits of the last byte zero, and n their count; a run of whole bytes is bytes"
-  regex,"@regex ""pattern"" with string escaping, or @regex(flags) ""pattern"" with the flags in the order of §2.3"
-  custom-tag,"@name value"
-  extra fields,"in a keyed struct, entries after the declared fields in held order; in a positional struct, entries after the items, in canonical order of their keys (§4.7)"
-```
+| Type | Form |
+|---|---|
+| `nil` | nil |
+| `boolean` | true \| false |
+| `integer` | optional -, then decimal digits without leading zeros |
+| `float` | see the float rules below |
+| `decimal` | as given: the coefficient with exactly scale fractional digits and its sign, negative zero included, then M; a positive exponent, which text cannot write, is written out with zeros |
+| `rational` | numerator/denominator as held, not reduced; the sign on the numerator, the denominator positive |
+| `string` | see the string rules below |
+| `char` | ? then the character; ?s for space; \\ escape forms for \\, whitespace and control characters |
+| `symbol` | the identifier |
+| `keyword` | :name when name is an identifier and not reserved, else :"..." with string escaping |
+| `list` | [ items ] |
+| `tuple` | { items } |
+| `array` | @array[ items ] |
+| `map` | %{ entries } in canonical order of their keys |
+| `ordered-map` | @ordered %{ entries } in held order |
+| `set` | @{ items } in canonical order |
+| `sorted-set` | @sorted-set @{ items } in canonical order |
+| `struct` | %Name(N){ entries } keyed, or %Name(N)[ items ] positional, as held; (N) when the version is known; keyed entries in held order, since in a %schema body the order is the field order |
+| `map entry` | name: value when the key is a keyword whose name is an identifier and not reserved, else key => value |
+| `date` | @date "YYYY-MM-DD" |
+| `time` | @time "HH:MM:SS" then .fraction with trailing zeros removed, omitted when zero |
+| `datetime` | @datetime "YYYY-MM-DDTHH:MM:SS" with the fraction as for time, then Z when the offset is zero, else ±HH:MM |
+| `local-datetime` | @local-datetime "YYYY-MM-DDTHH:MM:SS" with the fraction as for time |
+| `duration` | @duration "P..." with fields in the order of §2.3, zero fields omitted, PT0S when all are zero |
+| `uuid` | @uuid "8-4-4-4-12" in lowercase hex |
+| `objectid` | @objectid "..." in 24 lowercase hex digits |
+| `ip` | @ip "...": IPv4 in dotted decimal, IPv6 as RFC 5952 writes it (lowercase, the longest run of zero groups as ::), then /length for a prefix |
+| `uri` | @uri "..." as held, with string escaping |
+| `bytes` | @bytes "..." in standard base64 with padding |
+| `bits` | @bits {"..." n}: the bits in standard base64 with padding, the unused low bits of the last byte zero, and n their count; a run of whole bytes is bytes |
+| `regex` | @regex "pattern" with string escaping, or @regex(flags) "pattern" with the flags in the order of §2.3 |
+| `custom-tag` | @name value |
+| `extra fields` | in a keyed struct, entries after the declared fields in held order; in a positional struct, entries after the items, in canonical order of their keys (§4.7) |
 
 **Nothing is normalised.** A value is written as it was given: `1.50M`
 stays `1.50M` (and `[-2, 150]` in `.dxnb`), `2/4` stays `2/4`. A
@@ -370,69 +365,67 @@ ObjectId, an IP address), integers where it is a count (dates, times,
 durations), CBOR's shortest integer and length forms everywhere, and
 never the text form a value has in `.dxn`.
 
-```toon
-cbor_map[32]{type,cbor_major_or_tag,payload,integrity_note}:
-  nil,"simple(22)","",""
-  boolean,"simple(20/21)","","false/true"
-  integer,"major0/1; tag2/3","two's complement bignum bytes past 64-bit","arbitrary precision preserved exactly"
-  float,"major7","IEEE 754: the shortest of half, single and double that holds the value exactly","NaN/Infinity encode natively in half precision, no tag needed; a reader reads all three widths"
-  decimal,"tag4","[exponent,mantissa]","a negative zero has no mantissa of its own: `-0.0M` is written as `0.0M`, the one value `.dxnb` does not keep (text does, §1.5)"
-  rational,"tag30","[numerator,denominator]",""
-  string,"major3 (untagged)","UTF-8 bytes","default/untagged case"
-  char,"tag T_CHAR","major0 codepoint",""
-  symbol,"tag T_SYMBOL","major3 text",""
-  keyword,"tag T_KEYWORD","major3 text",""
-  list,"major4 (untagged)","items","default/untagged case"
-  tuple,"tag T_TUPLE","major4 items",""
-  map,"major5 (untagged)","pairs","default/untagged case"
-  ordered-map,"tag T_ORDERED","major5 pairs","order preserved by tag presence, not byte sequence"
-  set,"tag T_SET","major4 items",""
-  sorted-set,"tag T_SORTED_SET","major4 items, in canonical order (§1.5)",""
-  struct,"tag T_STRUCT","[type-name-or-ref, field..., extras?]","positional only, §2.1; the type name carries the version, `User(3)` (§4.8); extra fields, when there are any, as one trailing `T_EXTRA` map (§4.7)"
-  array,"tag T_ARRAY","major4 items",""
-  date,"tag T_DATE","integer days since 1970-01-01","Unix epoch, day granularity"
-  time,"tag T_TIME (218)","integer nanoseconds since midnight","0.2's T_TIME_US (210), microseconds, is read, never written"
-  datetime,"tag T_DATETIME (219)","epoch-nanoseconds int in UTC, else [epoch-nanoseconds int, offset-minutes]","integers only -- a float loses nanoseconds at scale. 0.2's tag 1 (UTC, epoch microseconds) and T_DATETIME_US (211, [epoch-us, offset-min]) are read, never written"
-  local-datetime,"tag T_LOCAL_DATETIME","integer nanoseconds since 1970-01-01T00:00:00 on the wall clock","no offset, so no instant"
-  duration,"tag T_DURATION (220)","bitmask byte + present fields, §2.3","0.2's T_DURATION_US (212), its seventh field microseconds, is read, never written"
-  uuid,"tag37","16 raw bytes","not the 36-char text form"
-  objectid,"tag T_OBJECTID","12 raw bytes","not the 24-char text form"
-  ip,"tag52 (IPv4) | tag54 (IPv6), RFC 9164","an address: its raw bytes; a prefix: [length, the bytes with trailing zero bytes left off]","host bits of a prefix are zero, or it is refused"
-  uri,"tag32","major3 text",""
-  bytes,"major2","raw bytes","no base64 in binary"
-  bits,"tag T_BITS","[major2 bytes, bit count]","the unused low bits of the last byte are zero; a run of whole bytes is bytes, never T_BITS"
-  regex,"tag T_REGEX","pattern text with no flags, else [pattern text, flags byte]","flags bit layout in §2.3"
-  custom-tag,"tag T_CUSTOM","[tag-name-or-ref, value]","binary form of the open extension point"
-  header,"envelope, §2.1","magic+version bytes","not a CBOR item; metadata, not data"
-```
+| Type | CBOR major type or tag | Payload | Integrity note |
+|---|---|---|---|
+| `nil` | simple(22) |  |  |
+| `boolean` | simple(20/21) |  | false/true |
+| `integer` | major0/1; tag2/3 | two's complement bignum bytes past 64-bit | arbitrary precision preserved exactly |
+| `float` | major7 | IEEE 754: the shortest of half, single and double that holds the value exactly | NaN/Infinity encode natively in half precision, no tag needed; a reader reads all three widths |
+| `decimal` | tag4 | [exponent,mantissa] | a negative zero has no mantissa of its own: `-0.0M` is written as `0.0M`, the one value `.dxnb` does not keep (text does, §1.5) |
+| `rational` | tag30 | [numerator,denominator] |  |
+| `string` | major3 (untagged) | UTF-8 bytes | default/untagged case |
+| `char` | tag T_CHAR | major0 codepoint |  |
+| `symbol` | tag T_SYMBOL | major3 text |  |
+| `keyword` | tag T_KEYWORD | major3 text |  |
+| `list` | major4 (untagged) | items | default/untagged case |
+| `tuple` | tag T_TUPLE | major4 items |  |
+| `map` | major5 (untagged) | pairs | default/untagged case |
+| `ordered-map` | tag T_ORDERED | major5 pairs | order preserved by tag presence, not byte sequence |
+| `set` | tag T_SET | major4 items |  |
+| `sorted-set` | tag T_SORTED_SET | major4 items, in canonical order (§1.5) |  |
+| `struct` | tag T_STRUCT | [type-name-or-ref, field..., extras?] | positional only, §2.1; the type name carries the version, `User(3)` (§4.8); extra fields, when there are any, as one trailing `T_EXTRA` map (§4.7) |
+| `array` | tag T_ARRAY | major4 items |  |
+| `date` | tag T_DATE | integer days since 1970-01-01 | Unix epoch, day granularity |
+| `time` | tag T_TIME (218) | integer nanoseconds since midnight | 0.2's T_TIME_US (210), microseconds, is read, never written |
+| `datetime` | tag T_DATETIME (219) | epoch-nanoseconds int in UTC, else [epoch-nanoseconds int, offset-minutes] | integers only -- a float loses nanoseconds at scale. 0.2's tag 1 (UTC, epoch microseconds) and T_DATETIME_US (211, [epoch-us, offset-min]) are read, never written |
+| `local-datetime` | tag T_LOCAL_DATETIME | integer nanoseconds since 1970-01-01T00:00:00 on the wall clock | no offset, so no instant |
+| `duration` | tag T_DURATION (220) | bitmask byte + present fields, §2.3 | 0.2's T_DURATION_US (212), its seventh field microseconds, is read, never written |
+| `uuid` | tag37 | 16 raw bytes | not the 36-char text form |
+| `objectid` | tag T_OBJECTID | 12 raw bytes | not the 24-char text form |
+| `ip` | tag52 (IPv4) \| tag54 (IPv6), RFC 9164 | an address: its raw bytes; a prefix: [length, the bytes with trailing zero bytes left off] | host bits of a prefix are zero, or it is refused |
+| `uri` | tag32 | major3 text |  |
+| `bytes` | major2 | raw bytes | no base64 in binary |
+| `bits` | tag T_BITS | [major2 bytes, bit count] | the unused low bits of the last byte are zero; a run of whole bytes is bytes, never T_BITS |
+| `regex` | tag T_REGEX | pattern text with no flags, else [pattern text, flags byte] | flags bit layout in §2.3 |
+| `custom-tag` | tag T_CUSTOM | [tag-name-or-ref, value] | binary form of the open extension point |
+| `header` | envelope, §2.1 | magic+version bytes | not a CBOR item; metadata, not data |
 
 ### 2.3 Private tag assignments and bit layouts
 
-```toon
-private_tags[22]{name,number,wraps}:
-  T_CHAR,200,"integer codepoint"
-  T_SYMBOL,201,"text string"
-  T_KEYWORD,202,"text string"
-  T_TUPLE,203,"array"
-  T_ARRAY,204,"array"
-  T_ORDERED,205,"map"
-  T_SET,206,"array"
-  T_SORTED_SET,207,"array"
-  T_STRUCT,208,"array: [type-ref, field...]"
-  T_DATE,209,"integer"
-  T_TIME_US,210,"integer: DXN 0.2's microseconds since midnight; read, never written"
-  T_DATETIME_US,211,"array: [epoch-us, offset-min], DXN 0.2's; read, never written"
-  T_DURATION_US,212,"bitmask byte + fields, the seventh microseconds, DXN 0.2's; read, never written"
-  T_REGEX,213,"text: the pattern, with no flags; else array: [pattern, flags-byte]"
-  T_CUSTOM,214,"array: [tag-ref, value]"
-  T_EXTRA,215,"map: {key: value, ...} — a struct's extra fields, only ever its last item (§4.7)"
-  T_BITS,216,"array: [bytes, bit-count] — a run of bits that is not whole bytes (§1.3)"
-  T_LOCAL_DATETIME,217,"integer: nanoseconds since 1970-01-01T00:00:00, wall clock"
-  T_TIME,218,"integer: nanoseconds since midnight"
-  T_DATETIME,219,"integer: epoch-ns, in UTC; else array: [epoch-ns, offset-min]"
-  T_DURATION,220,"bitmask byte + fields, the seventh nanoseconds"
-  T_OBJECTID,221,"byte string: BSON's 12-byte ObjectId"
-```
+| Name | Number | Wraps |
+|---|---|---|
+| `T_CHAR` | 200 | integer codepoint |
+| `T_SYMBOL` | 201 | text string |
+| `T_KEYWORD` | 202 | text string |
+| `T_TUPLE` | 203 | array |
+| `T_ARRAY` | 204 | array |
+| `T_ORDERED` | 205 | map |
+| `T_SET` | 206 | array |
+| `T_SORTED_SET` | 207 | array |
+| `T_STRUCT` | 208 | array: [type-ref, field...] |
+| `T_DATE` | 209 | integer |
+| `T_TIME_US` | 210 | integer: DXN 0.2's microseconds since midnight; read, never written |
+| `T_DATETIME_US` | 211 | array: [epoch-us, offset-min], DXN 0.2's; read, never written |
+| `T_DURATION_US` | 212 | bitmask byte + fields, the seventh microseconds, DXN 0.2's; read, never written |
+| `T_REGEX` | 213 | text: the pattern, with no flags; else array: [pattern, flags-byte] |
+| `T_CUSTOM` | 214 | array: [tag-ref, value] |
+| `T_EXTRA` | 215 | map: {key: value, ...} — a struct's extra fields, only ever its last item (§4.7) |
+| `T_BITS` | 216 | array: [bytes, bit-count] — a run of bits that is not whole bytes (§1.3) |
+| `T_LOCAL_DATETIME` | 217 | integer: nanoseconds since 1970-01-01T00:00:00, wall clock |
+| `T_TIME` | 218 | integer: nanoseconds since midnight |
+| `T_DATETIME` | 219 | integer: epoch-ns, in UTC; else array: [epoch-ns, offset-min] |
+| `T_DURATION` | 220 | bitmask byte + fields, the seventh nanoseconds |
+| `T_OBJECTID` | 221 | byte string: BSON's 12-byte ObjectId |
 
 **A tag never changes its meaning** (2026-10-20): when DXN's times went
 from microseconds to nanoseconds, the nanosecond forms took new tags,
@@ -449,16 +442,15 @@ register formally before any non-`dextrin` interop is expected.
 each set bit is followed, in bit order, by that field's value as a signed
 integer:
 
-```toon
-duration_bits[7]{bit,field,unit}:
-  0,years,count
-  1,months,count
-  2,weeks,count
-  3,days,count
-  4,hours,count
-  5,minutes,count
-  6,nanoseconds,"count (fractional seconds folded in, matching time and datetime precision)"
-```
+| Bit | Field | Unit |
+|---|---|---|
+| 0 | `years` | count |
+| 1 | `months` | count |
+| 2 | `weeks` | count |
+| 3 | `days` | count |
+| 4 | `hours` | count |
+| 5 | `minutes` | count |
+| 6 | `nanoseconds` | count (fractional seconds folded in, matching time and datetime precision) |
 
 Bit 7 is reserved (must be 0).
 
@@ -466,16 +458,15 @@ Bit 7 is reserved (must be 0).
 bit first, each bit a boolean modifier matching Erlang `:re`/Elixir
 `Regex` semantics:
 
-```toon
-regex_bits[7]{bit,flag,meaning}:
-  0,i,caseless
-  1,m,multiline
-  2,s,dotall
-  3,u,unicode
-  4,x,extended
-  5,f,firstline
-  6,r,ungreedy
-```
+| Bit | Flag | Meaning |
+|---|---|---|
+| 0 | `i` | caseless |
+| 1 | `m` | multiline |
+| 2 | `s` | dotall |
+| 3 | `u` | unicode |
+| 4 | `x` | extended |
+| 5 | `f` | firstline |
+| 6 | `r` | ungreedy |
 
 Bit 7 is reserved (must be 0).
 
@@ -557,40 +548,39 @@ schema of their own, which would be circular.
 
 ### 4.1 `type_expr` forms
 
-```toon
-type_expr[31]{form,dxn_shape,meaning}:
-  any,":any","matches any value at all"
-  never,":never","matches no value at all (JSON Schema's false)"
-  primitive,":integer / :string / ...","one keyword per §1.3 type name; :bits matches bits and bytes alike, :bytes only whole bytes"
-  reference,"bare symbol, e.g. Address","names a struct schema or a named type in this document (or Ns/Name, §4.6)"
-  list-of,"{:list-of elem}","list whose every element matches elem"
-  list-items,"{:list-items a {:repeat b 0 nil}}","a list's items in order: a type for one item, a repeat for several, §4.1a"
-  set-of,"{:set-of elem}","set whose every element matches elem"
-  tuple-of,"{:tuple-of a b c}","fixed-arity positional tuple, one type_expr per slot"
-  tuple-of-all,"{:tuple-of-all elem}","tuple of any length whose every element matches elem"
-  map-of,"{:map-of key-type val-type}","every key matches key-type, every value matches val-type"
-  array-of,"{:array-of elem}","array whose every element matches elem"
-  ordered-map-of,"{:ordered-map-of key-type val-type}","ordered map: every key matches key-type, every value matches val-type"
-  sorted-set-of,"{:sorted-set-of elem}","sorted set whose every element matches elem"
-  tagged,"{:tagged acme.money T}","a custom tag of that name whose value matches T; an application's value as its registered tag encoder writes it"
-  sized,":int32 :int64 :uint32 :uint64","sugar: {:refine :integer %{min: ..., max: ...}} over that range; :float32 is {:refine :float %{float32: true}}"
-  number,":number","sugar: {:any-of :integer :float :decimal :rational}"
-  const,"{:const v}","sugar: {:enum v}, the one value v"
-  if,"{:if I T E}","a value that matches I must match T, any other E (JSON Schema's if/then/else); E is :any when left out"
-  enum,"{:enum lit lit ...}","value must equal one of the given literals (any type)"
-  one-of,"{:one-of a b}","exactly one variant matches (JSON Schema's oneOf): none, or two or more, is a refusal"
-  any-of,"{:any-of a b}","union — one or more variants match (JSON Schema's anyOf)"
-  all-of,"{:all-of a b}","intersection — value must match every variant"
-  not,"{:not t}","value must not match t"
-  nilable,"{:nilable t}","sugar for {:any-of :nil t}"
-  refine,"{:refine t %{constraints}}","base type plus constraints, §4.2"
-  struct,"%schema{...}","struct/record shape, §4.4"
-  shape,"%shape{...}","a plain map with these fields, defaults filled, §4.4a"
-  case,"{:case field %{value => type, :else => type}}","the type the sibling field's value chooses, §4.4a"
-  doc,"{:doc T %{description: ...}}","T, annotated: a title, a description, examples and the like, §4.1b; takes what T takes"
-  generic,"{:generic [t ...] body}","a named type with parameters, §4.5"
-  of,"{:of Name type ...}","one use of a generic, its arguments where its parameters stand, §4.5"
-```
+| Form | DXN shape | Meaning |
+|---|---|---|
+| `any` | `:any` | matches any value at all |
+| `never` | `:never` | matches no value at all (JSON Schema's false) |
+| `primitive` | `:integer / :string / ...` | one keyword per §1.3 type name; :bits matches bits and bytes alike, :bytes only whole bytes |
+| `reference` | `bare symbol, e.g. Address` | names a struct schema or a named type in this document (or Ns/Name, §4.6) |
+| `list-of` | `{:list-of elem}` | list whose every element matches elem |
+| `list-items` | `{:list-items a {:repeat b 0 nil}}` | a list's items in order: a type for one item, a repeat for several, §4.1a |
+| `set-of` | `{:set-of elem}` | set whose every element matches elem |
+| `tuple-of` | `{:tuple-of a b c}` | fixed-arity positional tuple, one type_expr per slot |
+| `tuple-of-all` | `{:tuple-of-all elem}` | tuple of any length whose every element matches elem |
+| `map-of` | `{:map-of key-type val-type}` | every key matches key-type, every value matches val-type |
+| `array-of` | `{:array-of elem}` | array whose every element matches elem |
+| `ordered-map-of` | `{:ordered-map-of key-type val-type}` | ordered map: every key matches key-type, every value matches val-type |
+| `sorted-set-of` | `{:sorted-set-of elem}` | sorted set whose every element matches elem |
+| `tagged` | `{:tagged acme.money T}` | a custom tag of that name whose value matches T; an application's value as its registered tag encoder writes it |
+| `sized` | `:int32 :int64 :uint32 :uint64` | sugar: {:refine :integer %{min: ..., max: ...}} over that range; :float32 is {:refine :float %{float32: true}} |
+| `number` | `:number` | sugar: {:any-of :integer :float :decimal :rational} |
+| `const` | `{:const v}` | sugar: {:enum v}, the one value v |
+| `if` | `{:if I T E}` | a value that matches I must match T, any other E (JSON Schema's if/then/else); E is :any when left out |
+| `enum` | `{:enum lit lit ...}` | value must equal one of the given literals (any type) |
+| `one-of` | `{:one-of a b}` | exactly one variant matches (JSON Schema's oneOf): none, or two or more, is a refusal |
+| `any-of` | `{:any-of a b}` | union — one or more variants match (JSON Schema's anyOf) |
+| `all-of` | `{:all-of a b}` | intersection — value must match every variant |
+| `not` | `{:not t}` | value must not match t |
+| `nilable` | `{:nilable t}` | sugar for {:any-of :nil t} |
+| `refine` | `{:refine t %{constraints}}` | base type plus constraints, §4.2 |
+| `struct` | `%schema{...}` | struct/record shape, §4.4 |
+| `shape` | `%shape{...}` | a plain map with these fields, defaults filled, §4.4a |
+| `case` | `{:case field %{value => type, :else => type}}` | the type the sibling field's value chooses, §4.4a |
+| `doc` | `{:doc T %{description: ...}}` | T, annotated: a title, a description, examples and the like, §4.1b; takes what T takes |
+| `generic` | `{:generic [t ...] body}` | a named type with parameters, §4.5 |
+| `of` | `{:of Name type ...}` | one use of a generic, its arguments where its parameters stand, §4.5 |
 
 A bare `type_expr` (no wrapping tuple/struct) is always a `primitive`
 or a `reference` — the tuple form is only needed once a constructor
@@ -660,17 +650,16 @@ whole entry: a named type, a generic, a `%shape` or a `%schema`.
 }
 ```
 
-```toon
-annotations[8]{key,takes,meaning}:
-  title,string,"a short name for the type"
-  description,string,"what the type is for"
-  examples,list,"values the type takes, for a reader"
-  read-only,boolean,"the value is written by its owner only"
-  write-only,boolean,"the value is never read back"
-  deprecated,"boolean or string","true, or the reason, when the type is on its way out"
-  meta,map,"anything else, kept as written, meaning nothing to a check"
-  values,map,"on an enum: each of its values to that value's own annotations (no values of their own)"
-```
+| Key | Takes | Meaning |
+|---|---|---|
+| `title` | string | a short name for the type |
+| `description` | string | what the type is for |
+| `examples` | list | values the type takes, for a reader |
+| `read-only` | boolean | the value is written by its owner only |
+| `write-only` | boolean | the value is never read back |
+| `deprecated` | boolean or string | true, or the reason, when the type is on its way out |
+| `meta` | map | anything else, kept as written, meaning nothing to a check |
+| `values` | map | on an enum: each of its values to that value's own annotations (no values of their own) |
 
 Any other key is a compile error (`schema/compile`), as is a value of
 the wrong kind; `meta` is where what DXNS does not name goes.
@@ -681,46 +670,45 @@ error.
 
 ### 4.2 `refine` constraints
 
-```toon
-refine_constraints[37]{key,applies_to,meaning}:
-  min,"integer/float/decimal/rational/date/time/datetime/local-datetime/duration","value >= given value of the same kind"
-  max,"integer/float/decimal/rational/date/time/datetime/local-datetime/duration","value <= given value of the same kind"
-  exclusive-min,"integer/float/decimal/rational/date/time/datetime/local-datetime/duration","value > given value of the same kind"
-  exclusive-max,"integer/float/decimal/rational/date/time/datetime/local-datetime/duration","value < given value of the same kind"
-  multiple-of,"integer/float/decimal/rational","value is an exact multiple of given number"
-  min-length,"string/keyword/symbol/bytes/bits","length >= given integer: codepoints of a text or a name, bytes of bytes, bits under :bits"
-  max-length,"string/keyword/symbol/bytes/bits","length <= given integer, counted as min-length counts it"
-  min-bytes,"string/keyword/symbol","UTF-8 byte count >= given integer"
-  max-bytes,"string/keyword/symbol","UTF-8 byte count <= given integer"
-  pattern,"string/keyword/symbol/bytes","value matches given regex (§1.3's regex type); bytes one character per byte"
-  format,string,"the string is in the format named, one of §4.2a's"
-  encoding,string,"the string is valid in RFC 4648's :base64 (padded), :base64url (padded or not), :base32 (padded, upper case) or :base16 (either case)"
-  media-type,string,"what the string holds, type/subtype; checks nothing, but tells content how to read it"
-  content,string,"the string, decoded by its encoding if it has one, is a DXN document whose value matches the given type: .dxnb under application/dxnb, text otherwise"
-  encodes,bytes,"the bytes are a .dxnb document whose value matches the given type (CDDL's .cbor)"
-  encodes-seq,bytes,"the bytes are .dxnb documents back to back, each with its envelope, each matching the given type; none at all too (CDDL's .cborseq)"
-  min-count,"list/set/tuple/sorted-set/array","element count >= given integer"
-  max-count,"list/set/tuple/sorted-set/array","element count <= given integer"
-  contains,"list/set/tuple/sorted-set/array","at least min-contains (1 when not given) and at most max-contains elements match the given type"
-  min-contains,"with contains","how many elements must match contains, at least"
-  max-contains,"with contains","how many elements may match contains, at most"
-  unique,"list/set/tuple/sorted-set/array","true: no two elements are the same value"
-  unique-by,"list/set/tuple/sorted-set/array","no two elements' given field is the same value; an element without it is compared with none"
-  finite,float,"true: neither NaN nor an infinity"
-  float32,float,"true: single precision holds the value exactly (NaN and the infinities it holds)"
-  min-precision,decimal,"the coefficient's digit count, as written, >= given integer (1.50M has 3)"
-  max-precision,decimal,"the coefficient's digit count <= given integer"
-  min-exponent,decimal,"the exponent >= given integer (1.50M's is -2)"
-  max-exponent,decimal,"the exponent <= given integer"
-  bits,"integer/bytes","only the bits numbered in the given list are set: a non-negative integer's from its lowest, bytes from the first byte's lowest (RFC 8610's .bits)"
-  before-now,datetime,"true: before the time of the check"
-  after-now,datetime,"true: after the time of the check"
-  within,datetime,"no further from the time of the check than the given duration, either way"
-  resolution,"time/datetime/local-datetime/duration","no part finer than the given unit, :second, :millisecond, :microsecond or :nanosecond"
-  offsets,datetime,"the value's offset is one of the given strings, Z or ±HH:MM"
-  version,ip,"4 or 6: the value is that family"
-  prefix,ip,"true: a prefix; false: an address"
-```
+| Key | Applies to | Meaning |
+|---|---|---|
+| `min` | integer/float/decimal/rational/date/time/datetime/local-datetime/duration | value >= given value of the same kind |
+| `max` | integer/float/decimal/rational/date/time/datetime/local-datetime/duration | value <= given value of the same kind |
+| `exclusive-min` | integer/float/decimal/rational/date/time/datetime/local-datetime/duration | value > given value of the same kind |
+| `exclusive-max` | integer/float/decimal/rational/date/time/datetime/local-datetime/duration | value < given value of the same kind |
+| `multiple-of` | integer/float/decimal/rational | value is an exact multiple of given number |
+| `min-length` | string/keyword/symbol/bytes/bits | length >= given integer: codepoints of a text or a name, bytes of bytes, bits under :bits |
+| `max-length` | string/keyword/symbol/bytes/bits | length <= given integer, counted as min-length counts it |
+| `min-bytes` | string/keyword/symbol | UTF-8 byte count >= given integer |
+| `max-bytes` | string/keyword/symbol | UTF-8 byte count <= given integer |
+| `pattern` | string/keyword/symbol/bytes | value matches given regex (§1.3's regex type); bytes one character per byte |
+| `format` | string | the string is in the format named, one of §4.2a's |
+| `encoding` | string | the string is valid in RFC 4648's :base64 (padded), :base64url (padded or not), :base32 (padded, upper case) or :base16 (either case) |
+| `media-type` | string | what the string holds, type/subtype; checks nothing, but tells content how to read it |
+| `content` | string | the string, decoded by its encoding if it has one, is a DXN document whose value matches the given type: .dxnb under application/dxnb, text otherwise |
+| `encodes` | bytes | the bytes are a .dxnb document whose value matches the given type (CDDL's .cbor) |
+| `encodes-seq` | bytes | the bytes are .dxnb documents back to back, each with its envelope, each matching the given type; none at all too (CDDL's .cborseq) |
+| `min-count` | list/set/tuple/sorted-set/array | element count >= given integer |
+| `max-count` | list/set/tuple/sorted-set/array | element count <= given integer |
+| `contains` | list/set/tuple/sorted-set/array | at least min-contains (1 when not given) and at most max-contains elements match the given type |
+| `min-contains` | with contains | how many elements must match contains, at least |
+| `max-contains` | with contains | how many elements may match contains, at most |
+| `unique` | list/set/tuple/sorted-set/array | true: no two elements are the same value |
+| `unique-by` | list/set/tuple/sorted-set/array | no two elements' given field is the same value; an element without it is compared with none |
+| `finite` | float | true: neither NaN nor an infinity |
+| `float32` | float | true: single precision holds the value exactly (NaN and the infinities it holds) |
+| `min-precision` | decimal | the coefficient's digit count, as written, >= given integer (1.50M has 3) |
+| `max-precision` | decimal | the coefficient's digit count <= given integer |
+| `min-exponent` | decimal | the exponent >= given integer (1.50M's is -2) |
+| `max-exponent` | decimal | the exponent <= given integer |
+| `bits` | integer/bytes | only the bits numbered in the given list are set: a non-negative integer's from its lowest, bytes from the first byte's lowest (RFC 8610's .bits) |
+| `before-now` | datetime | true: before the time of the check |
+| `after-now` | datetime | true: after the time of the check |
+| `within` | datetime | no further from the time of the check than the given duration, either way |
+| `resolution` | time/datetime/local-datetime/duration | no part finer than the given unit, :second, :millisecond, :microsecond or :nanosecond |
+| `offsets` | datetime | the value's offset is one of the given strings, Z or ±HH:MM |
+| `version` | ip | 4 or 6: the value is that family |
+| `prefix` | ip | true: a prefix; false: an address |
 
 `{:refine t %{k: v, ...}}`'s constraint map may combine any number of
 these keys; a value must satisfy `t` itself *and* every listed
@@ -793,31 +781,30 @@ string's end**: PCRE and PHP compile the grammars with the `D` flag
 newline is no part of a hostname. The tags' readers end there too:
 `@time "12:00:00\n"` is `syntax`.
 
-```toon
-formats[22]{name,checked_as}:
-  date,"@date's reader (§1.2)"
-  time,"@time's reader"
-  datetime,"@datetime's reader: an offset, Z or ±HH:MM, is required"
-  local-datetime,"@local-datetime's reader: no offset"
-  duration,"@duration's reader"
-  uuid,"@uuid's reader: 8-4-4-4-12 hex digits, either case"
-  ipv4,"@ip's reader: an IPv4 address, no prefix"
-  ipv6,"@ip's reader: an IPv6 address, no prefix, no zone"
-  hostname,"labels LABEL joined by dots, 253 codepoints at most"
-  idn-hostname,"labels U-LABEL joined by dots, 253 codepoints at most"
-  email,"LOCAL @ DOMAIN, split at the last @: LOCAL at most 64 bytes, DOMAIN a hostname, [IPv4] or [IPv6:address]"
-  idn-email,"as email, with IDN-LOCAL and an idn-hostname"
-  uri,"RFC 3986's URI, from the parts below"
-  uri-reference,"a uri, or RFC 3986's relative-ref"
-  iri,"a uri that may hold any character past ASCII where it holds an unreserved one"
-  iri-reference,"an iri, or a relative-ref that may"
-  uri-template,"RFC 6570's URI-Template, below"
-  json-pointer,"RFC 6901, below"
-  relative-json-pointer,"draft-handrews-relative-json-pointer, below"
-  semver,"Semantic Versioning 2.0.0, below"
-  mac,"six or eight pairs of hex digits, one separator, : or -, throughout"
-  host-port,"HOST:PORT, split at the last colon: HOST a hostname, an IPv4 address or [IPv6], PORT 0 to 65535 without leading zeros"
-```
+| Name | Checked as |
+|---|---|
+| `date` | @date's reader (§1.2) |
+| `time` | @time's reader |
+| `datetime` | @datetime's reader: an offset, Z or ±HH:MM, is required |
+| `local-datetime` | @local-datetime's reader: no offset |
+| `duration` | @duration's reader |
+| `uuid` | @uuid's reader: 8-4-4-4-12 hex digits, either case |
+| `ipv4` | @ip's reader: an IPv4 address, no prefix |
+| `ipv6` | @ip's reader: an IPv6 address, no prefix, no zone |
+| `hostname` | labels LABEL joined by dots, 253 codepoints at most |
+| `idn-hostname` | labels U-LABEL joined by dots, 253 codepoints at most |
+| `email` | LOCAL @ DOMAIN, split at the last @: LOCAL at most 64 bytes, DOMAIN a hostname, [IPv4] or [IPv6:address] |
+| `idn-email` | as email, with IDN-LOCAL and an idn-hostname |
+| `uri` | RFC 3986's URI, from the parts below |
+| `uri-reference` | a uri, or RFC 3986's relative-ref |
+| `iri` | a uri that may hold any character past ASCII where it holds an unreserved one |
+| `iri-reference` | an iri, or a relative-ref that may |
+| `uri-template` | RFC 6570's URI-Template, below |
+| `json-pointer` | RFC 6901, below |
+| `relative-json-pointer` | draft-handrews-relative-json-pointer, below |
+| `semver` | Semantic Versioning 2.0.0, below |
+| `mac` | six or eight pairs of hex digits, one separator, : or -, throughout |
+| `host-port` | HOST:PORT, split at the last colon: HOST a hostname, an IPv4 address or [IPv6], PORT 0 to 65535 without leading zeros |
 
 The grammars:
 
@@ -1029,13 +1016,12 @@ files follows this convention**, so that one set of schema files serves
 every implementation. A struct of version `N` named `Foo.Bar/Baz` is
 looked for, on each search path in order, in:
 
-```toon
-schema_files[4]{layout,version_1,version_N}:
-  directories,"Foo/Bar/Baz.dxns or Foo/Bar/Baz-v1.dxns","Foo/Bar/Baz-vN.dxns"
-  one directory per name,"Foo/Bar/Baz/v1.dxns","Foo/Bar/Baz/vN.dxns"
-  flat,"Foo.Bar.Baz.dxns or Foo.Bar.Baz-v1.dxns","Foo.Bar.Baz-vN.dxns"
-  namespace file,"the entry Baz in Foo.Bar.dxns","the same file, by its %schema(N)"
-```
+| Layout | Version 1 | Version N |
+|---|---|---|
+| directories | `Foo/Bar/Baz.dxns or Foo/Bar/Baz-v1.dxns` | `Foo/Bar/Baz-vN.dxns` |
+| one directory per name | `Foo/Bar/Baz/v1.dxns` | `Foo/Bar/Baz/vN.dxns` |
+| flat | `Foo.Bar.Baz.dxns or Foo.Bar.Baz-v1.dxns` | `Foo.Bar.Baz-vN.dxns` |
+| namespace file | `the entry Baz in Foo.Bar.dxns` | `the same file, by its %schema(N)` |
 
 A name with no `/` is its own namespace: `Baz` is looked for as
 `Baz.dxns`, `Baz-vN.dxns`, `Baz/vN.dxns`, and the entry `Baz` in
@@ -1224,29 +1210,28 @@ exactly one **category**, and an implementation MUST expose it on the
 error value. Categories are compared exactly; messages are not
 normative.
 
-```toon
-categories[20]{category,raised_when}:
-  syntax,"text does not parse"
-  binary,"a .dxnb document is malformed: magic, version, a tag's payload"
-  key/not-allowed,"a map or extra-field key has a type §1.6 does not allow"
-  encode/unsupported,"a host value has no DXN meaning, or no form in the text being written -- a symbol whose name is not an identifier"
-  schema/compile,"a .dxns document is not a valid schema"
-  schema/duplicate-version,"a (name, version) is loaded twice"
-  schema/not-loaded,"a replace names a (name, version) that is not loaded"
-  schema/unknown-version,"a struct's version is older than the latest loaded and not loaded itself"
-  schema/no-materializer,"an older version arrives and no materializer is registered"
-  schema/field-count,"a positional struct's item count differs from its own version's field count"
-  schema/missing-field,"a required field is absent, or a positional form has no value for an optional field without a default (§4.3)"
-  schema/type-mismatch,"a field's value does not match its declared type"
-  schema/undeclared-field,"a strict decode meets a field the schema does not declare"
-  schema/shadowed-field,"an extra field has the name of a declared field"
-  schema/materializer,"a materializer answers an error, or a value the latest schema rejects"
-  schema/version-discipline,"the compatibility check: changed content under the same version, or a version going down"
-  document/not-found,"an edit to a document (a reader that keeps comments) names a path that is not there"
-  document/exists,"an insert names a key the map already has"
-  document/ambiguous,"an update finds a deleted item followed by an inserted one -- a replace, or the two -- and its setting refuses to choose: always, or where the deleted item owns a comment"
-  document/not-a-collection,"an edit's path goes into a value that holds no entries"
-```
+| Category | Raised when |
+|---|---|
+| `syntax` | text does not parse |
+| `binary` | a .dxnb document is malformed: magic, version, a tag's payload |
+| `key/not-allowed` | a map or extra-field key has a type §1.6 does not allow |
+| `encode/unsupported` | a host value has no DXN meaning, or no form in the text being written -- a symbol whose name is not an identifier |
+| `schema/compile` | a .dxns document is not a valid schema |
+| `schema/duplicate-version` | a (name, version) is loaded twice |
+| `schema/not-loaded` | a replace names a (name, version) that is not loaded |
+| `schema/unknown-version` | a struct's version is older than the latest loaded and not loaded itself |
+| `schema/no-materializer` | an older version arrives and no materializer is registered |
+| `schema/field-count` | a positional struct's item count differs from its own version's field count |
+| `schema/missing-field` | a required field is absent, or a positional form has no value for an optional field without a default (§4.3) |
+| `schema/type-mismatch` | a field's value does not match its declared type |
+| `schema/undeclared-field` | a strict decode meets a field the schema does not declare |
+| `schema/shadowed-field` | an extra field has the name of a declared field |
+| `schema/materializer` | a materializer answers an error, or a value the latest schema rejects |
+| `schema/version-discipline` | the compatibility check: changed content under the same version, or a version going down |
+| `document/not-found` | an edit to a document (a reader that keeps comments) names a path that is not there |
+| `document/exists` | an insert names a key the map already has |
+| `document/ambiguous` | an update finds a deleted item followed by an inserted one -- a replace, or the two -- and its setting refuses to choose: always, or where the deleted item owns a comment |
+| `document/not-a-collection` | an edit's path goes into a value that holds no entries |
 
 ## 6. Media types and identification
 
@@ -1255,12 +1240,11 @@ forms, and decides cheaply whether a body is worth decoding as one. A
 reader MAY offer this; one that does answers as below, so every
 implementation sniffs the same way.
 
-```toon
-forms[3]{form,media_type,extension}:
-  text,application/vnd.dxn,.dxn
-  binary,application/vnd.dxnb,.dxnb
-  schema,application/vnd.dxns,.dxns
-```
+| Form | Media type | Extension |
+|---|---|---|
+| text | `application/vnd.dxn` | `.dxn` |
+| binary | `application/vnd.dxnb` | `.dxnb` |
+| schema | `application/vnd.dxns` | `.dxns` |
 
 **A media type names its form.** The three above name theirs, and any
 media type with a structured `+dxn` suffix (`application/vnd.acme.event+dxn`)
