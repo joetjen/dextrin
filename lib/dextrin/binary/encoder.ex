@@ -455,7 +455,7 @@ defmodule Dextrin.Binary.Encoder do
   # is all there is (see `Dextrin.Struct`'s own moduledoc).
   #
   # Every position must be filled, and nil is not a stand-in for an absent
-  # field (DXN.md §4.7): a reader refuses nil unless the type is nilable.
+  # field (DXNS.md §7): a reader refuses nil unless the type is nilable.
   # So an absent field is written as its default where it has one, and is
   # otherwise refused (`schema/missing-field`).
   defp positional_values(name, pairs, opts) do

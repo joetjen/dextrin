@@ -1,7 +1,7 @@
 defmodule Dextrin.Schema.Reader do
   @moduledoc """
   Which schema a decoded struct is read with, given the version it was
-  written with and the versions loaded (DXN.md §4.8). Shared by the text
+  written with and the versions loaded (DXNS.md §8). Shared by the text
   and binary decoders, so both answer every case the same way.
 
     * **No version, or the latest loaded:** read with the latest, exactly.

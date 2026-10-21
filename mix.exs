@@ -1,7 +1,7 @@
 defmodule Dextrin.MixProject do
   use Mix.Project
 
-  @version "0.3.0"
+  @version "0.3.1"
 
   def project do
     [
@@ -74,8 +74,8 @@ defmodule Dextrin.MixProject do
       # generates lib/dextrin/text/grammar/native.ex ahead of time --
       # it's never referenced by any code that ships, hence `only:
       # :dev, runtime: false`.
-      {:ichor_runtime, "~> 0.6"},
-      {:ichor, "~> 0.7", only: :dev, runtime: false},
+      {:ichor_runtime, "~> 0.6.1"},
+      {:ichor, "~> 0.7.1", only: :dev, runtime: false},
 
       # `~> 3.0`, not `~> 2.1` -- 2.4.1 (the version that constraint
       # resolved to) carries a real, published MEDIUM-severity DoS
@@ -152,6 +152,10 @@ defmodule Dextrin.MixProject do
       "guides/dxn/DXN.md",
       "guides/dxn/DXN_EXAMPLES.md",
       "guides/dxn/DXN_CHEATSHEET.md",
+      {"guides/dxns/TUTORIAL.md", filename: "dxns-tutorial", title: "DXNS Tutorial"},
+      "guides/dxns/DXNS.md",
+      "guides/dxns/DXNS_EXAMPLES.md",
+      "guides/dxns/DXNS_CHEATSHEET.md",
       "CHANGELOG.md",
       "CONTRIBUTING.md",
       "LICENSE"
@@ -177,6 +181,7 @@ defmodule Dextrin.MixProject do
     [
       Guides: ["guides/TUTORIAL.md", "guides/EXAMPLES.md", "guides/CHEATSHEET.md"],
       "DXN Format": Path.wildcard("guides/dxn/*.md"),
+      "DXNS Schemas": Path.wildcard("guides/dxns/*.md"),
       Project: ["CHANGELOG.md", "CONTRIBUTING.md", "LICENSE"]
     ]
   end

@@ -1,7 +1,7 @@
 defmodule Dextrin.Schema.Layout do
   @moduledoc """
   The names a `.dxns` file's entries have, from where the file lies under
-  its root (DXN.md §4.6) -- one rule for every reader of a tree: the
+  its root (DXNS.md §6) -- one rule for every reader of a tree: the
   docs generator, `Dextrin.Schema.Tree` and the file resolver.
 
   - **A file named like one entry holds that entry**: `acme/shop/

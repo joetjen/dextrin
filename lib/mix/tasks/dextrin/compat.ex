@@ -1,6 +1,6 @@
 defmodule Mix.Tasks.Dextrin.Compat do
   @moduledoc """
-  The version discipline check (`Dextrin.Schema.Compat`, DXN.md §4.8):
+  The version discipline check (`Dextrin.Schema.Compat`, DXNS.md §8):
   compares the schemas in `OLD` with those in `NEW`, each a `.dxns` file
   or a directory searched for them. A version whose content changed
   without a new version, or a version that went down, is reported and

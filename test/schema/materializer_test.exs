@@ -3,7 +3,7 @@ defmodule Dextrin.Schema.MaterializerTest do
   B4 of `design/implementation-plan.md`: one materializer per schema,
   `(schema_name, version, fields)` with string-keyed fields, called for
   every decoded struct of its schema whatever the version, its result
-  validated against the latest schema (DXN.md §4.8). Without one, the
+  validated against the latest schema (DXNS.md §8). Without one, the
   latest version comes back as a generic `Dextrin.Struct`.
   """
 

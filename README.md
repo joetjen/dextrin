@@ -193,7 +193,7 @@ implementation is held to that by the
 
 A `.dxns` schema is DXN data. It is meant to say everything the schema
 languages of the formats above can say, except what has no value or no
-meaning in DXN ([`design/schema-superset.md`](design/schema-superset.md)
+meaning in DXN ([`design/schema-superset.md`](https://github.com/joetjen/dextrin/blob/develop/design/schema-superset.md)
 goes through them construct by construct). YAML, TOML and MessagePack
 have no schema language of their own; people use JSON Schema for them.
 
@@ -242,7 +242,7 @@ switch, for two reasons:
   schema serves both, so whether unknown fields are refused belongs to
   the decode: `Dextrin.decode(text, registry: r, strict: true)` refuses
   them (`schema/undeclared-field`), and without `strict:` they are kept
-  -- in `.dxnb` as one trailing item (DXN.md §4.7) -- and written back out.
+  -- in `.dxnb` as one trailing item (DXNS.md §7) -- and written back out.
 - **A closed type breaks the next version.** Adding a field to a closed
   type makes every older reader refuse every newer message, which turns
   each compatible change into a breaking one. DXN's versions (below)
@@ -256,7 +256,7 @@ the application knows what it means.
 
 Several services reading and writing the same schema never all deploy
 at once. DXNS makes that safe with versions, not with compatibility
-modes (DXN.md §4.8):
+modes (DXNS.md §8):
 
 - **Every schema has a version**, `%schema(3){...}`, and every version
   stays loadable beside the others. A writer always writes the latest it
@@ -339,7 +339,7 @@ Add `dextrin` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:dextrin, "~> 0.3.0"}
+    {:dextrin, "~> 0.3.1"}
   ]
 end
 ```
@@ -396,6 +396,19 @@ produced at `dextrin`'s own compile time (that's also what keeps
 `ichor` itself, and everything it depends on for parsing/codegen,
 `only: :dev, runtime: false` — only the small `ichor_runtime` package
 ships in a release) — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Two benchmarks live in `bench/`: `mix run bench/format_sizes.exs`
+measures the sizes in the comparison above, and
+`mix run bench/schema_validation.exs [seconds] [seed]` times decoding --
+lexing, parsing, building -- and `Dextrin.Schema.check/3`, data set by
+data set for ten minutes, against a schema set more complex than any
+real one (`bench/schemas/universe.dxns`: recursion, generics, cases,
+documents inside documents), about 30% of the data sets carrying one
+error. It reports each stage's total, mean, minimum, median,
+percentiles and maximum, good against bad and by kind of error, and
+writes the fastest, slowest and average data sets to
+`tmp/bench/schema-validation/`. `bench/generate_universes.exs` writes
+the same data sets for the Node and PHP implementations' benchmarks.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes, and
 [CHANGELOG.md](CHANGELOG.md) for release history.

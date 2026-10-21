@@ -77,7 +77,7 @@ defmodule Dextrin.Schema.Compiler do
           {:ok, Dextrin.Registry.t()} | {:error, Dextrin.Error.t()}
   #
   # `names` maps an entry's key to the name it is registered under -- a
-  # tree's full names (DXN.md §4.6, `Dextrin.Schema.Layout`); a bare
+  # tree's full names (DXNS.md §6, `Dextrin.Schema.Layout`); a bare
   # symbol naming a sibling resolves to the sibling's full name. It
   # travels in the scope under `@names`, beside the named types.
   #
@@ -119,7 +119,7 @@ defmodule Dextrin.Schema.Compiler do
   defp compile_error(message), do: Dextrin.Error.action(message, "schema/compile")
 
   # Every named type in a document sees every other (design/
-  # shapes-and-case.md, DXN.md §4.5): each is compiled with its siblings
+  # shapes-and-case.md, DXNS.md §5): each is compiled with its siblings
   # standing as `{:named, name}`, and those are put in place once all
   # are read -- so the order of a map's entries, which DXN does not
   # give, never matters. A named type may reach itself only through a
@@ -511,7 +511,7 @@ defmodule Dextrin.Schema.Compiler do
 
   # A schema written in Dextrin 0.1's syntax -- `fields: @ordered %{...}`,
   # `closed: true`, `forbidden: [...]` -- says so, and what a schema is
-  # written as now (DXN.md §4.4), rather than that a field has no known
+  # written as now (DXNS.md §4), rather than that a field has no known
   # type. Only those shapes: now `fields`, `closed` and `forbidden` are
   # ordinary field names, whose values are type expressions. The format
   # itself stays 1.0 until 1.0.0 (Jan, 2026-10-20), so the old syntax is
@@ -529,7 +529,7 @@ defmodule Dextrin.Schema.Compiler do
       do:
         {:error,
          "this is Dextrin 0.1's schema syntax (fields:, closed:, forbidden:); a schema lists its fields " <>
-           "directly, %schema(N){field: type, ...}, and refuses undeclared fields with strict: true (DXN.md §4.4)"},
+           "directly, %schema(N){field: type, ...}, and refuses undeclared fields with strict: true (DXNS.md §4)"},
       else: :ok
   end
 
@@ -654,7 +654,7 @@ defmodule Dextrin.Schema.Compiler do
   defp compile_type_expr(%Keyword{name: name}, _aliases) when name in @primitives,
     do: {:ok, {:primitive, name}}
 
-  # Sugar (DXN.md §4.1, Jan, 2026-10-20): protobuf's and MongoDB's sized
+  # Sugar (DXNS.md §1, Jan, 2026-10-20): protobuf's and MongoDB's sized
   # numbers as their ranges, `:float32` as single precision, `:number` as
   # every kind of number.
   defp compile_type_expr(%Keyword{name: name}, _aliases) when is_map_key(@sized, name) do
@@ -669,7 +669,7 @@ defmodule Dextrin.Schema.Compiler do
     {:ok, {:any_of, Enum.map(~w(integer float decimal rational), &{:primitive, &1})}}
   end
 
-  # DXN 0.2's timestamp type, now a datetime in UTC (DXN.md §4.2, Jan,
+  # DXN 0.2's timestamp type, now a datetime in UTC (DXNS.md §2, Jan,
   # 2026-10-20): a schema naming it keeps its meaning.
   defp compile_type_expr(%Keyword{name: "timestamp"}, _aliases),
     do: {:ok, {:refine, {:primitive, "datetime"}, %{"offsets" => ["Z"]}}}
@@ -782,7 +782,7 @@ defmodule Dextrin.Schema.Compiler do
   end
 
   # `{:list-items p ...}`: a list's items in order, each `p` a type for
-  # one item or a `{:repeat ...}` (DXN.md §4.1a).
+  # one item or a `{:repeat ...}` (DXNS.md §1a).
   defp compile_type_expr(%Tuple{items: [%Keyword{name: "list-items"} | particles]}, aliases) do
     with {:ok, ps} <- particles(particles, aliases), do: {:ok, {:list_items, ps}}
   end
@@ -811,7 +811,7 @@ defmodule Dextrin.Schema.Compiler do
   defp compile_type_expr(%Tuple{items: [%Keyword{name: "if"} | _]}, _aliases),
     do: {:error, "an if is {:if test then else}, else :any when left out"}
 
-  # `{:doc type %{...}}`: the type, annotated (DXN.md §4.1b).
+  # `{:doc type %{...}}`: the type, annotated (DXNS.md §1b).
   defp compile_type_expr(%Tuple{items: [%Keyword{name: "doc"}, inner, raw]}, aliases) do
     with {:ok, type} <- compile_type_expr(inner, aliases),
          {:ok, notes} <- annotations(raw, type),
@@ -822,7 +822,7 @@ defmodule Dextrin.Schema.Compiler do
     do: {:error, "a doc is {:doc type %{description: ..., ...}}"}
 
   # `{:tagged name type}`: a custom tag of that name, its value a type
-  # (DXN.md §4.1).
+  # (DXNS.md §1).
   defp compile_type_expr(%Tuple{items: [%Keyword{name: "tagged"}, name, type]}, aliases) do
     case name_of(name) do
       nil ->
@@ -906,7 +906,7 @@ defmodule Dextrin.Schema.Compiler do
   # What `content` reads a string as, by its media type.
   @content_readers [nil, "application/dxn", "application/dxnb"]
 
-  # A refine's constraints by name, every key one DXN.md §4.2 knows and
+  # A refine's constraints by name, every key one DXNS.md §2 knows and
   # every argument one it takes: a misspelt key would otherwise refuse
   # every value, silently, and a bad argument fail at check time. The
   # types are compiled here; `unique-by`, `format`, `resolution` and
@@ -938,7 +938,7 @@ defmodule Dextrin.Schema.Compiler do
   defp known_keys(named) do
     case Enum.find(Enum.sort(Map.keys(named)), &(&1 not in @refine_keys)) do
       nil -> :ok
-      key -> {:error, "#{key} is no refine constraint (DXN.md §4.2)"}
+      key -> {:error, "#{key} is no refine constraint (DXNS.md §2)"}
     end
   end
 
@@ -1093,7 +1093,7 @@ defmodule Dextrin.Schema.Compiler do
 
   @annotation_keys ~w(title description examples read-only write-only deprecated meta values)
 
-  # A doc's annotations by name, each of its kind (DXN.md §4.1b); `type`
+  # A doc's annotations by name, each of its kind (DXNS.md §1b); `type`
   # is what they annotate, `:schema` for a whole schema, so `values` can
   # be checked against an enum's literals.
   defp annotations(raw, type) when is_map(raw) and not is_struct(raw) do

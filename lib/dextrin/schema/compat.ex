@@ -1,6 +1,6 @@
 defmodule Dextrin.Schema.Compat do
   @moduledoc """
-  The version discipline check (DXN.md §4.8): compares the schemas of a
+  The version discipline check (DXNS.md §8): compares the schemas of a
   previous release with the current ones.
 
     * **A schema whose content changed must have a new version.** A
@@ -17,7 +17,7 @@ defmodule Dextrin.Schema.Compat do
 
   There are no compatibility modes and no append-only rule: changing
   positions is allowed, and documented as what older readers misread
-  (DXN.md §4.8). A field's description is documentation, not content.
+  (DXNS.md §8). A field's description is documentation, not content.
   CI runs this against the previous release's schema files
   (`mix dextrin.compat OLD NEW`).
   """

@@ -8,7 +8,7 @@ defmodule Dextrin.Schema.Compiled do
   `fields` is ordered, and that order is the canonical position <-> name
   mapping `.dxnb`'s positional struct encoding needs: the order the
   fields are written in the schema's body. `version` is the schema's
-  version, `1` when its entry has no header (DXN.md §4.8).
+  version, `1` when its entry has no header (DXNS.md §8).
   """
 
   alias Dextrin.Schema.Field
@@ -21,7 +21,7 @@ defmodule Dextrin.Schema.Compiled do
         }
 
   # `annotations` are what a `{:doc %schema{...} %{...}}` around the
-  # entry says about it (DXN.md §4.1b).
+  # entry says about it (DXNS.md §1b).
   defstruct [:name, version: 1, fields: [], annotations: %{}]
 
   @spec field_names(t()) :: [String.t()]

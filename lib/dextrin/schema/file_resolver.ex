@@ -1,7 +1,7 @@
 defmodule Dextrin.Schema.FileResolver do
   @moduledoc """
   A `struct_resolver` finding a struct's schema in `.dxns` files on disk,
-  by the convention DXN.md §4.6 states for every implementation -- so one
+  by the convention DXNS.md §6 states for every implementation -- so one
   set of schema files serves them all. Swappable like any resolver
   (`Dextrin.Registry.put_resolver/2`): anyone with another convention
   writes their own.
@@ -100,7 +100,7 @@ defmodule Dextrin.Schema.FileResolver do
   # `[{:error, why}]`.
   #
   # The file is compiled as a tree compiles it (`Dextrin.Schema.Tree`):
-  # its entries under their full names (DXN.md §4.6), over the named
+  # its entries under their full names (DXNS.md §6), over the named
   # types the rest of its search path defines -- so a field naming
   # another file's shape or named type resolves.
   defp load(path, entry, expected, dir, name) do
@@ -153,7 +153,7 @@ defmodule Dextrin.Schema.FileResolver do
           {:error,
            refusal(
              "#{path} holds #{entry} as version #{Enum.join(found, ", ")}, " <>
-               "but its name says version #{expected} (DXN.md §4.6)"
+               "but its name says version #{expected} (DXNS.md §6)"
            )}
         ]
     end
@@ -173,7 +173,7 @@ defmodule Dextrin.Schema.FileResolver do
 
         {:error,
          refusal(
-           "#{name} version #{version} is in two files, #{paths}; it is found once (DXN.md §4.6)"
+           "#{name} version #{version} is in two files, #{paths}; it is found once (DXNS.md §6)"
          )}
     end
   end

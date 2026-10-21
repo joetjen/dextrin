@@ -55,7 +55,7 @@ defmodule Dextrin.Text.ActionsErrorTest do
   test "a struct entry whose key is not a name is an extra field, not a field" do
     # struct_keyed reuses the same map_entry rule as a plain map, which
     # also allows the arrow form -- %Point{1 => 2} is a struct carrying
-    # one extra field keyed 1 (DXN.md §4.7), and a key that is not a map
+    # one extra field keyed 1 (DXNS.md §7), and a key that is not a map
     # key at all is refused like any map's.
     assert {:ok, %Dextrin.Struct{fields: {:keyed, []}, extra: [{1, 2}]}} =
              Dextrin.decode("%Point{1 => 2}")

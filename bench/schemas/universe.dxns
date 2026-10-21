@@ -1,0 +1,225 @@
+# The schema set the schema-validation benchmark checks against, the same
+# in every Dextrin implementation. It is meant to be more complex than any
+# schema one would meet in practice, using every form DXNS has:
+#
+# - recursion: an expression language whose expressions, conditions and
+#   bindings refer to each other (Expr, Cond, Binding), a generic tree
+#   whose nodes hold generic values (Tree, Either), an organisation that
+#   may have a parent organisation (Org), and a JSON-like node (Node);
+# - generics, nested: a tree of either-values, a pair of pairs;
+# - cases: the type of a party's details chosen by its kind, of a postal
+#   code by its country, of an event's payload by its type, of an
+#   expression's arguments by its operator;
+# - one-of, any-of, all-of and not; a list's items in order, with
+#   repeats and groups; every collection: list, set, sorted set, tuple,
+#   tuple of any length, map, ordered map, array; custom tags;
+# - refine keys: formats, patterns, lengths in codepoints and in bytes,
+#   ranges on numbers, dates and durations, decimal precision and
+#   exponents, finite floats, offsets and resolution of datetimes,
+#   uniqueness by value and by field, contains counts, encodings;
+# - documents inside documents: an attachment that is base64 text of a
+#   .dxnb Party, and raw bytes that are a sequence of .dxnb ledger entries;
+# - sugar and annotations: sized integers, :number, {:const}, {:if},
+#   {:doc} with deprecations.
+#
+# A data set is one Universe.
+
+%{
+  # ---- identities and amounts ---------------------------------------------
+
+  Id: {:doc {:any-of :uuid :objectid {:refine :string %{pattern: @regex "^[a-z]{2}-[0-9]{6}$"}}}
+            %{description: "A UUID, an ObjectId, or a two-letter prefix and six digits"}}
+
+  Currency: {:refine :keyword %{pattern: @regex "^[a-z]{3}$"}}
+
+  Money: %shape{
+    amount: {:refine :decimal %{min-exponent: -4, max-exponent: 0, max-precision: 18}}
+    currency: Currency
+  }
+
+  Quantity: {:one-of {:refine :int32 %{min: 1}}
+                     {:refine :rational %{exclusive-min: 0}}
+                     {:refine :decimal %{exclusive-min: 0M, min-exponent: -3}}}
+
+  Ref: {:tagged acme.ref Id}
+
+  # ---- generics -----------------------------------------------------------
+
+  Pair: {:generic [a b] {:tuple-of a b}}
+  Either: {:generic [l r] {:one-of %shape{left: l} %shape{right: r}}}
+  Interval: {:generic [t] {:tuple-of t t}}
+  Tree: {:generic [t] %shape{
+    value: t
+    children: %field{type: {:refine {:list-of {:of Tree t}} %{max-count: 4}}, default: []}
+  }}
+  Snapshot: {:generic [t] %shape{version: {:refine :int32 %{min: 1}}, data: t}}
+  Patch: {:generic [t] {:refine {:list-of Op} %{min-count: 1, max-count: 8}}}
+
+  Op: {:tuple-of {:enum :add :remove :replace}
+                 {:refine :string %{format: :json-pointer}}
+                 :any}
+
+  # ---- an expression language: mutual recursion ---------------------------
+
+  Symbol: {:refine :symbol %{pattern: @regex "^[a-z][a-z0-9_]{0,15}$"}}
+
+  Literal: {:one-of :int64 {:refine :float %{finite: true}} {:refine :string %{max-length: 32}} :boolean :nil Money}
+
+  Expr: %shape{
+    op: {:enum :lit :add :mul :neg :if :let :var :call}
+    args: {:case op %{
+      :lit  => {:list-items Literal}
+      :add  => {:list-items Expr Expr {:repeat Expr 0 nil}}
+      :mul  => {:list-items Expr Expr {:repeat Expr 0 nil}}
+      :neg  => {:list-items Expr}
+      :if   => {:list-items Cond Expr Expr}
+      :let  => {:list-items {:repeat Binding 1 4} Expr}
+      :var  => {:list-items Symbol}
+      :call => {:list-items Symbol {:repeat Expr 0 4}}
+    }}
+  }
+
+  Cond: %shape{
+    op: {:enum :and :or :not :cmp}
+    args: {:case op %{
+      :and => {:list-items Cond {:repeat Cond 1 nil}}
+      :or  => {:list-items Cond {:repeat Cond 1 nil}}
+      :not => {:list-items Cond}
+      :cmp => {:list-items {:enum :lt :le :eq :ge :gt} Expr Expr}
+    }}
+  }
+
+  Binding: {:tuple-of Symbol Expr}
+
+  # ---- a JSON-like node, and a graph --------------------------------------
+
+  Scalar: {:any-of :nil :boolean :int64 {:refine :float %{finite: true}} {:refine :string %{max-bytes: 128}}}
+
+  Node: {:any-of Scalar
+                 {:refine {:list-of Node} %{max-count: 5}}
+                 {:map-of {:refine :string %{min-length: 1, max-length: 16}} Node}
+                 {:set-of Scalar}
+                 {:tuple-of-all Node}
+                 Ref}
+
+  NodeKey: {:refine :string %{pattern: @regex "^n[0-9]{1,4}$"}}
+
+  Vertex: %shape{
+    label: {:refine :string %{min-length: 1}}
+    weight: {:refine :float %{min: 0.0, finite: true}}
+    tags: {:refine {:set-of :keyword} %{max-count: 5}}
+    meta?: {:of Tree :string}
+  }
+
+  Edge: %shape{
+    id: :int64
+    from: NodeKey
+    to: NodeKey
+    kind: {:enum :directed :undirected}
+    weight?: {:if :integer {:refine :int32 %{min: 0}} {:refine :decimal %{min: 0M}}}
+  }
+
+  Graph: %shape{
+    nodes: {:map-of NodeKey Vertex}
+    edges: {:refine {:list-of Edge} %{unique-by: :id, max-count: 12}}
+  }
+
+  # ---- parties ------------------------------------------------------------
+
+  Contact: {:one-of %shape{email: {:refine :string %{format: :email}}}
+                    %shape{phone: {:refine :string %{pattern: @regex "^\\+[0-9]{8,15}$"}}}
+                    %shape{web: {:refine :string %{format: :uri}}}}
+
+  Address: %shape{
+    country: {:enum "DE" "US" "JP" "GB" "FR"}
+    postal: {:case country %{
+      "DE" => {:refine :string %{pattern: @regex "^[0-9]{5}$"}}
+      "US" => {:refine :string %{pattern: @regex "^[0-9]{5}(-[0-9]{4})?$"}}
+      "JP" => {:refine :string %{pattern: @regex "^[0-9]{3}-[0-9]{4}$"}}
+      :else => {:refine :string %{min-length: 2, max-length: 10}}
+    }}
+    lines: {:list-items :string {:repeat :string 0 3}}
+    geo?: {:tuple-of {:refine :float %{min: -90.0, max: 90.0}} {:refine :float %{min: -180.0, max: 180.0}}}
+  }
+
+  Person: %shape{
+    born: {:refine :date %{min: @date "1900-01-01", max: @date "2010-12-31"}}
+    languages: {:refine {:sorted-set-of {:refine :keyword %{pattern: @regex "^[a-z]{2}$"}}} %{max-count: 4}}
+  }
+
+  Org: %shape{
+    registry: {:refine :string %{format: :hostname}}
+    employees: {:refine :int32 %{min: 1}}
+    parent?: Org
+  }
+
+  Party: %shape{
+    id: Id
+    name: {:refine :string %{min-length: 1, max-length: 120, max-bytes: 240}}
+    kind: {:enum :person :org}
+    details: {:case kind %{:person => Person, :org => Org}}
+    contacts: {:refine {:list-of Contact} %{min-count: 1, max-count: 5}}
+    addresses: {:refine {:list-of Address} %{max-count: 3}}
+  }
+
+  # ---- a ledger ------------------------------------------------------------
+
+  Leg: {:tuple-of Id {:enum :debit :credit} Money}
+
+  Entry: %shape{
+    at: {:refine :datetime %{offsets: ["Z" "+01:00" "+02:00"], resolution: :millisecond}}
+    amount: Money
+    legs: {:list-items Leg Leg {:repeat Leg 0 6}}
+    memo?: {:doc {:refine :string %{max-length: 140}} %{deprecated: "use note"}}
+    note?: :string
+    checksum: {:refine :bytes %{min-length: 32, max-length: 32}}
+  }
+
+  # ---- events ----------------------------------------------------------------
+
+  Event: %shape{
+    type: {:enum "created" "updated" "deleted" "merged"}
+    at: :datetime
+    payload: {:case type %{
+      "created" => {:of Snapshot Party}
+      "updated" => {:of Patch Party}
+      "deleted" => %shape{id: Id, reason?: :string}
+      "merged"  => {:list-items Id Id {:repeat Id 0 3}}
+    }}
+  }
+
+  # ---- settings ----------------------------------------------------------------
+
+  Settings: %shape{
+    flags: {:refine :bits %{max-length: 64}}
+    limits: {:ordered-map-of :keyword {:refine :number %{min: 0}}}
+    matrix: {:array-of {:array-of {:refine :float %{finite: true}}}}
+    schedule: {:list-of {:of Interval :time}}
+    ttl: {:refine :duration %{max: @duration "P30D"}}
+    version: {:refine :string %{format: :semver}}
+    hosts: {:refine {:list-of {:refine :string %{format: :host-port}}} %{unique: true}}
+    net: {:refine {:list-of :ip} %{max-count: 4}}
+    retry: {:const 3}
+    mode: {:if {:const "strict"} :string {:enum "lax" "off"}}
+  }
+
+  # ---- the universe --------------------------------------------------------------
+
+  Universe: {:doc %shape{
+    id: Id
+    parties: {:refine {:list-of Party} %{min-count: 1, unique-by: :id}}
+    graph: Graph
+    ledger: {:refine {:list-of Entry} %{max-count: 20}}
+    events: {:list-of Event}
+    program: Expr
+    rules: {:refine {:list-of Cond} %{max-count: 5}}
+    settings: Settings
+    tree: {:of Tree {:of Either :string :int32}}
+    pairs: {:list-of {:of Pair Id {:of Pair :keyword Quantity}}}
+    lookup: {:map-of Symbol Node}
+    refs: {:refine {:list-of Ref} %{contains: {:tagged acme.ref :uuid}, min-contains: 1, max-contains: 10}}
+    labels: {:all-of {:list-of :string} {:refine {:list-of :any} %{unique: true}} {:not {:list-items}}}
+    attachment?: {:refine :string %{encoding: :base64, media-type: "application/dxnb", content: Party}}
+    raw?: {:refine :bytes %{encodes-seq: Entry}}
+  } %{title: "A universe", description: "Far more than any real document would hold"}}
+}

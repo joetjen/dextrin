@@ -177,7 +177,7 @@ defmodule Dextrin.Schema.Validator do
     end
   end
 
-  # An extra field never shadows a declared one (DXN.md §4.7), on the way
+  # An extra field never shadows a declared one (DXNS.md §7), on the way
   # out as on the way in.
   defp unshadowed(%Compiled{} = compiled, %Struct{extra: [_ | _] = extra}) do
     declared = MapSet.new(Compiled.field_names(compiled))

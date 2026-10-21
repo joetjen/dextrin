@@ -7,7 +7,7 @@ Node, PHP, Praxis), and each one's docs task must turn them into the
 same `doc/`.
 
 - `schemas/` -- the schemas, laid out by the file conventions of
-  DXN.md §4.6: a namespace file (`acme.common.dxns`, `acme.events.dxns`),
+  DXNS.md §6: a namespace file (`acme.common.dxns`, `acme.events.dxns`),
   versioned files (`acme/shop/Customer-v1.dxns`, `-v2`), a directory per
   name (`acme/shop/Order/v1.dxns`), a flat file
   (`acme.shop.Product.dxns`), and a name with no namespace
@@ -17,5 +17,5 @@ same `doc/`.
 
 `acme.events.dxns` uses `%shape{...}` and `{:case ...}`;
 `acme.shop.Product.dxns` and `HealthCheck.dxns` carry annotations,
-`{:doc T %{...}}` (DXN.md §4.1b), which the documentation shows beside
+`{:doc T %{...}}` (DXNS.md §1b), which the documentation shows beside
 the definitions they annotate.

@@ -2,7 +2,7 @@ defmodule Dextrin.Schema.ReadingAcrossVersionsTest do
   @moduledoc """
   B3 of `design/implementation-plan.md`: a struct is read according to
   the version it was written with, set against the versions loaded
-  (DXN.md §4.8).
+  (DXNS.md §8).
   """
 
   use ExUnit.Case, async: true
