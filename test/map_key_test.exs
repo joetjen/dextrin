@@ -68,7 +68,10 @@ defmodule Dextrin.MapKeyTest do
 
     test "a NaN key is refused, though the keyword :nan is allowed" do
       refused(Dextrin.decode("%{NaN => 1}"))
-      assert {:ok, %{nan: 1}} = Dextrin.decode("%{:nan => 1}")
+      assert {:ok, %{%Dextrin.Keyword{name: "nan"} => 1}} = Dextrin.decode("%{:nan => 1}")
+      # Trusted too: the atom :nan is NaN, so the keyword stays a keyword.
+      assert {:ok, %{%Dextrin.Keyword{name: "nan"} => 1}} =
+               Dextrin.decode("%{:nan => 1}", trusted: true)
     end
 
     test "an ordered map refuses the same keys" do

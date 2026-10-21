@@ -17,7 +17,7 @@ defmodule Dextrin.Schema do
   """
 
   alias Dextrin.Registry
-  alias Dextrin.Schema.Validator
+  alias Dextrin.Schema.{TypeExpr, Validator}
 
   @doc """
   Compiles a decoded `.dxns` document (see `Dextrin.decode/2`) into
@@ -33,6 +33,43 @@ defmodule Dextrin.Schema do
   @spec compile(term(), Registry.t()) :: {:ok, Registry.t()} | {:error, Dextrin.Error.t()}
   def compile(schema_doc, base_registry \\ Registry.new()) do
     Dextrin.Schema.Compiler.compile(schema_doc, base_registry)
+  end
+
+  @doc """
+  `compile/2`, each entry registered under the full name `names` gives
+  its key -- how `Dextrin.Schema.Tree` compiles a file of a tree (DXN.md
+  §4.6) -- and a bare symbol naming a sibling resolving to it.
+  """
+  @spec compile(term(), Registry.t(), %{String.t() => String.t()}) ::
+          {:ok, Registry.t()} | {:error, Dextrin.Error.t()}
+  def compile(schema_doc, base_registry, names) do
+    Dextrin.Schema.Compiler.compile(schema_doc, base_registry, names)
+  end
+
+  @doc """
+  Compiles several decoded `.dxns` documents into one registry, in order,
+  over `base_registry` -- each document seeing the schemas and named
+  types of those before it, as `compile/2` called on each in turn. The
+  first that does not compile is the refusal, naming which it was.
+
+      iex> docs = for t <- ["%{A: %schema{a: :integer}}", "%{B: %schema{a: A}}"], do: elem(Dextrin.decode(t), 1)
+      iex> {:ok, registry} = Dextrin.Schema.compile_all(docs)
+      iex> match?({:ok, _, _}, Dextrin.Registry.fetch_struct_schema(registry, "B"))
+      true
+  """
+  @spec compile_all([term()], Registry.t()) :: {:ok, Registry.t()} | {:error, Dextrin.Error.t()}
+  def compile_all(schema_docs, base_registry \\ Registry.new()) when is_list(schema_docs) do
+    schema_docs
+    |> Enum.with_index(1)
+    |> Enum.reduce_while({:ok, base_registry}, fn {doc, n}, {:ok, registry} ->
+      case compile(doc, registry) do
+        {:ok, registry} ->
+          {:cont, {:ok, registry}}
+
+        {:error, error} ->
+          {:halt, {:error, %{error | message: "document #{n}: #{error.message}"}}}
+      end
+    end)
   end
 
   @doc """
@@ -73,6 +110,84 @@ defmodule Dextrin.Schema do
   end
 
   @doc """
+  Whether `value` -- data a program already holds -- matches the
+  definition `name` in `registry`: a struct schema, a `%shape` or a
+  named type (design/shapes-and-case.md). Only a check: `value` is
+  never changed. `:ok`, or the error saying why.
+
+      iex> {:ok, doc} = Dextrin.decode("%{Port: {:refine :integer %{min: 1, max: 65535}}}")
+      iex> {:ok, registry} = Dextrin.Schema.compile(doc)
+      iex> Dextrin.Schema.check(8080, registry, "Port")
+      :ok
+      iex> {:error, %Dextrin.Error{category: category}} = Dextrin.Schema.check(0, registry, "Port")
+      iex> category
+      "schema/type-mismatch"
+  """
+  @spec check(term(), Registry.t(), String.t()) :: :ok | {:error, Dextrin.Error.t()}
+  def check(value, %Registry{} = registry, name) do
+    with {:ok, _conformed} <- conform(value, registry, name), do: :ok
+  end
+
+  @doc """
+  What the `{:doc ... %{...}}` around the schema or named type `name`
+  says about it (DXN.md §4.1b): its annotations by name, `%{}` when it
+  has none, `:error` when there is no such name. A schema answers for
+  its latest version.
+
+      iex> {:ok, doc} = Dextrin.decode(~s|%{Port: {:doc :integer %{description: "A TCP port"}}}|)
+      iex> {:ok, registry} = Dextrin.Schema.compile(doc)
+      iex> Dextrin.Schema.annotations(registry, "Port")
+      {:ok, %{"description" => "A TCP port"}}
+  """
+  @spec annotations(Registry.t(), String.t()) :: {:ok, %{optional(String.t()) => term()}} | :error
+  def annotations(%Registry{} = registry, name) do
+    case Map.fetch(registry.type_aliases, name) do
+      {:ok, {:doc, _type, notes}} ->
+        {:ok, notes}
+
+      {:ok, {:generic, _params, {:doc, _body, notes}}} ->
+        {:ok, notes}
+
+      {:ok, _type} ->
+        {:ok, %{}}
+
+      :error ->
+        case Registry.fetch_struct_schema(registry, name) do
+          {:ok, compiled, _registry} -> {:ok, compiled.annotations}
+          _ -> :error
+        end
+    end
+  end
+
+  @doc """
+  `value` checked as `check/3` checks it, answered with every shape's
+  missing defaults filled in, as a decode fills them: `{:ok, value}`, or
+  the error saying why.
+
+      iex> {:ok, doc} = Dextrin.decode(~s|%{Money: %shape{amount: :decimal, currency: %field{type: :string, default: "EUR"}}}|)
+      iex> {:ok, registry} = Dextrin.Schema.compile(doc)
+      iex> Dextrin.Schema.conform(%{amount: Decimal.new("1.50")}, registry, "Money")
+      {:ok, %{:amount => Decimal.new("1.50"), %Dextrin.Keyword{name: "currency"} => "EUR"}}
+  """
+  @spec conform(term(), Registry.t(), String.t()) :: {:ok, term()} | {:error, Dextrin.Error.t()}
+  def conform(value, %Registry{} = registry, name) do
+    case Map.fetch(registry.type_aliases, name) do
+      {:ok, type_expr} ->
+        case TypeExpr.conform(type_expr, value, TypeExpr.context(registry)) do
+          {:ok, _} = ok ->
+            ok
+
+          :error ->
+            {:error,
+             Dextrin.Error.action("value does not match #{inspect(name)}", "schema/type-mismatch")}
+        end
+
+      :error ->
+        with :ok <- validate(value, registry, name), do: {:ok, value}
+    end
+  end
+
+  @doc """
   Encode-time schema validation: checks `value` —
   ordinary Elixir data you're about to encode (a plain map, atom or
   string keys, or a real struct) — against a named, compiled schema
@@ -92,6 +207,9 @@ defmodule Dextrin.Schema do
       {:unknown, _registry} ->
         {:error,
          Dextrin.Error.action("no compiled schema registered for #{inspect(schema_name)}")}
+
+      {:error, error, _registry} ->
+        {:error, error}
     end
   end
 
@@ -176,6 +294,9 @@ defmodule Dextrin.Schema do
             end
 
           {:ok, registry}
+
+        {:error, %Dextrin.Error{message: message}, _registry} ->
+          {:error, message}
 
         {:unknown, _registry} ->
           {:error,

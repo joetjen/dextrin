@@ -1,7 +1,7 @@
 defmodule Dextrin.MapKey do
   @moduledoc """
   Which values may be map keys (`DXN.md` §1.6): a `string`, `keyword`,
-  `integer`, `uuid`, `date`, `bytes`, `symbol` or `char`. Anything else is
+  `integer`, `uuid`, `objectid`, `date`, `bytes`, `symbol` or `char`. Anything else is
   refused as `key/not-allowed` -- in text, in binary and when encoding.
 
   The allowed types are those whose identity is exact and obvious in
@@ -35,7 +35,7 @@ defmodule Dextrin.MapKey do
   @spec refusal(term()) :: Dextrin.Error.t()
   def refusal(key) do
     Dextrin.Error.action(
-      "#{inspect(key)} cannot be a map key: a key is a string, keyword, integer, uuid, date, bytes, symbol or char",
+      "#{inspect(key)} cannot be a map key: a key is a string, keyword, integer, uuid, objectid, date, bytes, symbol or char",
       "key/not-allowed"
     )
   end
@@ -56,8 +56,10 @@ defmodule Dextrin.MapKey do
   defp allowed?(key) when is_atom(key), do: key not in [nil, true, false]
   defp allowed?(%Dextrin.Keyword{}), do: true
   defp allowed?(%Dextrin.Uuid{}), do: true
+  defp allowed?(%Dextrin.ObjectId{}), do: true
   defp allowed?(%Date{}), do: true
-  defp allowed?(%Dextrin.Bytes{}), do: true
+  # Bytes are a key; bits that are not whole bytes are not (DXN.md §1.6).
+  defp allowed?(%Dextrin.Bytes{data: data}), do: is_binary(data)
   defp allowed?(%Dextrin.Symbol{}), do: true
   defp allowed?(%Dextrin.Char{}), do: true
   defp allowed?(_other), do: false

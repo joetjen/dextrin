@@ -33,15 +33,18 @@ set          @{ ... }
 sorted-set   @sorted-set @{ ... }
 struct       %Name{ ... } | %Name[ ... ]              needs a schema to fully interpret
 array        @array[ ... ]                           fixed-size, indexed
-date         ~D[YYYY-MM-DD]
-time         ~T[HH:MM:SS(.ffffff)?]
-timestamp    ~U[YYYY-MM-DD HH:MM:SSZ]                 UTC only
-datetime     @datetime "..."                          non-UTC offset required
+date         @date "YYYY-MM-DD"
+time         @time "HH:MM:SS(.fffffffff)?"           nanoseconds
+datetime     @datetime "YYYY-MM-DDTHH:MM:SS(Z|±HH:MM)"  an instant with its offset
+local-dt     @local-datetime "YYYY-MM-DDTHH:MM:SS"    no offset
 duration     @duration "P..."                         ISO 8601 duration
 uuid         @uuid "..."                              RFC 4122
+objectid     @objectid "<24 hex>"                     BSON's ObjectId, 12 bytes
+ip           @ip "192.0.2.1" | "2001:db8::/32"        an address or a prefix
 uri          @uri "..."                               RFC 3986
 bytes        @bytes "..."                             base64 in text
-regex        ~r/pattern/flags                          flags: i m s u x f r
+bits         @bits {"..." n}                          base64 and a bit count; whole bytes are bytes
+regex        @regex "pattern" | @regex(im) "pattern"  flags: i m s u x f r
 custom-tag   @tag value                                open extension point
 ```
 
@@ -75,23 +78,58 @@ produces nothing — never appears in the result, no binary encoding.
 :integer / :string / ...        one keyword per primitive type name above
 Name                            bare symbol -- a struct name or a named type
 {:list-of T}                    list, every element matches T
+{:list-items A {:repeat B 0 nil}}  a list's items in order; {:repeat {:group A B} 1 nil}
 {:set-of T}                     set, every element matches T
 {:tuple-of A B C}                fixed-arity positional tuple
+{:tuple-of-all T}               tuple of any length, every element a T
+{:tagged acme.money T}          a custom tag of that name, its value a T
+{:doc T %{description: ...}}    T, annotated: title description examples read-only write-only deprecated meta values
+:int32 :int64 :uint32 :uint64   integer ranges; :float32 single precision
+:number                         any integer, float, decimal or rational
+{:const v}                      the one value v
+{:if I T E}                     an I must be a T, anything else an E
 {:map-of K V}                   every key matches K, every value matches V
+{:array-of T}                   array, every element matches T
+{:ordered-map-of K V}           ordered map, keys match K, values match V
+{:sorted-set-of T}              sorted set, every element matches T
 {:enum lit lit ...}              value equals one of the literals
-{:one-of T U}                    union
+{:one-of T U}                    exactly one matches
+{:any-of T U}                    union: one or more match
 {:all-of T U}                    intersection
-{:nilable T}                     sugar for {:one-of :nil T}
+{:not T}                         matches what T refuses
+:never                           matches nothing
+{:nilable T}                     sugar for {:any-of :nil T}
 {:refine T %{constraints}}       base type + constraints, see below
 %schema{}    struct/record shape
+%shape{}     plain map with these fields, defaults filled (unversioned)
+{:case f %{v => T, :else => U}}  the type field f's value chooses
+{:generic [t] body}             a named type with parameters
+{:of Name T}                    one use of a generic
 ```
 
 ## `refine` constraints
 
 ```text
 min / max / exclusive-min / exclusive-max / multiple-of   int/float/decimal/rational
-min-length / max-length / pattern                          string
-min-count / max-count                                       list/set/tuple
+min / max / exclusive-*  on temporals                     date/time/datetime/local-datetime/duration, same kind
+min-bytes / max-bytes                                     string: UTF-8 bytes
+format                                                    string: :email :uri :hostname :semver ... (DXN.md §4.2a)
+encoding / media-type                                     string: :base64 ... / "type/subtype"
+content                                                   string: a DXN document of this type
+encodes / encodes-seq                                     bytes: .dxnb document(s) of this type
+float32                                                   float: single precision holds it
+min-precision / max-precision                             decimal: coefficient digits
+min-exponent / max-exponent                               decimal: exponent
+bits                                                      integer/bytes: only these bit numbers set
+before-now / after-now / within                           datetime against the clock
+resolution                                                time/datetime/duration: :second :millisecond ...
+min-length / max-length / pattern                          string/keyword/symbol/bytes (bits: length only)
+min-count / max-count                                       list/set/tuple/sorted-set/array
+contains / min-contains / max-contains                      how many elements are a given type
+unique / unique-by                                          no two elements, or their field, the same
+finite                                                      float: true refuses NaN and the infinities
+offsets                                                     datetime: ["Z" "+02:00" ...]
+version / prefix                                            ip: 4 or 6; true a prefix, false an address
 ```
 
 ## Struct schema shape
@@ -116,13 +154,13 @@ PositiveInt: {:refine :integer %{min: 1}}
 
 Any `.dxns` entry that isn't a `%schema{}` is a named type — a
 reusable name for a combination of the fixed type_expr forms above,
-referenced exactly like a struct name. Can't reference a sibling named
-type declared in the *same* document (no ordering guarantee to resolve
-against); can freely reference one from an earlier-compiled document.
+referenced exactly like a struct name, from a sibling in the same
+document in any order, or from an earlier-compiled one; it may refer to
+itself through a field or a collection (DXN.md §4.5).
 
-## Reserved sigils
+## Reserved leaders
 
-None of these may begin a bare identifier: `#` `@` `%` `~` `?` `:`.
+None of these may begin a bare identifier: `#` `@` `%` `?` `:`.
 
 ## Binary (`.dxnb`) envelope
 

@@ -8,6 +8,15 @@ implement a conforming parser, encoder, or decoder — see the
 [cheatsheet](DXN_CHEATSHEET.md) for a gentler introduction, and
 `dextrin`'s own module docs for one particular implementation's choices.
 
+This is **format version 1.0**, and it stays 1.0 until the libraries
+that implement it reach 1.0.0. Until then the format changes between
+releases without a new version number -- Dextrin 0.3 changed `.dxns`
+documents (§4.4: the body lists the fields, `%schema(N)` carries a
+version) and added `bits` (§1.3). The `@dxn` header's version is
+informational: a reader MUST accept any `1.x` and MAY refuse another
+major version. The `.dxnb` envelope's version byte (§2.1) counts major
+versions and is `1`.
+
 Grammar is ISO/IEC 14977 EBNF. Reference tables are [TOON](https://toon.sh)
 (`name[N]{fields}:` header, one comma-separated row per record) for
 token-efficient machine parsing; a cell containing a comma or quote is
@@ -31,7 +40,9 @@ hex_digit    = digit | "a" | "b" | "c" | "d" | "e" | "f" | "A" | "B" | "C" | "D"
 letter       = ? any character with Unicode property XID_Start (UAX #31) ? ;
 ident_char   = ? any character with Unicode property XID_Continue (UAX #31) ? | "-" | "?" | "!" ;
 
-identifier   = ( letter | "_" ) , { ident_char } , [ "/" , ( letter | "_" ) , { ident_char } ] ;
+identifier   = segments , [ "/" , segments ] ;           (* namespace / name *)
+segments     = segment , { "." , segment } ;              (* Foo.Bar.Baz *)
+segment      = ( letter | "_" ) , { ident_char } ;
 reserved     = "nil" | "true" | "false" | "NaN" | "Infinity" ;
 
 string_char  = ? any character except '"' or "\" ? | escape ;
@@ -43,8 +54,8 @@ char_body    = ? any single non-whitespace character ? | escape | "s" (* space, 
 char         = "?" , char_body ;
 ```
 
-Reserved sigils — none may begin a bare `identifier`: `#` comment, `@`
-open tag, `%` map/struct, `~` closed sigil family, `?` char, `:` keyword.
+Reserved leaders — none may begin a bare `identifier`: `#` comment, `@`
+tag, `%` map/struct, `?` char, `:` keyword.
 
 ### 1.2 Value grammar
 
@@ -55,7 +66,7 @@ discard      = "@_" , value ;                      (* parses and discards one va
 
 value_body   = nil | boolean | number | string | char | symbol | keyword
              | list | tuple | map_lit | struct_lit | set_lit
-             | sigil | tag_form ;
+             | tag_form ;
 
 nil          = "nil" ;
 boolean      = "true" | "false" ;
@@ -85,15 +96,53 @@ struct_lit   = "%" , identifier , [ "(" , integer , ")" ] ,   (* version, §4.8 
                  | ( "[" , { item } , { map_entry } , "]" ) ) ;   (* positional, then extra fields *)
 item         = value ;                                (* a value not followed by "=>" (§4.7) *)
 
-sigil        = date_sigil | time_sigil | instant_sigil | regex_sigil ;
-date_sigil   = "~D[" , iso_date , "]" ;
-time_sigil   = "~T[" , iso_time , "]" ;
-instant_sigil= "~U[" , iso_date , " " , iso_time , "Z" , "]" ;
-regex_sigil  = "~r/" , { regex_char } , "/" , [ regex_flags ] ;
-regex_flags  = { "i" | "m" | "s" | "u" | "x" | "f" | "r" } ;
-
-tag_form     = "@" , identifier , value ;             (* built-in tag name -> §1.3; else custom *)
+tag_form     = "@" , identifier , [ "(" , regex_flags , ")" ] , value ;
+                                                      (* built-in tag name -> §1.3; else custom *)
+regex_flags  = ( "i" | "m" | "s" | "u" | "x" | "f" | "r" ) ,
+               { "i" | "m" | "s" | "u" | "x" | "f" | "r" } ;   (* @regex only, §1.3 *)
 ```
+
+**One way to write a value** (Jan, 2026-10-20): every type that is not
+a number, string, char, symbol, keyword or collection is a tag, `@name
+value` -- dates and times among them. DXN 0.2 wrote dates, times, UTC
+timestamps and regexes as sigils, `~D[...]`, `~T[...]`, `~U[...]` and
+`~r/.../`; those are gone, and a reader refuses them (`syntax`).
+
+**Dates and times are ISO 8601 strings** under their tag:
+
+```text
+@date "2026-10-20"
+@time "14:30:00.123456789"
+@datetime "2026-10-20T14:30:00Z"          # UTC
+@datetime "2026-10-20T16:30:00+02:00"     # the same instant, written with its offset
+@local-datetime "2026-10-20T14:30:00"     # a wall-clock time, no offset
+@duration "PT1H30M"
+```
+
+A time takes up to nine fraction digits: nanoseconds. A `datetime` has
+an offset, `Z` or `±HH:MM`; `Z` is `+00:00`, and `-00:00` ("offset
+unknown") is refused -- a value with no offset is a `local-datetime`. A
+string that is not the form its tag names is `syntax`.
+
+**`@objectid` and `@ip` are built in** (Jan, 2026-10-20), like `@uuid`:
+readable in text, raw bytes in `.dxnb`. An ObjectId is BSON's 12 bytes,
+written as 24 hex digits, either case read, lowercase written. An `@ip`
+is an IPv4 or IPv6 address, or a prefix with its length; a prefix whose
+host bits are not zero (`10.0.0.1/8`) is `syntax`, as RFC 9164 asks.
+
+**A regex is its pattern as a string**, its flags in a header against
+the tag: `@regex(im) "^\\d+$"`. PCRE's own inline modifiers are part of
+the pattern and need no header: `@regex "(?im)^\\d+$"` matches what the
+first does, and is a different value (its pattern differs). A pattern is
+an ordinary string, so a backslash in it is written `\\`. A header on
+any tag but `regex` is `syntax`, and so is a flag given twice.
+
+**A pattern that PCRE does not compile is `syntax`** (Jan, 2026-10-21):
+`@regex "a("` is no regex. An implementation without a PCRE engine
+cannot tell every pattern apart, and says so: the Node implementation
+reads any pattern, since JavaScript's own engine refuses valid PCRE --
+inline modifiers such as `(?im)`, atomic groups, `\\A` -- and so cannot
+stand in for it. That is a documented limit of the platform, not of DXN.
 
 Tag resolution: an `identifier` immediately following `@` is matched
 against the built-in tag table (§1.3) first; any name not found there is
@@ -101,10 +150,16 @@ a **custom tag** — parses identically (`@tag value`), decodes to an
 application-defined type via a registered decoder, per §2 goal 4 of the
 design log.
 
+Whitespace between a tag and its value is allowed and means nothing:
+`@array[1 2]` and `@array [1 2]` are the same array. **`@array[`, the
+bracket against the tag, is the preferred spelling** (Jan, 2026-10-20),
+and the one every writer produces; every other tag is written with one
+space before its value (`@ordered %{...}`, `@uuid "..."`).
+
 ### 1.3 Type reference
 
 ```toon
-types[30]{type,category,dxn_syntax,notes}:
+types[33]{type,category,dxn_syntax,notes}:
   nil,scalar,nil,""
   boolean,scalar,"true | false",""
   integer,scalar,"-?[0-9]+","arbitrary precision"
@@ -124,17 +179,20 @@ types[30]{type,category,dxn_syntax,notes}:
   struct-keyed,collection,"%Name{ ... }","requires schema to fully interpret"
   struct-positional,collection,"%Name[ ... ]","field order per schema; both struct forms parse equal"
   array,collection,"@array[ ... ]","fixed-size/indexed"
-  date,temporal,"~D[YYYY-MM-DD]","ISO 8601"
-  time,temporal,"~T[HH:MM:SS(.ffffff)?]","ISO 8601"
-  timestamp,temporal,"~U[YYYY-MM-DD HH:MM:SSZ]","ISO 8601, UTC only"
-  datetime,temporal,"@datetime ""...""","ISO 8601, offset required, non-UTC"
-  duration,temporal,"@duration ""P...""","ISO 8601 duration"
+  date,temporal,"@date ""YYYY-MM-DD""","ISO 8601"
+  time,temporal,"@time ""HH:MM:SS(.f{1,9})?""","ISO 8601, nanoseconds"
+  datetime,temporal,"@datetime ""YYYY-MM-DDTHH:MM:SS(.f{1,9})?(Z|±HH:MM)""","ISO 8601, an instant with its offset; Z is UTC"
+  local-datetime,temporal,"@local-datetime ""YYYY-MM-DDTHH:MM:SS(.f{1,9})?""","ISO 8601, no offset: a wall-clock time"
+  duration,temporal,"@duration ""P...""","ISO 8601 duration, nanoseconds"
   uuid,extended,"@uuid ""...""","RFC 4122"
+  objectid,extended,"@objectid ""<24 hex digits>""","BSON's ObjectId: 12 bytes"
+  ip,extended,"@ip ""192.0.2.1"" | ""10.0.0.0/8"" | ""2001:db8::1"" | ""2001:db8::/32""","an IPv4 or IPv6 address, or a prefix (RFC 9164)"
   uri,extended,"@uri ""...""","RFC 3986"
   bytes,extended,"@bytes ""...""","base64"
-  regex,extended,"~r/pattern/flags","PCRE-style via Erlang :re"
+  bits,extended,"@bits {""..."" n}","base64 and a bit count: a run of bits that is not whole bytes"
+  regex,extended,"@regex ""pattern"" | @regex(flags) ""pattern""","PCRE-style via Erlang :re"
   custom-tag,extended,"@tag value","open extension point, any unrecognized tag name"
-  header,meta,"@dxn ""1.0""","optional, first form only"
+  header,meta,"@dxn ""1.0""","optional, first form only; the format version (see the introduction)"
 ```
 
 ### 1.4 Semantic notes not expressible in grammar alone
@@ -154,6 +212,15 @@ types[30]{type,category,dxn_syntax,notes}:
   and `months` are calendar-relative (variable length), so they, along
   with weeks/days/hours/minutes/seconds, are tracked as independent
   fields (see §2.3 for the exact field set, shared with `.dxnb`).
+- **`bits` and `bytes` are one value space.** A run of bits whose count
+  is a multiple of 8 *is* bytes: `@bits {"AQID" 24}` reads as
+  `@bytes "AQID"`, and a writer writes it so. In `@bits {data n}`, `n`
+  is a non-negative integer and `data` holds exactly the bytes `n` needs
+  (`ceil(n / 8)`); the bits run from the high bit of the first byte, and
+  a reader MUST refuse (`syntax`, or `binary` for `T_BITS`) a count the
+  data does not match. The unused low bits of the last byte are written
+  zero and ignored when read. A language with no bitstring type holds
+  bits in a value of its own (bytes and a count).
 
 ### 1.5 Canonical form
 
@@ -176,7 +243,7 @@ General rules:
 Per type:
 
 ```toon
-canonical[30]{type,form}:
+canonical[32]{type,form}:
   nil,"nil"
   boolean,"true | false"
   integer,"optional -, then decimal digits without leading zeros"
@@ -196,15 +263,18 @@ canonical[30]{type,form}:
   sorted-set,"@sorted-set @{ items } in canonical order"
   struct,"%Name(N){ entries } keyed, or %Name(N)[ items ] positional, as held; (N) when the version is known; keyed entries in held order, since in a %schema body the order is the field order"
   map entry,"name: value when the key is a keyword whose name is an identifier and not reserved, else key => value"
-  date,"~D[YYYY-MM-DD]"
-  time,"~T[HH:MM:SS] then .fraction with trailing zeros removed, omitted when zero"
-  timestamp,"~U[YYYY-MM-DD HH:MM:SS] then the fraction as for time, then Z"
-  datetime,"@datetime ""YYYY-MM-DDTHH:MM:SS"" with the fraction as for time, then ±HH:MM"
+  date,"@date ""YYYY-MM-DD"""
+  time,"@time ""HH:MM:SS"" then .fraction with trailing zeros removed, omitted when zero"
+  datetime,"@datetime ""YYYY-MM-DDTHH:MM:SS"" with the fraction as for time, then Z when the offset is zero, else ±HH:MM"
+  local-datetime,"@local-datetime ""YYYY-MM-DDTHH:MM:SS"" with the fraction as for time"
   duration,"@duration ""P..."" with fields in the order of §2.3, zero fields omitted, PT0S when all are zero"
   uuid,"@uuid ""8-4-4-4-12"" in lowercase hex"
+  objectid,"@objectid ""..."" in 24 lowercase hex digits"
+  ip,"@ip ""..."": IPv4 in dotted decimal, IPv6 as RFC 5952 writes it (lowercase, the longest run of zero groups as ::), then /length for a prefix"
   uri,"@uri ""..."" as held, with string escaping"
   bytes,"@bytes ""..."" in standard base64 with padding"
-  regex,"~r/pattern/flags with the flags in canonical order"
+  bits,"@bits {""..."" n}: the bits in standard base64 with padding, the unused low bits of the last byte zero, and n their count; a run of whole bytes is bytes"
+  regex,"@regex ""pattern"" with string escaping, or @regex(flags) ""pattern"" with the flags in the order of §2.3"
   custom-tag,"@name value"
   extra fields,"in a keyed struct, entries after the declared fields in held order; in a positional struct, entries after the items, in canonical order of their keys (§4.7)"
 ```
@@ -241,8 +311,8 @@ zeros, everything else literally; then `"`.
 ### 1.6 Map keys
 
 A map key, and the key of a struct's extra field (§4.7), MUST be one of
-`string`, `keyword`, `integer`, `uuid`, `date`, `bytes`, `symbol`,
-`char`. Any other key is an error (`key/not-allowed`, §5), in text, in
+`string`, `keyword`, `integer`, `uuid`, `objectid`, `date`, `bytes`,
+`symbol`, `char`. Any other key is an error (`key/not-allowed`, §5), in text, in
 binary and when encoding.
 
 Two keys are the same key exactly when their canonical forms (§1.5) are
@@ -257,7 +327,7 @@ every language. Excluded, and why:
   `NaN`, `1.0M` and `1.00M`, `2/4` and `1/2` are distinct DXN values
   that some languages hold as one, and the BEAM has no `NaN` or
   infinities.
-- `time`, `timestamp`, `datetime`, `duration`, `uri`: precision,
+- `time`, `datetime`, `local-datetime`, `duration`, `uri`: precision,
   offsets, `P1D` against `PT24H`, URI normalization.
 - `nil` and `boolean`: they collide with other keys in some languages
   (in PHP, `nil` with `""` and `true` with `1` as array keys), and they
@@ -294,13 +364,19 @@ resolved away before a value exists to encode.
 
 ### 2.2 Type mapping
 
+**Every value takes the smallest representation that keeps it exactly**
+(Jan, 2026-10-20): raw bytes where a type is bytes at heart (a uuid, an
+ObjectId, an IP address), integers where it is a count (dates, times,
+durations), CBOR's shortest integer and length forms everywhere, and
+never the text form a value has in `.dxn`.
+
 ```toon
-cbor_map[29]{type,cbor_major_or_tag,payload,integrity_note}:
+cbor_map[32]{type,cbor_major_or_tag,payload,integrity_note}:
   nil,"simple(22)","",""
   boolean,"simple(20/21)","","false/true"
   integer,"major0/1; tag2/3","two's complement bignum bytes past 64-bit","arbitrary precision preserved exactly"
-  float,"major7","IEEE 754 double","NaN/Infinity encode natively, no tag needed"
-  decimal,"tag4","[exponent,mantissa]",""
+  float,"major7","IEEE 754: the shortest of half, single and double that holds the value exactly","NaN/Infinity encode natively in half precision, no tag needed; a reader reads all three widths"
+  decimal,"tag4","[exponent,mantissa]","a negative zero has no mantissa of its own: `-0.0M` is written as `0.0M`, the one value `.dxnb` does not keep (text does, §1.5)"
   rational,"tag30","[numerator,denominator]",""
   string,"major3 (untagged)","UTF-8 bytes","default/untagged case"
   char,"tag T_CHAR","major0 codepoint",""
@@ -315,14 +391,17 @@ cbor_map[29]{type,cbor_major_or_tag,payload,integrity_note}:
   struct,"tag T_STRUCT","[type-name-or-ref, field..., extras?]","positional only, §2.1; the type name carries the version, `User(3)` (§4.8); extra fields, when there are any, as one trailing `T_EXTRA` map (§4.7)"
   array,"tag T_ARRAY","major4 items",""
   date,"tag T_DATE","integer days since 1970-01-01","Unix epoch, day granularity"
-  time,"tag T_TIME","integer microseconds since midnight",""
-  timestamp,"tag1, integer form only","integer microseconds since epoch","MUST use integer, not float tag-1 form — float loses microsecond precision at scale"
-  datetime,"tag T_DATETIME_OFFSET","[epoch-microseconds int, offset-minutes]","same integer-only requirement as timestamp"
-  duration,"tag T_DURATION","bitmask byte + present fields, §2.3",""
+  time,"tag T_TIME (218)","integer nanoseconds since midnight","0.2's T_TIME_US (210), microseconds, is read, never written"
+  datetime,"tag T_DATETIME (219)","epoch-nanoseconds int in UTC, else [epoch-nanoseconds int, offset-minutes]","integers only -- a float loses nanoseconds at scale. 0.2's tag 1 (UTC, epoch microseconds) and T_DATETIME_US (211, [epoch-us, offset-min]) are read, never written"
+  local-datetime,"tag T_LOCAL_DATETIME","integer nanoseconds since 1970-01-01T00:00:00 on the wall clock","no offset, so no instant"
+  duration,"tag T_DURATION (220)","bitmask byte + present fields, §2.3","0.2's T_DURATION_US (212), its seventh field microseconds, is read, never written"
   uuid,"tag37","16 raw bytes","not the 36-char text form"
+  objectid,"tag T_OBJECTID","12 raw bytes","not the 24-char text form"
+  ip,"tag52 (IPv4) | tag54 (IPv6), RFC 9164","an address: its raw bytes; a prefix: [length, the bytes with trailing zero bytes left off]","host bits of a prefix are zero, or it is refused"
   uri,"tag32","major3 text",""
   bytes,"major2","raw bytes","no base64 in binary"
-  regex,"tag T_REGEX","[pattern text, flags byte]","flags bit layout in §2.3"
+  bits,"tag T_BITS","[major2 bytes, bit count]","the unused low bits of the last byte are zero; a run of whole bytes is bytes, never T_BITS"
+  regex,"tag T_REGEX","pattern text with no flags, else [pattern text, flags byte]","flags bit layout in §2.3"
   custom-tag,"tag T_CUSTOM","[tag-name-or-ref, value]","binary form of the open extension point"
   header,"envelope, §2.1","magic+version bytes","not a CBOR item; metadata, not data"
 ```
@@ -330,7 +409,7 @@ cbor_map[29]{type,cbor_major_or_tag,payload,integrity_note}:
 ### 2.3 Private tag assignments and bit layouts
 
 ```toon
-private_tags[15]{name,number,wraps}:
+private_tags[22]{name,number,wraps}:
   T_CHAR,200,"integer codepoint"
   T_SYMBOL,201,"text string"
   T_KEYWORD,202,"text string"
@@ -341,16 +420,27 @@ private_tags[15]{name,number,wraps}:
   T_SORTED_SET,207,"array"
   T_STRUCT,208,"array: [type-ref, field...]"
   T_DATE,209,"integer"
-  T_TIME,210,"integer"
-  T_DATETIME_OFFSET,211,"array: [epoch-us, offset-min]"
-  T_DURATION,212,"bitmask byte + fields"
-  T_REGEX,213,"array: [pattern, flags-byte]"
+  T_TIME_US,210,"integer: DXN 0.2's microseconds since midnight; read, never written"
+  T_DATETIME_US,211,"array: [epoch-us, offset-min], DXN 0.2's; read, never written"
+  T_DURATION_US,212,"bitmask byte + fields, the seventh microseconds, DXN 0.2's; read, never written"
+  T_REGEX,213,"text: the pattern, with no flags; else array: [pattern, flags-byte]"
   T_CUSTOM,214,"array: [tag-ref, value]"
   T_EXTRA,215,"map: {key: value, ...} — a struct's extra fields, only ever its last item (§4.7)"
+  T_BITS,216,"array: [bytes, bit-count] — a run of bits that is not whole bytes (§1.3)"
+  T_LOCAL_DATETIME,217,"integer: nanoseconds since 1970-01-01T00:00:00, wall clock"
+  T_TIME,218,"integer: nanoseconds since midnight"
+  T_DATETIME,219,"integer: epoch-ns, in UTC; else array: [epoch-ns, offset-min]"
+  T_DURATION,220,"bitmask byte + fields, the seventh nanoseconds"
+  T_OBJECTID,221,"byte string: BSON's 12-byte ObjectId"
 ```
 
+**A tag never changes its meaning** (2026-10-20): when DXN's times went
+from microseconds to nanoseconds, the nanosecond forms took new tags,
+and a reader still reads the old ones as what they meant -- a
+document DXN 0.2 wrote is not misread, and nothing writes them again.
+
 Allocated from CBOR's one-extra-byte tag range (24–255), placed at
-200–215 specifically to stay clear of the actively-managed low range
+200–221 specifically to stay clear of the actively-managed low range
 (0–40 has multiple assignments and gaps IANA could fill later). Not
 IANA-registered — collision-free only within `dextrin`-produced documents;
 register formally before any non-`dextrin` interop is expected.
@@ -367,7 +457,7 @@ duration_bits[7]{bit,field,unit}:
   3,days,count
   4,hours,count
   5,minutes,count
-  6,microseconds,"count (fractional seconds folded in, matching time/timestamp precision)"
+  6,nanoseconds,"count (fractional seconds folded in, matching time and datetime precision)"
 ```
 
 Bit 7 is reserved (must be 0).
@@ -423,7 +513,7 @@ This is a size optimization only, never an identity/aliasing feature:
 
 Not required for a conforming encoder to produce; a conforming decoder
 MUST accept it. Tags 28/29 do not collide with the private range in
-§2.3 (200–214) or with §2.4's tags (256, 25) — confirm both against
+§2.3 (200–221) or with §2.4's tags (256, 25) — confirm both against
 the current IANA CBOR tags registry before final implementation, as
 with any tag number cited normatively here.
 
@@ -439,17 +529,19 @@ with any tag number cited normatively here.
   active:  true
   score:   19.99M
   tags:    @{:admin :staff}
-  meta:    @ordered %{created: ~U[1990-01-01 00:00:00Z]}
+  meta:    @ordered %{created: @datetime "1990-01-01T00:00:00Z"}
   address: %Point[51.05, 13.74]
   result:  {:ok, 200}
-  handle:  ~r/^[a-z0-9_]{3,20}$/i
+  handle:  @regex(i) "^[a-z0-9_]{3,20}$"
 }
 ```
 
 Every construct above is fully specified by §1.2 + §1.3; every field
 round-trips through §2 without loss (§2.2's `integrity_note` column
-records the two places — bignum and timestamp precision — where that
-took a specific encoding choice to guarantee).
+records the two places — bignum and datetime precision — where that
+took a specific encoding choice to guarantee, and the one value that
+does not: a negative-zero decimal, which `.dxnb` writes as positive
+zero).
 
 ---
 
@@ -459,52 +551,318 @@ A `.dxns` file is valid `.dxn` — §1's grammar, unchanged, no schema
 -specific syntax. What makes a document a *schema* document is purely
 the shape of the value it decodes to: a `map` whose values are either
 `%schema{...}` (a struct schema) or a `type_expr` (a **named type**,
-§4.5). `%schema{}`/`%field{}` (§4.4) are recognized by name directly,
+§4.5) -- a `%shape{...}` (§4.4a) among them. `%schema{}`/`%shape{}`/`%field{}` (§4.4) are recognized by name directly,
 the same way a built-in tag name is (§1.2) — not looked up against a
 schema of their own, which would be circular.
 
 ### 4.1 `type_expr` forms
 
 ```toon
-type_expr[13]{form,dxn_shape,meaning}:
+type_expr[31]{form,dxn_shape,meaning}:
   any,":any","matches any value at all"
-  primitive,":integer / :string / ...","one keyword per §1.3 type name"
+  never,":never","matches no value at all (JSON Schema's false)"
+  primitive,":integer / :string / ...","one keyword per §1.3 type name; :bits matches bits and bytes alike, :bytes only whole bytes"
   reference,"bare symbol, e.g. Address","names a struct schema or a named type in this document (or Ns/Name, §4.6)"
   list-of,"{:list-of elem}","list whose every element matches elem"
+  list-items,"{:list-items a {:repeat b 0 nil}}","a list's items in order: a type for one item, a repeat for several, §4.1a"
   set-of,"{:set-of elem}","set whose every element matches elem"
   tuple-of,"{:tuple-of a b c}","fixed-arity positional tuple, one type_expr per slot"
+  tuple-of-all,"{:tuple-of-all elem}","tuple of any length whose every element matches elem"
   map-of,"{:map-of key-type val-type}","every key matches key-type, every value matches val-type"
+  array-of,"{:array-of elem}","array whose every element matches elem"
+  ordered-map-of,"{:ordered-map-of key-type val-type}","ordered map: every key matches key-type, every value matches val-type"
+  sorted-set-of,"{:sorted-set-of elem}","sorted set whose every element matches elem"
+  tagged,"{:tagged acme.money T}","a custom tag of that name whose value matches T; an application's value as its registered tag encoder writes it"
+  sized,":int32 :int64 :uint32 :uint64","sugar: {:refine :integer %{min: ..., max: ...}} over that range; :float32 is {:refine :float %{float32: true}}"
+  number,":number","sugar: {:any-of :integer :float :decimal :rational}"
+  const,"{:const v}","sugar: {:enum v}, the one value v"
+  if,"{:if I T E}","a value that matches I must match T, any other E (JSON Schema's if/then/else); E is :any when left out"
   enum,"{:enum lit lit ...}","value must equal one of the given literals (any type)"
-  one-of,"{:one-of a b}","union — value must match at least one variant"
+  one-of,"{:one-of a b}","exactly one variant matches (JSON Schema's oneOf): none, or two or more, is a refusal"
+  any-of,"{:any-of a b}","union — one or more variants match (JSON Schema's anyOf)"
   all-of,"{:all-of a b}","intersection — value must match every variant"
-  nilable,"{:nilable t}","sugar for {:one-of :nil t}"
+  not,"{:not t}","value must not match t"
+  nilable,"{:nilable t}","sugar for {:any-of :nil t}"
   refine,"{:refine t %{constraints}}","base type plus constraints, §4.2"
   struct,"%schema{...}","struct/record shape, §4.4"
+  shape,"%shape{...}","a plain map with these fields, defaults filled, §4.4a"
+  case,"{:case field %{value => type, :else => type}}","the type the sibling field's value chooses, §4.4a"
+  doc,"{:doc T %{description: ...}}","T, annotated: a title, a description, examples and the like, §4.1b; takes what T takes"
+  generic,"{:generic [t ...] body}","a named type with parameters, §4.5"
+  of,"{:of Name type ...}","one use of a generic, its arguments where its parameters stand, §4.5"
 ```
 
 A bare `type_expr` (no wrapping tuple/struct) is always a `primitive`
 or a `reference` — the tuple form is only needed once a constructor
 takes arguments.
 
+`{:tagged name T}` takes the name as a symbol, a keyword or a string
+(Jan, 2026-10-20). A built-in tag's name (§1.3) is a compile error
+there: `@uuid` is the type `:uuid`, no custom tag. An application's
+value -- what a registered tag decoder made of the tag -- matches when
+the registry's tag encoder for its module writes it under that name,
+with a value that matches `T`; register both directions, as for a
+struct (§4.7).
+
+### 4.1a A list's items (`{:list-items}`)
+
+`{:list-items p ...}` describes a list item by item, in order (Jan,
+2026-10-20; JSON Schema's `prefixItems` and `items`, CDDL's arrays, Ion
+Schema's `ordered_elements`). Each `p` is one of:
+
+- a `type_expr`: exactly one item, of that type;
+- `{:repeat p min max}`: between `min` and `max` items of the type `p`,
+  `max` `nil` for no upper bound, `0 <= min <= max`;
+- `{:repeat {:group p ...} min max}`: the group's items, together, that
+  many times; a group's items are again types and repeats.
+
+The list matches when its items are all taken, none left over:
+
+```dxn
+%{
+  Command: {:list-items :string {:repeat :string 0 nil}}   # a name, then arguments
+  Pairs:   {:list-items {:repeat {:group :string :integer} 1 nil}}
+  Point:   {:list-items {:repeat :float 2 3}}              # 2D or 3D
+}
+```
+
+**A repeat takes as many items as it can, then gives them back one at a
+time** until the rest of the items match, so `{:list-items {:repeat
+:any 0 nil} :string}` takes any list that ends in a string. Every
+implementation tries the same choices in the same order, so a shape's
+defaults (§4.4a) are filled the same way in each. A repetition that
+takes no item is the last: each further one would take none either.
+`{:repeat}` and `{:group}` stand only among a `{:list-items}`'s items;
+anywhere else they are a compile error (`schema/compile`).
+
+`list-items` closes the list (an item no `p` takes is a refusal), which
+is why DXNS has no `unevaluatedItems`: a list that may go on ends in
+`{:repeat :any 0 nil}`.
+
+### 4.1b Annotations (`{:doc}`)
+
+`{:doc T %{...}}` says things about `T` and changes nothing it takes
+(Jan, 2026-10-20; JSON Schema's annotations, protobuf's options, Ion
+Schema's open content). It stands wherever a type does, and around a
+whole entry: a named type, a generic, a `%shape` or a `%schema`.
+
+```dxn
+%{
+  Order: {:doc %schema(2){
+    id:      :integer
+    email:   {:doc :string %{description: "Where receipts go", meta: %{"acme.pii" => true}}}
+    legacy?: {:doc :string %{deprecated: "use email"}}
+  } %{title: "An order", deprecated: false}}
+
+  Color: {:doc {:enum :red :green :old-blue} %{
+    values: %{:old-blue => %{deprecated: true, description: "Use :blue"}}
+  }}
+}
+```
+
+```toon
+annotations[8]{key,takes,meaning}:
+  title,string,"a short name for the type"
+  description,string,"what the type is for"
+  examples,list,"values the type takes, for a reader"
+  read-only,boolean,"the value is written by its owner only"
+  write-only,boolean,"the value is never read back"
+  deprecated,"boolean or string","true, or the reason, when the type is on its way out"
+  meta,map,"anything else, kept as written, meaning nothing to a check"
+  values,map,"on an enum: each of its values to that value's own annotations (no values of their own)"
+```
+
+Any other key is a compile error (`schema/compile`), as is a value of
+the wrong kind; `meta` is where what DXNS does not name goes.
+`Dextrin.Schema.annotations/2` reads a named type's or a schema's (its
+latest version's); a field's stay on its type. A `doc` checks the value
+`T` checks, so it is no guard (§4.5): `A: {:doc A %{}}` is a compile
+error.
+
 ### 4.2 `refine` constraints
 
 ```toon
-refine_constraints[10]{key,applies_to,meaning}:
-  min,"integer/float/decimal/rational","value >= given number"
-  max,"integer/float/decimal/rational","value <= given number"
-  exclusive-min,"integer/float/decimal/rational","value > given number"
-  exclusive-max,"integer/float/decimal/rational","value < given number"
+refine_constraints[37]{key,applies_to,meaning}:
+  min,"integer/float/decimal/rational/date/time/datetime/local-datetime/duration","value >= given value of the same kind"
+  max,"integer/float/decimal/rational/date/time/datetime/local-datetime/duration","value <= given value of the same kind"
+  exclusive-min,"integer/float/decimal/rational/date/time/datetime/local-datetime/duration","value > given value of the same kind"
+  exclusive-max,"integer/float/decimal/rational/date/time/datetime/local-datetime/duration","value < given value of the same kind"
   multiple-of,"integer/float/decimal/rational","value is an exact multiple of given number"
-  min-length,string,"codepoint count >= given integer"
-  max-length,string,"codepoint count <= given integer"
-  pattern,string,"value matches given regex (§1.3's regex type)"
-  min-count,"list/set/tuple","element count >= given integer"
-  max-count,"list/set/tuple","element count <= given integer"
+  min-length,"string/keyword/symbol/bytes/bits","length >= given integer: codepoints of a text or a name, bytes of bytes, bits under :bits"
+  max-length,"string/keyword/symbol/bytes/bits","length <= given integer, counted as min-length counts it"
+  min-bytes,"string/keyword/symbol","UTF-8 byte count >= given integer"
+  max-bytes,"string/keyword/symbol","UTF-8 byte count <= given integer"
+  pattern,"string/keyword/symbol/bytes","value matches given regex (§1.3's regex type); bytes one character per byte"
+  format,string,"the string is in the format named, one of §4.2a's"
+  encoding,string,"the string is valid in RFC 4648's :base64 (padded), :base64url (padded or not), :base32 (padded, upper case) or :base16 (either case)"
+  media-type,string,"what the string holds, type/subtype; checks nothing, but tells content how to read it"
+  content,string,"the string, decoded by its encoding if it has one, is a DXN document whose value matches the given type: .dxnb under application/dxnb, text otherwise"
+  encodes,bytes,"the bytes are a .dxnb document whose value matches the given type (CDDL's .cbor)"
+  encodes-seq,bytes,"the bytes are .dxnb documents back to back, each with its envelope, each matching the given type; none at all too (CDDL's .cborseq)"
+  min-count,"list/set/tuple/sorted-set/array","element count >= given integer"
+  max-count,"list/set/tuple/sorted-set/array","element count <= given integer"
+  contains,"list/set/tuple/sorted-set/array","at least min-contains (1 when not given) and at most max-contains elements match the given type"
+  min-contains,"with contains","how many elements must match contains, at least"
+  max-contains,"with contains","how many elements may match contains, at most"
+  unique,"list/set/tuple/sorted-set/array","true: no two elements are the same value"
+  unique-by,"list/set/tuple/sorted-set/array","no two elements' given field is the same value; an element without it is compared with none"
+  finite,float,"true: neither NaN nor an infinity"
+  float32,float,"true: single precision holds the value exactly (NaN and the infinities it holds)"
+  min-precision,decimal,"the coefficient's digit count, as written, >= given integer (1.50M has 3)"
+  max-precision,decimal,"the coefficient's digit count <= given integer"
+  min-exponent,decimal,"the exponent >= given integer (1.50M's is -2)"
+  max-exponent,decimal,"the exponent <= given integer"
+  bits,"integer/bytes","only the bits numbered in the given list are set: a non-negative integer's from its lowest, bytes from the first byte's lowest (RFC 8610's .bits)"
+  before-now,datetime,"true: before the time of the check"
+  after-now,datetime,"true: after the time of the check"
+  within,datetime,"no further from the time of the check than the given duration, either way"
+  resolution,"time/datetime/local-datetime/duration","no part finer than the given unit, :second, :millisecond, :microsecond or :nanosecond"
+  offsets,datetime,"the value's offset is one of the given strings, Z or ±HH:MM"
+  version,ip,"4 or 6: the value is that family"
+  prefix,ip,"true: a prefix; false: an address"
 ```
 
 `{:refine t %{k: v, ...}}`'s constraint map may combine any number of
 these keys; a value must satisfy `t` itself *and* every listed
 constraint.
+
+**A constraint refuses a value it does not apply to** (Jan,
+2026-10-20): `min-length` refuses an integer, `min` a string, `bits` a
+negative integer. A constraint never raises, whatever it meets.
+
+**Ranges compare values of one kind**: numbers with numbers, dates with
+dates, times with times, datetimes as the instants they are (whatever
+their offsets), local date-times with local date-times, durations as
+their nanoseconds. A duration with years or months compares with
+nothing, as their lengths vary; nor do two values of different kinds.
+
+**`before-now`, `after-now` and `within` ask the clock**, once per
+check, so the same value can pass one check and fail a later one. The
+grammar-checked strings and named predicates of the other languages
+(CDDL's `.abnf`, protovalidate's CEL) have no refine key: neither is
+portable without a grammar engine or an expression language in every
+implementation.
+
+**`content` reads only DXN**: a `media-type` other than
+`application/dxn` or `application/dxnb` beside it is a compile error, as
+is `application/dxnb` without an `encoding`, since a string holds no raw
+bytes. Without a `content`, any media type is a name and nothing more.
+A document read for `content`, `encodes` or `encodes-seq` is its own:
+its shared values and string references (§2.4) are not the enclosing
+document's.
+
+**Every argument is checked when the schema compiles**: a count is a
+non-negative integer, a flag `true` or `false`, a bound a number, date,
+time, datetime, local date-time or a duration without years or months,
+`multiple-of` a number other than 0, `pattern` a regex, `version` 4 or
+6, `offsets` a list of `"Z"` or `"±HH:MM"`, `bits` a list of
+non-negative integers, `within` a duration without years or months,
+`media-type` a `type/subtype`. A compile error writes the argument it
+refuses in DXN.
+
+**Every key is one of these**: an unknown key, a misspelt `min-lenght`,
+is a compile error (`schema/compile`), as are `min-contains` and
+`max-contains` without `contains`, a key that is no name, and a
+`unique-by` or `resolution` that is no name or no unit.
+
+**Two values are the same when their canonical forms are** (§1.5), for
+`unique` and `unique-by`: `1` and `1.0` differ, as `%{a: 1}` and
+`%{"a" => 1}` do.
+
+**NaN lies outside every range** (Jan, 2026-10-20): `min`, `max` and
+both `exclusive-` bounds refuse it, as every IEEE 754 comparison with NaN
+is false; `Infinity` and `-Infinity` compare as the numbers they are.
+`finite: true` refuses all three.
+
+**`:timestamp` is sugar for a datetime in UTC**, `{:refine :datetime
+%{offsets: ["Z"]}}`: DXN 0.2 had a timestamp type of its own, and a
+schema naming it keeps its meaning (§1.2).
+
+### 4.2a Formats (`format:`)
+
+`{:refine :string %{format: :email}}` takes a string in that format
+(Jan, 2026-10-20; JSON Schema's `format`, with Ion Schema's and
+protovalidate's string rules). The set is closed: any other name is a
+compile error (`schema/compile`). Every implementation checks a format
+the same way: a format DXN has a tag for is read by that tag's reader,
+so `format: :date` takes exactly the strings `@date "..."` takes; every
+other format is the grammar below, a regular expression that PCRE,
+JavaScript (with the `u` flag) and PHP read alike. **`$` is the
+string's end**: PCRE and PHP compile the grammars with the `D` flag
+(`PCRE2_DOLLAR_ENDONLY`), which JavaScript's `$` is already, so a final
+newline is no part of a hostname. The tags' readers end there too:
+`@time "12:00:00\n"` is `syntax`.
+
+```toon
+formats[22]{name,checked_as}:
+  date,"@date's reader (§1.2)"
+  time,"@time's reader"
+  datetime,"@datetime's reader: an offset, Z or ±HH:MM, is required"
+  local-datetime,"@local-datetime's reader: no offset"
+  duration,"@duration's reader"
+  uuid,"@uuid's reader: 8-4-4-4-12 hex digits, either case"
+  ipv4,"@ip's reader: an IPv4 address, no prefix"
+  ipv6,"@ip's reader: an IPv6 address, no prefix, no zone"
+  hostname,"labels LABEL joined by dots, 253 codepoints at most"
+  idn-hostname,"labels U-LABEL joined by dots, 253 codepoints at most"
+  email,"LOCAL @ DOMAIN, split at the last @: LOCAL at most 64 bytes, DOMAIN a hostname, [IPv4] or [IPv6:address]"
+  idn-email,"as email, with IDN-LOCAL and an idn-hostname"
+  uri,"RFC 3986's URI, from the parts below"
+  uri-reference,"a uri, or RFC 3986's relative-ref"
+  iri,"a uri that may hold any character past ASCII where it holds an unreserved one"
+  iri-reference,"an iri, or a relative-ref that may"
+  uri-template,"RFC 6570's URI-Template, below"
+  json-pointer,"RFC 6901, below"
+  relative-json-pointer,"draft-handrews-relative-json-pointer, below"
+  semver,"Semantic Versioning 2.0.0, below"
+  mac,"six or eight pairs of hex digits, one separator, : or -, throughout"
+  host-port,"HOST:PORT, split at the last colon: HOST a hostname, an IPv4 address or [IPv6], PORT 0 to 65535 without leading zeros"
+```
+
+The grammars:
+
+```text
+LABEL      [A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?
+U-LABEL    [\p{L}\p{N}](?:[\p{L}\p{N}\p{M}-]{0,61}[\p{L}\p{N}\p{M}])?
+ATEXT      [\-A-Za-z0-9!#$%&'*+/=?^_`{|}~]
+QUOTED     "(?:[\x20\x21\x23-\x5B\x5D-\x7E]|\\[\x20-\x7E])*"
+LOCAL      ^(?:ATEXT+(?:\.ATEXT+)*|QUOTED)$
+IDN-LOCAL  as LOCAL, each ATEXT (?:ATEXT|[^\x00-\x7F])
+PORT       ^(?:0|[1-9][0-9]{0,4})$, and at most 65535
+
+json-pointer           ^(?:/(?:[^~/]|~[01])*)*$
+relative-json-pointer  ^(?:0|[1-9][0-9]*)(?:#|(?:/(?:[^~/]|~[01])*)*)$
+semver                 ^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)
+                       (?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)
+                       (?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?
+                       (?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$
+mac                    ^[0-9A-Fa-f]{2}([:-])[0-9A-Fa-f]{2}(?:\1[0-9A-Fa-f]{2}){4}
+                       (?:(?:\1[0-9A-Fa-f]{2}){2})?$
+uri-template           ^(?:LITERAL|%[0-9A-Fa-f]{2}|\{[+#./;?&=,!@|]?VARSPEC(?:,VARSPEC)*\})*$
+  LITERAL  [^\x00-\x20"'%<>\\^`{|}\x7F]
+  VARSPEC  VARCHAR(?:\.?VARCHAR)*(?::[1-9][0-9]{0,3}|\*)?
+  VARCHAR  (?:[A-Za-z0-9_]|%[0-9A-Fa-f]{2})
+
+The URI parts (RFC 3986 §3); for an iri, every PCT is
+(?:%[0-9A-Fa-f]{2}|[^\x00-\x7F]):
+  U          [\-A-Za-z0-9._~!$&'()*+,;=]     unreserved and sub-delims
+  PCT        %[0-9A-Fa-f]{2}
+  PCHAR      (?:[U:@]|PCT)                  U's characters, ":" and "@"
+  NC         (?:[U@]|PCT)                   a PCHAR but ":"
+  AUTHORITY  (?:(?:[U:]|PCT)*@)?(?:\[[^\]]*\]|(?:[U]|PCT)*)(?::[0-9]*)?
+  TAIL       (?:\?(?:PCHAR|[/?])*)?(?:#(?:PCHAR|[/?])*)?
+  uri        ^[A-Za-z][A-Za-z0-9+.-]*:(?://AUTHORITY(?:/PCHAR*)*
+             |/(?:PCHAR+(?:/PCHAR*)*)?|PCHAR+(?:/PCHAR*)*|)TAIL$
+  relative   ^(?://AUTHORITY(?:/PCHAR*)*|/(?:PCHAR+(?:/PCHAR*)*)?
+             |NC+(?:/PCHAR*)*|)TAIL$
+  and a [...] host is an IPv6 address (@ip's reader) or
+  ^v[0-9A-Fa-f]+\.[A-Za-z0-9._~!$&'()*+,;=:-]+$ (IPvFuture).
+```
+
+A format takes only a string that is valid UTF-8; any other value it
+refuses (§4.2). JSON Schema's `regex` format has no counterpart: whether
+a pattern compiles depends on the engine, and not every implementation
+has PCRE.
 
 ### 4.3 Required vs. optional fields
 
@@ -557,6 +915,43 @@ the field is absent; independent of `?`, which controls whether
 *absence itself* is an error) or a human-readable description. It never
 carries its own optionality flag — that's always the key's `?` suffix.
 
+### 4.4a Shapes (`%shape{}`) and `{:case}`
+
+```text
+Envelope: %schema{
+  type: :string,
+  payload: {:case type %{"order.placed" => OrderPlaced, :else => :any}}
+}
+OrderPlaced: %shape{
+  order_id: :uuid,
+  currency: %field{type: :string, default: "EUR"},
+  gift?: :boolean
+}
+```
+
+**A shape is a named, unversioned map type** (Jan, 2026-10-20): its
+body is a `%schema` body -- fields in order, `?` for optional,
+`%field{}` for a default or a description -- and it matches a **plain
+map** only, never a struct. `%shape(N){...}` and a positional
+`%shape[...]` are refused: a shape has no version, and evolving one
+compatibly is its author's business. A declared field is matched by
+name whatever spelling its key has (`name:`, `"name" =>`, `:"name" =>`),
+and a map giving one twice does not match. Every other key is an
+extra, kept; a strict decode (§4.7) refuses extras. **A missing field
+takes its default**: a map checked against a shape while decoding comes
+out with each missing field's default filled in, under a keyword key,
+as a struct's field does; encoding writes the map as it is given. A
+map a shape refuses is a `schema/type-mismatch` of the field holding it.
+
+**`{:case field %{value => type, ...}}` is the type its sibling chooses**:
+`field` names a field of the nearest enclosing schema or shape, whose
+value is compared with each key as `{:enum ...}` compares, and the type
+of the equal key is the type. `:else` is the type when no key is equal,
+or the sibling is absent; with no `:else`, that value is refused. A case
+may stand anywhere in a field's type -- inside `nilable`, `list-of`,
+`any-of` -- and a `field` naming no field of the schema or shape it is
+written in is a compile error.
+
 ### 4.5 Named types
 
 Any top-level entry whose value is not a `%schema{}` defines a **named
@@ -566,27 +961,100 @@ like a struct name — a bare symbol (§4.1's `reference` form) — since
 both are resolved the same way: by name, against whatever this
 document (or an already-known document, §4.6) defines.
 
-A named type's own body MAY reference another named type. Whether it
-may reference one declared *alongside* it in the same document (a
-same-document forward or sibling reference) is implementation-defined:
-a `.dxns` document's top-level `map` carries no ordering guarantee
-(§1.4), so there is no normative order to resolve such a reference
-against. A conforming reader MAY refuse same-document sibling
-references outright, MAY resolve them via some deterministic pass
-(e.g. two-phase compilation), or MAY support arbitrary forward
-reference — implementations are free to differ here, and a schema
-author SHOULD NOT rely on behavior beyond "a named type can reference
-one already known before this document was processed."
+A named type's own body MAY reference another named type, **including
+one declared alongside it in the same document**, in any order: a
+reader compiles every named type of a document before it resolves any
+reference between them, so the top-level `map`'s order (which §1.4
+does not give) never matters.
+
+**A named type may refer to itself**, directly or through others
+(Jan, 2026-10-20), when every such cycle passes a **guard**: a field of
+a `%shape` or `%schema`, or the elements of a collection (`list-of`,
+`list-items`, `set-of`, `map-of`, `tuple-of`, `tuple-of-all`,
+`array-of`, `ordered-map-of`, `sorted-set-of`, `tagged`, and a refine's
+`contains`, `content`, `encodes` and `encodes-seq`). `nilable`, `any-of`, `one-of`, `all-of`, `not`,
+`refine`, `doc`, `if` and `case` check the same value again, so they are no guard:
+`A: {:nilable A}` describes no value and is a compile error
+(`schema/compile`). A guarded check always ends, since a DXN value is
+finite (§2.5) and every guard steps into a smaller part of it:
+
+```text
+Comment: %shape{text: :string, replies?: {:list-of Comment}}
+JsonValue: {:any-of :nil :boolean :integer :float :string
+                    {:list-of JsonValue} {:map-of :string JsonValue}}
+```
+
+A cycle stays within one document: a reference to another file sees
+only documents read before it (§4.6).
+
+**A named type may take parameters** (Jan, 2026-10-20):
+`{:generic [t ...] body}` is a named type whose `body` names each
+parameter wherever a type goes, and `{:of Name type ...}` is one use of
+it, each argument standing where its parameter stands. A generic is a
+named type's whole definition, and is only ever used through `{:of}`:
+a bare `Page`, a wrong number of arguments, or `{:of}` on a type that is
+not generic, is a compile error. A generic may use itself, guarded as
+above.
+
+```text
+Page: {:generic [t] %shape{items: {:list-of t}, next?: :string}}
+Orders: {:of Page Order}
+List: {:generic [t] {:any-of :nil %shape{head: t, tail: {:of List t}}}}
+```
+
+**A `%schema` cannot be generic**: a struct goes on the wire under its
+one name, so two uses could not be told apart. A schema may use a
+generic in its fields.
+
+*Replaced (2026-10-20):* this section used to leave a same-document
+sibling reference implementation-defined -- a reader MAY refuse it, MAY
+resolve it by some deterministic pass, or MAY support forward
+reference -- on the argument that a map has no order to resolve it
+against. The argument only shows a reader must not resolve *in* map
+order; two-phase compilation needs no order at all. Shapes (§4.4a)
+name their siblings as a matter of course (`OrderCancelled` naming
+`CancelReason` beside it), so resolution is now required.
 
 ### 4.6 Cross-file references
 
-`identifier`'s own grammar already supports one `/` (§1.1),
-`Namespace/Name` — the mechanism this document uses for referencing a
-struct schema or named type defined in a separate `.dxns` file/unit.
-Resolving `Namespace/Name` to an actual document (a file path, a
-registry lookup, a network fetch, ...) is entirely reader-defined; this
-specification fixes only the reference *syntax*, not a resolution
-convention.
+An `identifier` (§1.1) is segments joined by `.`, with at most one `/`
+between a namespace and a name: `Foo.Bar/Baz`, `acme.billing/Invoice`.
+The namespace is everything before the `/`, dots included. A name with a
+`/` is the mechanism this document uses for referencing a struct schema
+or named type defined in a separate `.dxns` file or unit.
+
+Resolving a name to a document (a file path, a registry lookup, a
+network fetch, ...) is reader-defined. **A reader that resolves names to
+files follows this convention**, so that one set of schema files serves
+every implementation. A struct of version `N` named `Foo.Bar/Baz` is
+looked for, on each search path in order, in:
+
+```toon
+schema_files[4]{layout,version_1,version_N}:
+  directories,"Foo/Bar/Baz.dxns or Foo/Bar/Baz-v1.dxns","Foo/Bar/Baz-vN.dxns"
+  one directory per name,"Foo/Bar/Baz/v1.dxns","Foo/Bar/Baz/vN.dxns"
+  flat,"Foo.Bar.Baz.dxns or Foo.Bar.Baz-v1.dxns","Foo.Bar.Baz-vN.dxns"
+  namespace file,"the entry Baz in Foo.Bar.dxns","the same file, by its %schema(N)"
+```
+
+A name with no `/` is its own namespace: `Baz` is looked for as
+`Baz.dxns`, `Baz-vN.dxns`, `Baz/vN.dxns`, and the entry `Baz` in
+`Baz.dxns`. Its dots are directories all the same, and a file holds it
+under its whole name: `Foo.Bar.Baz` is the entry `Foo.Bar.Baz` in
+`Foo/Bar/Baz.dxns` or `Foo.Bar.Baz.dxns`. The rules:
+
+- **The first search path that has the name at all decides**; later ones
+  are not consulted for it.
+- **A file's version is its schema's.** `Baz-v2.dxns` holds `Baz` as
+  `%schema(2)`; one that holds another version is refused
+  (`schema/compile`).
+- **One version is found once.** Two files on one search path that both
+  hold the same name and version (`Baz-v2.dxns` and `Baz/v2.dxns`, or
+  either and the namespace file) are refused, naming both, rather than
+  one being picked.
+- **Every version found is loaded**, so that a struct written with an
+  older one reaches the materializer (§4.8); a struct without a version
+  is read as the highest found.
 
 ### 4.7 Enforcement
 
@@ -757,7 +1225,7 @@ error value. Categories are compared exactly; messages are not
 normative.
 
 ```toon
-categories[16]{category,raised_when}:
+categories[20]{category,raised_when}:
   syntax,"text does not parse"
   binary,"a .dxnb document is malformed: magic, version, a tag's payload"
   key/not-allowed,"a map or extra-field key has a type §1.6 does not allow"
@@ -774,4 +1242,44 @@ categories[16]{category,raised_when}:
   schema/shadowed-field,"an extra field has the name of a declared field"
   schema/materializer,"a materializer answers an error, or a value the latest schema rejects"
   schema/version-discipline,"the compatibility check: changed content under the same version, or a version going down"
+  document/not-found,"an edit to a document (a reader that keeps comments) names a path that is not there"
+  document/exists,"an insert names a key the map already has"
+  document/ambiguous,"an update finds a deleted item followed by an inserted one -- a replace, or the two -- and its setting refuses to choose: always, or where the deleted item owns a comment"
+  document/not-a-collection,"an edit's path goes into a value that holds no entries"
 ```
+
+## 6. Media types and identification
+
+How a program that receives a body or meets a file names DXN's three
+forms, and decides cheaply whether a body is worth decoding as one. A
+reader MAY offer this; one that does answers as below, so every
+implementation sniffs the same way.
+
+```toon
+forms[3]{form,media_type,extension}:
+  text,application/vnd.dxn,.dxn
+  binary,application/vnd.dxnb,.dxnb
+  schema,application/vnd.dxns,.dxns
+```
+
+**A media type names its form.** The three above name theirs, and any
+media type with a structured `+dxn` suffix (`application/vnd.acme.event+dxn`)
+names text: a document in DXN text whose vocabulary is the type's own.
+There is no `+dxnb` suffix. Media types compare without regard to case;
+parameters (`; charset=...`) are not part of the type, and whoever reads
+the type strips them first. Anything else names no form.
+
+**Identification is a prefix test, not a parse**: *yes* means the body
+is worth decoding as the form, never that it decodes.
+
+- **Binary**: the envelope's magic, `DX`, followed by a version byte
+  (§2.1). Whether the version is one the reader supports is decoding's
+  business.
+- **Text and schemas**: skip whitespace (`ws`, commas included), `#`
+  comments, and an optional header (`@dxn "..."`, with any whitespace
+  and comments around it); then the first character is `%` -- a map
+  (`%{`), a struct (`%Name{`, `%ns/Name[`, `%Name(2){`) or a schema
+  document. Every other body is not identified, **lists and scalars
+  included**: they are DXN, but `[`, `"`, digits, `true` and the rest
+  begin JSON just as well, and telling DXN from JSON in a body that came
+  without a type is what this test is mostly for.

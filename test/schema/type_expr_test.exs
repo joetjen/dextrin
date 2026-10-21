@@ -1,6 +1,6 @@
 defmodule Dextrin.Schema.TypeExprTest do
   @moduledoc """
-  Exercises all 13 `type_expr` forms and all 10 `refine` constraints,
+  Exercises every `type_expr` form and all 10 `refine` constraints,
   each with a passing and a failing value — coverage implemented in
   `Dextrin.Schema.TypeExpr`/`Compiler` but never actually exercised by
   a test until now.
@@ -85,7 +85,7 @@ defmodule Dextrin.Schema.TypeExprTest do
 
     test "{:enum literal...}" do
       r = registry_for("{:enum :a :b :c}")
-      assert {:ok, %{"v" => :a}} = field(r, ":a")
+      assert {:ok, %{"v" => %Dextrin.Keyword{name: "a"}}} = field(r, ":a")
       assert {:error, %Dextrin.Error{}} = field(r, ":d")
     end
 
@@ -94,6 +94,60 @@ defmodule Dextrin.Schema.TypeExprTest do
       assert {:ok, %{"v" => 1}} = field(r, "1")
       assert {:ok, %{"v" => "x"}} = field(r, ~s("x"))
       assert {:error, %Dextrin.Error{}} = field(r, "true")
+    end
+
+    # Jan, 2026-10-20: one-of means exactly one variant matches (JSON
+    # Schema's oneOf); any-of, one or more (anyOf).
+    test "{:one-of type...} refuses a value two variants match" do
+      r = registry_for("{:one-of :integer {:refine :integer %{min: 0}}}")
+      assert {:ok, %{"v" => -1}} = field(r, "-1")
+      assert {:error, %Dextrin.Error{}} = field(r, "5")
+    end
+
+    test "{:any-of type...} takes a value one or more variants match" do
+      r = registry_for("{:any-of :integer {:refine :integer %{min: 0}}}")
+      assert {:ok, %{"v" => -1}} = field(r, "-1")
+      assert {:ok, %{"v" => 5}} = field(r, "5")
+      assert {:error, %Dextrin.Error{}} = field(r, ~s("x"))
+    end
+
+    test "{:not type} takes what the type refuses" do
+      r = registry_for("{:not :string}")
+      assert {:ok, %{"v" => 1}} = field(r, "1")
+      assert {:error, %Dextrin.Error{}} = field(r, ~s("x"))
+    end
+
+    test ":never takes nothing at all" do
+      r = registry_for(":never")
+      assert {:error, %Dextrin.Error{}} = field(r, "1")
+      assert {:error, %Dextrin.Error{}} = field(r, "nil")
+    end
+
+    test "they nest in each other and as element types" do
+      r = registry_for("{:list-of {:one-of :string {:any-of :integer :decimal}}}")
+      assert {:ok, %{"v" => ["a", 1]}} = field(r, ~s(["a" 1]))
+      assert {:error, %Dextrin.Error{}} = field(r, "[true]")
+    end
+
+    test "{:array-of type}" do
+      r = registry_for("{:array-of :integer}")
+      assert {:ok, %{"v" => %Dextrin.Array{}}} = field(r, "@array[1 2]")
+      assert {:error, %Dextrin.Error{}} = field(r, ~s(@array[1 "x"]))
+      assert {:error, %Dextrin.Error{}} = field(r, "[1 2]")
+    end
+
+    test "{:ordered-map-of key value}" do
+      r = registry_for("{:ordered-map-of :keyword :integer}")
+      assert {:ok, %{"v" => %Dextrin.OrderedMap{}}} = field(r, "@ordered %{a: 1 b: 2}")
+      assert {:error, %Dextrin.Error{}} = field(r, ~s(@ordered %{a: "x"}))
+      assert {:error, %Dextrin.Error{}} = field(r, "%{a: 1}")
+    end
+
+    test "{:sorted-set-of type}" do
+      r = registry_for("{:sorted-set-of :integer}")
+      assert {:ok, %{"v" => %Dextrin.SortedSet{}}} = field(r, "@sorted-set @{2 1}")
+      assert {:error, %Dextrin.Error{}} = field(r, ~s(@sorted-set @{1 "x"}))
+      assert {:error, %Dextrin.Error{}} = field(r, "@{1 2}")
     end
 
     test "{:all-of type...}" do
@@ -167,7 +221,7 @@ defmodule Dextrin.Schema.TypeExprTest do
     end
 
     test "pattern" do
-      r = registry_for("{:refine :string %{pattern: ~r/^[a-z]+$/}}")
+      r = registry_for(~s|{:refine :string %{pattern: @regex "^[a-z]+$"}}|)
       assert {:ok, _} = field(r, ~s("abc"))
       assert {:error, %Dextrin.Error{}} = field(r, ~s("ABC"))
     end
@@ -238,15 +292,16 @@ defmodule Dextrin.Schema.TypeExprTest do
           {"set", "@{1}", "1"},
           {"sorted-set", "@sorted-set @{1}", "1"},
           {"array", "@array[1]", "1"},
-          {"date", "~D[2024-01-01]", "1"},
-          {"time", "~T[12:00:00]", "1"},
-          {"timestamp", "~U[2024-01-01 00:00:00Z]", "1"},
+          {"date", ~s|@date "2024-01-01"|, "1"},
+          {"time", ~s|@time "12:00:00"|, "1"},
+          {"local-datetime", ~s|@local-datetime "2024-01-01T00:00:00"|, "1"},
+          {"timestamp", ~s|@datetime "2024-01-01T00:00:00Z"|, "1"},
           {"datetime", ~s(@datetime "2024-01-01T00:00:00+02:00"), "1"},
           {"duration", ~s(@duration "P1D"), "1"},
           {"uuid", ~s(@uuid "550e8400-e29b-41d4-a716-446655440000"), "1"},
           {"uri", ~s(@uri "https://example.com"), "1"},
           {"bytes", ~s(@bytes "aGk="), "1"},
-          {"regex", "~r/abc/", "1"}
+          {"regex", ~s|@regex "abc"|, "1"}
         ] do
       test "#{type}" do
         r = registry_for(":#{unquote(type)}")
@@ -255,12 +310,27 @@ defmodule Dextrin.Schema.TypeExprTest do
       end
     end
 
-    test "timestamp specifically rejects a non-UTC datetime, and vice versa" do
+    # One datetime type whatever its offset; :timestamp is a datetime in
+    # UTC (Jan, 2026-10-20).
+    test "timestamp takes a UTC datetime only; datetime takes any offset" do
       r = registry_for(":timestamp")
+      assert {:ok, _} = field(r, ~s|@datetime "2024-01-01T00:00:00Z"|)
       assert {:error, %Dextrin.Error{}} = field(r, ~s(@datetime "2024-01-01T00:00:00+02:00"))
 
       r = registry_for(":datetime")
-      assert {:error, %Dextrin.Error{}} = field(r, "~U[2024-01-01 00:00:00Z]")
+      assert {:ok, _} = field(r, ~s|@datetime "2024-01-01T00:00:00Z"|)
+      assert {:ok, _} = field(r, ~s(@datetime "2024-01-01T00:00:00+02:00"))
+    end
+
+    test "finite refuses NaN and the infinities; a range refuses NaN" do
+      r = registry_for("{:refine :float %{finite: true}}")
+      assert {:ok, _} = field(r, "1.5")
+      for bad <- ~w(NaN Infinity -Infinity), do: assert({:error, _} = field(r, bad))
+
+      r = registry_for("{:refine :float %{min: 0}}")
+      assert {:ok, _} = field(r, "Infinity")
+      assert {:error, _} = field(r, "NaN")
+      assert {:error, _} = field(r, "-Infinity")
     end
   end
 

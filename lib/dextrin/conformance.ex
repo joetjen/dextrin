@@ -27,6 +27,14 @@ defmodule Dextrin.Conformance do
     refused edit answers `document/not-found`, `document/exists`,
     `document/ambiguous` or `document/not-a-collection`.
 
+  - `"media-type"` reads `"media-type"` and answers the form it names
+    (`Dextrin.Format.form/1`, `DXN.md` §6) as `"form"`: `"text"`,
+    `"binary"`, `"schema"`, or `"none"`;
+  - `"identify"` answers whether `"text"` is worth decoding as its
+    `"form"`, `"text"` or `"schema"` (`Dextrin.Format.identifies?/2`),
+    and `"identify-binary"` whether `"binary"`, base64, is a `.dxnb`
+    document, each as `"identified"`: `"true"` or `"false"`.
+
   A case may carry `"schemas"`, `.dxns` sources compiled in order into
   the registry it runs with, and `"strict": true`, which decodes
   strictly (`DXN.md` §4.7).
@@ -113,6 +121,25 @@ defmodule Dextrin.Conformance do
       %{"text" => Dextrin.Document.render(doc)}
     else
       {:error, error} -> failed(error)
+    end
+  end
+
+  defp outcome(%{"operation" => "media-type", "media-type" => media_type}, _opts) do
+    case Dextrin.Format.form(media_type) do
+      {:ok, form} -> %{"form" => Atom.to_string(form)}
+      :error -> %{"form" => "none"}
+    end
+  end
+
+  defp outcome(%{"operation" => "identify", "text" => text} = c, _opts) do
+    form = if c["form"] == "schema", do: :schema, else: :text
+    %{"identified" => to_string(Dextrin.Format.identifies?(text, form))}
+  end
+
+  defp outcome(%{"operation" => "identify-binary", "binary" => binary}, _opts) do
+    case Base.decode64(binary) do
+      {:ok, bytes} -> %{"identified" => to_string(Dextrin.Format.identifies?(bytes, :binary))}
+      :error -> %{"error" => "binary"}
     end
   end
 

@@ -54,6 +54,9 @@ defmodule Dextrin.Schema.Reader do
 
       {:unknown, registry} ->
         {:unknown, registry}
+
+      {:error, error, _registry} ->
+        {:error, error}
     end
   end
 
@@ -67,6 +70,9 @@ defmodule Dextrin.Schema.Reader do
 
   defp by_version(registry, %Compiled{name: name} = latest, version, fields, extra) do
     case {Registry.fetch_struct_schema(registry, name, version), materializer(registry, name)} do
+      {{:error, error, _registry}, _materializer} ->
+        {:error, error}
+
       {{:unknown, _registry}, _materializer} ->
         {:error,
          Dextrin.Error.action(

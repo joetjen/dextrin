@@ -22,6 +22,13 @@ defmodule Dextrin.DocumentEditTest do
 
   defp edited({:ok, doc}), do: Document.render(doc)
 
+  # A value as a document read with the same options holds it -- keywords
+  # as `Dextrin.Keyword`, decoding being untrusted by default.
+  defp decoded(text) do
+    {:ok, value} = Dextrin.decode(text)
+    value
+  end
+
   describe "replace/3" do
     test "keeps the comment beside the value, even if it is now stale" do
       text = ~s|%{\n  version: "1.0.0" # bumped for the security fix\n}\n|
@@ -46,7 +53,7 @@ defmodule Dextrin.DocumentEditTest do
 
     test "and the value is what it says" do
       {:ok, doc} = Document.replace(parsed(~s|%{a: %{b: [1 2]}}|), [:a, :b, 0], :x)
-      assert Document.to_value(doc) == %{a: %{b: [:x, 2]}}
+      assert Document.to_value(doc) == decoded("%{a: %{b: [:x 2]}}")
     end
 
     test "a struct's field is named by its string" do
@@ -137,7 +144,7 @@ defmodule Dextrin.DocumentEditTest do
 
     test "a map entry by its key" do
       {:ok, doc} = Document.delete(parsed(~s|%{a: 1, b: 2}|), [:a])
-      assert Document.to_value(doc) == %{b: 2}
+      assert Document.to_value(doc) == decoded("%{b: 2}")
     end
   end
 

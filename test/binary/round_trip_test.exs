@@ -39,11 +39,15 @@ defmodule Dextrin.Binary.RoundTripTest do
     {"empty map", "%{}"},
     {"nested collections", "[{:a [1 2]} %{b: @{1 2}}]"},
     {"struct positional", "%Point[1, 2]"},
-    {"date", "~D[1990-01-01]"},
-    {"time no fraction", "~T[12:00:00]"},
-    {"time with fraction", "~T[12:00:00.123456]"},
-    {"instant", "~U[1990-01-01 00:00:00Z]"},
-    {"regex all flags", "~r/^a.b$/imsuxfr"},
+    {"date", ~s|@date "1990-01-01"|},
+    {"time no fraction", ~s|@time "12:00:00"|},
+    {"time with fraction", ~s|@time "12:00:00.123456"|},
+    {"time to the nanosecond", ~s|@time "12:00:00.123456789"|},
+    {"local datetime", ~s|@local-datetime "1990-01-01T12:00:00.5"|},
+    {"datetime to the nanosecond", ~s|@datetime "1990-01-01T12:00:00.000000001+02:00"|},
+    {"instant", ~s|@datetime "1990-01-01T00:00:00Z"|},
+    {"regex all flags", ~s|@regex(imsuxfr) "^a.b$"|},
+    {"regex inline flags", ~s|@regex "(?i)^a.b$"|},
     {"ordered map with nested list", "@ordered %{a: 1, b: [1,2,3]}"},
     {"sorted set", "@sorted-set @{3 1 2}"},
     {"array", "@array[1, 2, 3]"},
@@ -72,6 +76,17 @@ defmodule Dextrin.Binary.RoundTripTest do
   # implemented — see test/binary/value_sharing_test.exs,
   # not here, since it needs its own fixtures (repeated compound
   # values) rather than the one-off samples this file uses.
+
+  # DXN.md §2.2 (Jan, 2026-10-20): CBOR's decimal has no negative zero,
+  # so `.dxnb` writes `-0.0M` as `0.0M` -- the one value it does not
+  # keep. Text keeps the sign.
+  test "a negative-zero decimal comes back from binary as positive zero" do
+    {:ok, value} = Dextrin.decode("-0.0M")
+    {:ok, bytes} = Dextrin.encode_binary(value)
+    {:ok, read} = Dextrin.decode_binary(bytes)
+    assert Dextrin.encode(read) == {:ok, "0.0M"}
+    assert Dextrin.encode(value) == {:ok, "-0.0M"}
+  end
 
   # A `Regex` compiled from the same source/opts twice is never `==` to
   # itself in Elixir — its `re_pattern` field is a distinct opaque

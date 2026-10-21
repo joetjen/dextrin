@@ -13,7 +13,7 @@
 # application decision, not something this library should guess at,
 # and DXN already has native `uri`/`uuid` primitives for the cases
 # that would otherwise tempt a regex reimplementation. `pattern:` is
-# available directly (`{:refine :string %{pattern: ~r/.../}}`) for
+# available directly (`{:refine :string %{pattern: @regex "..."}}`) for
 # anything an application needs beyond what's listed here.
 
 %{

@@ -50,6 +50,8 @@ defmodule Dextrin.Value do
           | DateTime.t()
           | Dextrin.Duration.t()
           | Dextrin.Uuid.t()
+          | Dextrin.ObjectId.t()
+          | Dextrin.Ip.t()
           | Dextrin.Uri.t()
           | binary()
           | Regex.t()

@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Acme schemas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<script>try { var t = localStorage.getItem("dextrin-docs-theme"); if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); } catch (e) {}</script>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" aria-label="All namespaces and definitions">
+    <div class="sidebar-head">
+      <a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true">%{}</span>Acme schemas</a>
+      <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Switch between light and dark">Dark</button>
+    </div>
+    <details class="sidebar-toggle" open>
+      <summary>Browse</summary>
+      <ul class="tree"><li><details><summary><a href="acme/index.html">acme</a></summary><ul><li><details><summary><a href="acme/common/index.html">common</a></summary><ul><li class="def-leaf"><a href="acme/common/index.html#Address"><span class="dot dot-schema" aria-hidden="true"></span>Address</a></li><li class="def-leaf"><a href="acme/common/index.html#CountryCode"><span class="dot dot-type" aria-hidden="true"></span>CountryCode</a></li><li class="def-leaf"><a href="acme/common/index.html#CurrencyCode"><span class="dot dot-type" aria-hidden="true"></span>CurrencyCode</a></li><li class="def-leaf"><a href="acme/common/index.html#Email"><span class="dot dot-type" aria-hidden="true"></span>Email</a></li><li class="def-leaf"><a href="acme/common/index.html#Metadata"><span class="dot dot-type" aria-hidden="true"></span>Metadata</a></li><li class="def-leaf"><a href="acme/common/index.html#Money"><span class="dot dot-schema" aria-hidden="true"></span>Money</a></li><li class="def-leaf"><a href="acme/common/index.html#NonEmptyString"><span class="dot dot-type" aria-hidden="true"></span>NonEmptyString</a></li><li class="def-leaf"><a href="acme/common/index.html#Percentage"><span class="dot dot-type" aria-hidden="true"></span>Percentage</a></li><li class="def-leaf"><a href="acme/common/index.html#PhoneNumber"><span class="dot dot-type" aria-hidden="true"></span>PhoneNumber</a></li><li class="def-leaf"><a href="acme/common/index.html#Tags"><span class="dot dot-type" aria-hidden="true"></span>Tags</a></li></ul></details></li><li><details><summary><a href="acme/events/index.html">events</a></summary><ul><li class="def-leaf"><a href="acme/events/index.html#CancelReason"><span class="dot dot-type" aria-hidden="true"></span>CancelReason</a></li><li class="def-leaf"><a href="acme/events/index.html#CustomerRegistered"><span class="dot dot-shape" aria-hidden="true"></span>CustomerRegistered</a></li><li class="def-leaf"><a href="acme/events/index.html#Envelope"><span class="dot dot-schema" aria-hidden="true"></span>Envelope</a></li><li class="def-leaf"><a href="acme/events/index.html#EventTag"><span class="dot dot-type" aria-hidden="true"></span>EventTag</a></li><li class="def-leaf"><a href="acme/events/index.html#EventType"><span class="dot dot-type" aria-hidden="true"></span>EventType</a></li><li class="def-leaf"><a href="acme/events/index.html#OrderCancelled"><span class="dot dot-shape" aria-hidden="true"></span>OrderCancelled</a></li><li class="def-leaf"><a href="acme/events/index.html#OrderPlaced"><span class="dot dot-shape" aria-hidden="true"></span>OrderPlaced</a></li></ul></details></li><li><details><summary><a href="acme/shop/index.html">shop</a></summary><ul><li class="def-leaf"><a href="acme/shop/index.html#Customer"><span class="dot dot-schema" aria-hidden="true"></span>Customer</a></li><li class="def-leaf"><a href="acme/shop/index.html#Order"><span class="dot dot-schema" aria-hidden="true"></span>Order</a><ul><li class="def-leaf"><a href="acme/shop/index.html#Order.OrderLine"><span class="dot dot-schema" aria-hidden="true"></span>OrderLine</a></li><li class="def-leaf"><a href="acme/shop/index.html#Order.Quantity"><span class="dot dot-type" aria-hidden="true"></span>Quantity</a></li><li class="def-leaf"><a href="acme/shop/index.html#Order.Status"><span class="dot dot-type" aria-hidden="true"></span>Status</a></li></ul></li><li class="def-leaf"><a href="acme/shop/index.html#Product"><span class="dot dot-schema" aria-hidden="true"></span>Product</a><ul><li class="def-leaf"><a href="acme/shop/index.html#Product.Variant"><span class="dot dot-schema" aria-hidden="true"></span>Variant</a></li></ul></li></ul></details></li></ul></details></li><li><details open><summary><a href="index.html">No namespace</a></summary><ul><li class="def-leaf"><a href="index.html#HealthCheck"><span class="dot dot-schema" aria-hidden="true"></span>HealthCheck</a></li></ul></details></li></ul>
+    </details>
+  </nav>
+  <main class="main">
+    <div class="page">
+  <header class="intro">
+    
+    <p class="eyebrow">Schema reference</p>
+    <h1>Acme schemas</h1>
+    <p class="lede">Every struct schema, shape and named type, by namespace. A name links to its definition wherever it appears.</p>
+    
+  </header>
+  <div class="sections"><section class="ns-section">
+  <h2><a href="acme/index.html"><code>acme</code></a></h2>
+  
+  <div class="group"><p class="label">Namespaces</p><ul class="links"><li><a class="ns-link" href="acme/common/index.html"><code>common</code></a><span class="count">10</span></li><li><a class="ns-link" href="acme/events/index.html"><code>events</code></a><span class="count">7</span></li><li><a class="ns-link" href="acme/shop/index.html"><code>shop</code></a><span class="count">3</span></li></ul></div>
+  
+</section>
+</div>
+  <h2 class="own-heading">Names with no namespace</h2>
+  <article class="def kind-schema" id="HealthCheck">
+  <header class="def-head">
+    <h2><a class="self" href="#HealthCheck"><code>HealthCheck</code></a></h2>
+    <div class="chips"><span class="chip chip-schema">struct schema</span><span class="chip chip-version">v1</span></div>
+    <p class="full-name"><code>HealthCheck</code></p>
+  </header>
+  <div class="prose"><p>What a service answers on its health endpoint.</p></div>
+  <div class="prose version-note"><p>A name with no namespace: <a class="ref" href="index.html#HealthCheck"><code>HealthCheck</code></a> is its own namespace and lives in <code>HealthCheck.dxns</code>.</p></div>
+<div class="table-wrap">
+  <table class="fields">
+    <thead><tr><th scope="col" class="pos" title="Position in the binary form">#</th><th scope="col">Field</th><th scope="col">Type</th><th scope="col">Notes</th></tr></thead>
+    <tbody><tr>
+  <td class="pos">1</td>
+  <th scope="row" class="field"><code>status</code></th>
+  <td class="type"><code>{<span class="kw">:enum</span> <span class="kw">:ok</span> <span class="kw">:degraded</span> <span class="kw">:down</span>}</code></td>
+  <td class="notes"><dl class="values"><p class="label">Values</p><dt><code>:degraded</code></dt><dd><p>Up, but a dependency is slow or down</p></dd></dl></td>
+</tr>
+<tr>
+  <td class="pos">2</td>
+  <th scope="row" class="field"><code>checks</code></th>
+  <td class="type"><code>{<span class="kw">:map-of</span> <span class="kw">:keyword</span> {<span class="kw">:tuple-of</span> {<span class="kw">:enum</span> <span class="kw">:ok</span> <span class="kw">:down</span>} <span class="kw">:duration</span>}}</code></td>
+  <td class="notes"><p>Every dependency the service checked, and how long it took.</p></td>
+</tr>
+<tr>
+  <td class="pos">3</td>
+  <th scope="row" class="field"><code>support_hours</code><span class="opt">optional</span></th>
+  <td class="type"><code>{<span class="kw">:list-of</span> {<span class="kw">:tuple-of</span> <span class="kw">:time</span> <span class="kw">:time</span>}}</code></td>
+  <td class="notes"><p>The opening hours of the support desk, as from-to pairs.</p></td>
+</tr>
+<tr>
+  <td class="pos">4</td>
+  <th scope="row" class="field"><code>features</code><span class="opt">optional</span></th>
+  <td class="type"><code>{<span class="kw">:set-of</span> <span class="kw">:keyword</span>}</code></td>
+  <td class="notes"><p>Feature switches, by name.</p></td>
+</tr>
+</tbody>
+  </table>
+</div>
+<p class="file">HealthCheck.dxns</p>
+
+  
+  
+</article>
+
+</div>
+
+    <footer class="site-foot"><p>Generated from the <code>.dxns</code> sources by Dextrin. A field's # is its position in the binary form.</p></footer>
+  </main>
+</div>
+<script>(function () {
+  var root = document.documentElement, button = document.getElementById("theme-toggle");
+  function current() {
+    var t = root.getAttribute("data-theme");
+    if (t) return t;
+    return window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  function label() {
+    var next = current() === "dark" ? "light" : "dark";
+    button.textContent = next === "dark" ? "Dark" : "Light";
+    button.setAttribute("aria-label", "Switch to " + next);
+  }
+  button.addEventListener("click", function () {
+    var next = current() === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem("dextrin-docs-theme", next); } catch (e) {}
+    label();
+  });
+  label();
+})();
+</script>
+</body>
+</html>

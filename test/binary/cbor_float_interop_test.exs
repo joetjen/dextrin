@@ -40,11 +40,48 @@ defmodule Dextrin.Binary.CborFloatInteropTest do
     assert {:ok, 1.5} = Dextrin.decode_binary(envelope)
   end
 
-  test "half-precision (16-bit) floats are rejected explicitly, not misdecoded" do
-    item = <<7::3, 25::5, 0::16>>
-    envelope = "DX" <> <<1>> <> item
+  # `.dxnb` writes the shortest width that holds a float exactly, and
+  # reads every width (DXN.md §2.2, Jan, 2026-10-20).
+  test "half-precision floats are read, specials and subnormals included" do
+    half = fn bits -> Dextrin.decode_binary("DX" <> <<1, 7::3, 25::5, bits::16>>) end
+    assert {:ok, +0.0} = half.(0x0000)
+    assert {:ok, -2.0} = half.(0xC000)
+    assert {:ok, 65_504.0} = half.(0x7BFF)
+    assert {:ok, 5.960464477539063e-8} = half.(0x0001)
+    assert {:ok, :positive_infinity} = half.(0x7C00)
+    assert {:ok, :negative_infinity} = half.(0xFC00)
+    assert {:ok, :nan} = half.(0x7E00)
+  end
 
-    assert {:error, %Dextrin.Error{}} = Dextrin.decode_binary(envelope)
+  test "a float is written in the shortest width that holds it exactly" do
+    width = fn f ->
+      {:ok, <<"DX", 1, 7::3, info::5, _::binary>>} = Dextrin.encode_binary(f)
+      %{25 => :half, 26 => :single, 27 => :double}[info]
+    end
+
+    assert width.(1.5) == :half
+    assert width.(-0.0) == :half
+    assert width.(65_504.0) == :half
+    assert width.(65_520.0) == :single
+    assert width.(0.1) == :double
+    assert width.(3.141592653589793) == :double
+    assert width.(:nan) == :half
+
+    for f <- [1.5, -0.0, 65_520.0, 0.1, 1.0e-40, 1.0e300, :nan, :positive_infinity] do
+      {:ok, bytes} = Dextrin.encode_binary(f)
+      {:ok, back} = Dextrin.decode_binary(bytes)
+      assert if(is_float(f), do: <<back::float>> == <<f::float>>, else: back == f), inspect(f)
+    end
+  end
+
+  test "a UTC datetime is its bare nanoseconds, a regex without flags its bare pattern" do
+    {:ok, utc} = Dextrin.decode(~s|@datetime "1970-01-01T00:00:01Z"|)
+    # tag 219, then the integer 1_000_000_000: no array, no offset.
+    assert {:ok, <<"DX", 1, 0xD8, 219, 0x1A, 1_000_000_000::32>>} = Dextrin.encode_binary(utc)
+
+    {:ok, regex} = Dextrin.decode(~s|@regex "a"|)
+    # tag 213, then the string "a".
+    assert {:ok, <<"DX", 1, 0xD8, 213, 0x61, ?a>>} = Dextrin.encode_binary(regex)
   end
 
   test "special float values still round-trip through the fixed header" do

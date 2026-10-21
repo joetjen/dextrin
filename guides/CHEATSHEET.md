@@ -19,12 +19,15 @@ Dextrin.encode_binary(value, opts \\ [])    #=> {:ok, bytes} | {:error, %Dextrin
 named schema), `validate:` (encode only, default `true` — set `false`
 to skip the automatic whole-tree schema check), `pretty:` (`encode/2`
 only, default `false` — multi-line, indented output instead of
-single-line/compact), `indent:` (`encode/2` only, meaningful with
-`pretty: true` — spaces per nesting level, default 2), `trusted:`
-(decode only, default `true` — `keyword` decodes as a real atom;
-`false` for untrusted input decodes it as `Dextrin.Keyword.t()`
-instead, so `String.to_atom/1` is never reachable from attacker
--controlled text).
+single-line/compact: the top-level collection one entry per line, a
+nested one on one line when it fits), `indent:` (`encode/2` only,
+meaningful with `pretty: true` — spaces per nesting level, default 2),
+`width:` (`encode/2` only, meaningful with `pretty: true` — the columns
+a nested collection's one line must fit in, default 80), `trusted:`
+(decode only, default `false` — `keyword` decodes as
+`Dextrin.Keyword.t()`, so `String.to_atom/1` is never reachable from
+the input; `true`, for a source you control, decodes it as a real
+atom).
 
 ## Render an error
 
@@ -68,7 +71,7 @@ Dextrin.Document.format(doc)                         # laid out, comments kept
 
 ```text
 symbol      Dextrin.Symbol{name: string}          bare identifier, e.g. `foo`
-keyword     atom (default) / Dextrin.Keyword      `:foo` / `foo:` (key position) — trusted: false for the latter
+keyword     Dextrin.Keyword (default) / atom      `:foo` / `foo:` (key position) — trusted: true for the latter
 tuple       Dextrin.Tuple{items: [term]}          `{1 2 3}` — list-backed, arbitrary length
 array       Dextrin.Array{items: tuple}           `@array[1 2 3]` — tuple-backed, fixed size
 ordered-map Dextrin.OrderedMap{pairs: [{k,v}]}    `@ordered %{...}` — order is part of identity
@@ -77,6 +80,8 @@ struct      Dextrin.Struct{name, fields}          `%Name{...}` / `%Name[...]`, o
 duration    Dextrin.Duration{years, months, ...}  `@duration "P1Y2M"` — 7 independent fields
 rational    Dextrin.Rational{numerator, denom}    `22/7` — stored exactly, never auto-reduced
 uuid        Dextrin.Uuid{bytes: <<_::128>>}       `@uuid "..."` — 16 raw bytes, not the text form
+objectid    Dextrin.ObjectId{bytes: <<_::96>>}    `@objectid "..."` — 12 raw bytes, BSON's ObjectId
+ip          Dextrin.Ip{address: _, prefix: _}     `@ip "10.0.0.0/8"` — an address or a prefix, raw bytes
 uri         Dextrin.Uri{value: string}            `@uri "..."` — raw string, not parsed
 bytes       Dextrin.Bytes{data: binary}           `@bytes "..."` (base64 in text)
 char        Dextrin.Char{codepoint: integer}      `?a` — distinct from a 1-grapheme string
@@ -147,23 +152,65 @@ Dextrin.Schema.validate_encode_tree(value, registry)                # automatic 
 :integer / :string / ...       one keyword per DXN.md §1.3 type name
 Address                        bare symbol — a struct name or a named type
 {:list-of T}                   list whose every element matches T
+{:list-items A {:repeat B 0 nil}}  a list's items in order; {:repeat {:group A B} 1 nil}
 {:set-of T}                    set whose every element matches T
 {:tuple-of A B C}              fixed-arity positional tuple
+{:tuple-of-all T}              tuple of any length, every element a T
+{:tagged acme.money T}         a custom tag of that name, its value a T
+{:doc T %{description: ...}}   T, annotated: title description examples read-only write-only deprecated meta values
+:int32 :int64 :uint32 :uint64  integer ranges; :float32 single precision
+:number                        any integer, float, decimal or rational
+{:const v}                     the one value v
+{:if I T E}                    an I must be a T, anything else an E
 {:map-of K V}                  every key matches K, every value matches V
+{:array-of T}                  array whose every element matches T
+{:ordered-map-of K V}          ordered map: keys match K, values match V
+{:sorted-set-of T}             sorted set whose every element matches T
 {:enum :a :b :c}                value must equal one of the given literals
-{:one-of A B}                  union — matches at least one
+{:one-of A B}                  exactly one matches (JSON Schema's oneOf)
+{:any-of A B}                  union — matches one or more (anyOf)
 {:all-of A B}                  intersection — matches all
-{:nilable T}                   sugar for {:one-of :nil T}
+{:not T}                       matches what T refuses
+:never                         matches nothing
+{:nilable T}                   sugar for {:any-of :nil T}
 {:refine T %{constraints}}     base type + refine constraints (below)
 %schema{}  struct/record shape
+%shape{}   plain map with these fields, defaults filled (unversioned)
+{:case f %{v => T, :else => U}}  the type the sibling field f's value chooses
+{:generic [t] body}             a named type with parameters
+{:of Name T}                    one use of a generic
 ```
 
 ## `refine` constraints
 
 ```text
 min / max / exclusive-min / exclusive-max / multiple-of   -- integer/float/decimal/rational
-min-length / max-length / pattern                          -- string
-min-count / max-count                                      -- list/set/tuple
+min / max / exclusive-*  on temporals                     -- date/time/datetime/local-datetime/duration, same kind
+min-bytes / max-bytes                                     -- string: UTF-8 bytes
+format                                                    -- string: :email :uri :hostname :semver ... (DXN.md §4.2a)
+encoding / media-type                                     -- string: :base64 ... / "type/subtype"
+content                                                   -- string: a DXN document of this type
+encodes / encodes-seq                                     -- bytes: .dxnb document(s) of this type
+float32                                                   -- float: single precision holds it
+min-precision / max-precision                             -- decimal: coefficient digits
+min-exponent / max-exponent                               -- decimal: exponent
+bits                                                      -- integer/bytes: only these bit numbers set
+before-now / after-now / within                           -- datetime against the clock
+resolution                                                -- time/datetime/duration: :second :millisecond ...
+min-length / max-length / pattern                          -- string/keyword/symbol/bytes (bits: length only)
+min-count / max-count                                      -- list/set/tuple/sorted-set/array
+contains / min-contains / max-contains                     -- how many elements are a given type
+unique / unique-by                                         -- no two elements, or their field, the same
+finite                                                     -- float: true refuses NaN and the infinities
+offsets                                                    -- datetime: ["Z" "+02:00" ...]
+version / prefix                                           -- ip: 4 or 6; true a prefix, false an address
+```
+
+## Checking without decoding
+
+```elixir
+Dextrin.Schema.check(value, registry, "OrderPlaced")    # :ok | {:error, error}, never changes value
+Dextrin.Schema.conform(value, registry, "OrderPlaced")  # {:ok, value with shape defaults filled}
 ```
 
 ## Struct schema options
@@ -211,6 +258,8 @@ mix dextrin.encode data.dxn [--out data.dxnb] [--share]
 mix dextrin.decode data.dxnb [--out data.dxn]
 mix dextrin.format data.dxn [--mode pretty|condense] [--in-place]
 mix dextrin.compat old-schemas/ schemas/
+mix dextrin.check schemas/ [--extern NAMESPACE]...
+mix dextrin.docs schemas/ [--out DIR] [--title TITLE]
 mix dextrin.gen.schema MyApp.SomeStruct [--out schema.dxns] [--name Name]
 mix dextrin.gen.unicode [--file PATH] [--force]
 ```

@@ -10,11 +10,11 @@ defmodule Dextrin.Text.GrammarHazardsTest do
 
   describe "§5.5 — MAP_KEY vs KEYWORD" do
     test "no space before colon is a shorthand map key" do
-      assert {:ok, %{x: 1}} = Dextrin.decode("%{x:1}")
+      assert {:ok, %{%Dextrin.Keyword{name: "x"} => 1}} = Dextrin.decode("%{x:1}")
     end
 
     test "space after colon is still a shorthand map key" do
-      assert {:ok, %{x: 1}} = Dextrin.decode("%{x: 1}")
+      assert {:ok, %{%Dextrin.Keyword{name: "x"} => 1}} = Dextrin.decode("%{x: 1}")
     end
 
     test "space before colon is NOT a valid shorthand key (documented restriction)" do

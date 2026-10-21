@@ -117,7 +117,8 @@ defmodule Dextrin.Document do
   `doc` laid out the way the pretty printer lays out a value, with every
   comment kept beside the entry it belongs to (`Dextrin.Document.Formatter`).
   Layout only: every token is written as it was. `:indent` is the spaces
-  per level (2).
+  per level (2), `:width` the columns a nested collection's one line must
+  fit in (80).
   """
   @spec format(t(), keyword()) :: String.t()
   def format(%__MODULE__{tree: tree}, opts \\ []),
@@ -179,11 +180,58 @@ defmodule Dextrin.Document do
   def update(%__MODULE__{} = doc, value, opts \\ []) do
     mode = Keyword.get(opts, :on_ambiguity, :safe)
 
-    with {:ok, changes} <- changes(doc, [], to_value(doc), value, mode),
+    held = if trusted?(doc), do: value, else: as_held(value)
+
+    with {:ok, changes} <- changes(doc, [], to_value(doc), held, mode),
          {:ok, updated} <- applied(doc, changes) do
-      {:ok, updated, changes}
+      {:ok, updated, Enum.map(changes, &as_given/1)}
+    else
+      {:error, {reason, path}} -> {:error, {reason, given(path)}}
     end
   end
+
+  defp trusted?(doc), do: Registry.from_options(doc.opts).trusted
+
+  # **The new value, as an untrusted document holds it**: the caller writes
+  # keywords as atoms (`%{version: "2"}`), the document holds them as
+  # `Dextrin.Keyword`s, and the two must compare. Turning atoms into
+  # keywords creates no atom; the other way round would, from the input.
+  defp as_held(atom) when is_atom(atom) and atom not in [nil, true, false],
+    do: Dextrin.Keyword.new(Atom.to_string(atom))
+
+  defp as_held(list) when is_list(list), do: Enum.map(list, &as_held/1)
+  defp as_held(%Dextrin.Tuple{items: items}), do: %Dextrin.Tuple{items: as_held(items)}
+
+  defp as_held(%{} = map) when not is_struct(map),
+    do: Map.new(map, fn {k, v} -> {as_held(k), as_held(v)} end)
+
+  defp as_held(other), do: other
+
+  # **The edits, as the caller wrote them**: a keyword the caller wrote as
+  # an atom is that atom again -- `String.to_existing_atom/1`, which
+  # creates none -- and one only the document has stays a keyword.
+  defp as_given({:replace, {path, value}}), do: {:replace, {given(path), given(value)}}
+  defp as_given({:delete, path}), do: {:delete, given(path)}
+
+  defp as_given({:insert, {path, where, value}}),
+    do: {:insert, {given(path), given(where), given(value)}}
+
+  defp given(%Dextrin.Keyword{name: name} = keyword) do
+    case Dextrin.Keyword.trusted(name) do
+      %Dextrin.Keyword{} -> keyword
+      _atom -> String.to_existing_atom(name)
+    end
+  rescue
+    ArgumentError -> keyword
+  end
+
+  defp given(list) when is_list(list), do: Enum.map(list, &given/1)
+  defp given(%Dextrin.Tuple{items: items}), do: %Dextrin.Tuple{items: given(items)}
+
+  defp given(%{} = map) when not is_struct(map),
+    do: Map.new(map, fn {k, v} -> {given(k), given(v)} end)
+
+  defp given(other), do: other
 
   defp applied(doc, changes) do
     Enum.reduce_while(changes, {:ok, doc}, fn change, {:ok, doc} ->
@@ -325,7 +373,7 @@ defmodule Dextrin.Document do
   defp step_into(doc, %Node{rule: rule} = node, step) when rule in [:map_lit, :struct_keyed] do
     entries = entries(node)
 
-    case Enum.find(entries, &(key_of(doc, &1, rule) == {:ok, step})) do
+    case Enum.find(entries, &names?(key_of(doc, &1, rule), step)) do
       nil -> :error
       entry -> {:ok, %{value: entry_value(entry), entry: entry, siblings: entries}}
     end
@@ -362,7 +410,7 @@ defmodule Dextrin.Document do
 
   defp absent_key(doc, %Node{rule: rule} = node, path, key)
        when rule in [:map_lit, :struct_keyed] do
-    if Enum.any?(entries(node), &(key_of(doc, &1, rule) == {:ok, key})),
+    if Enum.any?(entries(node), &names?(key_of(doc, &1, rule), key)),
       do: {:error, {:exists, path ++ [key]}},
       else: :ok
   end
@@ -402,6 +450,17 @@ defmodule Dextrin.Document do
 
   defp entry_value(%Node{children: children}),
     do: children |> Enum.filter(&match?(%Node{rule: :value}, &1)) |> List.last()
+
+  # Whether `step`, a path's segment, names the key `decoded`. A path is
+  # the caller's own code, not the input, so an atom in it names a keyword
+  # key however the document decoded it -- an atom when trusted, a
+  # `Dextrin.Keyword` when not (the default) -- and creates no atom.
+  defp names?({:ok, key}, key), do: true
+
+  defp names?({:ok, %Dextrin.Keyword{name: name}}, step) when is_atom(step),
+    do: Atom.to_string(step) == name
+
+  defp names?(_decoded, _step), do: false
 
   # A map entry's key as it decodes: a shorthand `name:` is the keyword
   # `:name` in a map and the field name `"name"` in a struct; an arrow

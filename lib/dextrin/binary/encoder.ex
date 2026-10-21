@@ -183,16 +183,26 @@ defmodule Dextrin.Binary.Encoder do
   defp encode_item_dispatch(false, _opts), do: {:ok, head(7, 20)}
   defp encode_item_dispatch(true, _opts), do: {:ok, head(7, 21)}
 
-  defp encode_item_dispatch(:nan, _opts), do: {:ok, float_head() <> <<0x7FF8000000000000::64>>}
-
-  defp encode_item_dispatch(:positive_infinity, _opts),
-    do: {:ok, float_head() <> <<0x7FF0000000000000::64>>}
-
-  defp encode_item_dispatch(:negative_infinity, _opts),
-    do: {:ok, float_head() <> <<0xFFF0000000000000::64>>}
+  # A float in the shortest of CBOR's three widths that holds it exactly
+  # (DXN.md §2.2, Jan, 2026-10-20: the smallest representation): half,
+  # single, then double. NaN and the infinities fit in half.
+  defp encode_item_dispatch(:nan, _opts), do: {:ok, <<7::3, 25::5, 0x7E00::16>>}
+  defp encode_item_dispatch(:positive_infinity, _opts), do: {:ok, <<7::3, 25::5, 0x7C00::16>>}
+  defp encode_item_dispatch(:negative_infinity, _opts), do: {:ok, <<7::3, 25::5, 0xFC00::16>>}
 
   defp encode_item_dispatch(i, _opts) when is_integer(i), do: {:ok, encode_integer(i)}
-  defp encode_item_dispatch(f, _opts) when is_float(f), do: {:ok, float_head() <> <<f::float>>}
+
+  defp encode_item_dispatch(f, _opts) when is_float(f) do
+    case Dextrin.Binary.Float.half(f) do
+      {:ok, bits} ->
+        {:ok, <<7::3, 25::5, bits::16>>}
+
+      :error ->
+        if Dextrin.Binary.Float.single?(f),
+          do: {:ok, <<7::3, 26::5, f::float-32>>},
+          else: {:ok, float_head() <> <<f::float>>}
+    end
+  end
 
   defp encode_item_dispatch(%Decimal{sign: sign, coef: coef, exp: exp}, opts) do
     with {:ok, exponent} <- encode_item(exp, opts),
@@ -208,7 +218,21 @@ defmodule Dextrin.Binary.Encoder do
   end
 
   defp encode_item_dispatch(s, _opts) when is_binary(s), do: {:ok, text(s)}
-  defp encode_item_dispatch(%Bytes{data: data}, _opts), do: {:ok, bytes(data)}
+
+  defp encode_item_dispatch(%Bytes{data: data}, _opts) when is_binary(data),
+    do: {:ok, bytes(data)}
+
+  # Bits that are not whole bytes (DXN.md §2.3): T_BITS around
+  # [bytes, count]. A bitstring that is not a binary can be no string.
+  defp encode_item_dispatch(%Bytes{data: bits}, opts) do
+    {data, count} = Dextrin.Bits.parts(bits)
+
+    with {:ok, n} <- encode_item(count, opts),
+         do: {:ok, tag(Tags.t_bits(), array_of([bytes(data), n]))}
+  end
+
+  defp encode_item_dispatch(bits, opts) when is_bitstring(bits),
+    do: encode_item_dispatch(Bytes.new(bits), opts)
 
   defp encode_item_dispatch(%Dextrin.Char{codepoint: cp}, opts) do
     with {:ok, item} <- encode_item(cp, opts), do: {:ok, tag(Tags.t_char(), item)}
@@ -287,27 +311,24 @@ defmodule Dextrin.Binary.Encoder do
          do: {:ok, tag(Tags.t_date(), item)}
   end
 
-  defp encode_item_dispatch(%Time{} = time, opts) do
-    {micro, _precision} = time.microsecond
-    total = time.hour * 3_600_000_000 + time.minute * 60_000_000 + time.second * 1_000_000 + micro
-    with {:ok, item} <- encode_item(total, opts), do: {:ok, tag(Tags.t_time(), item)}
-  end
+  # Nanoseconds throughout (DXN.md §2.2, Jan, 2026-10-20): a time since
+  # midnight, a datetime since the epoch with its offset in minutes (UTC
+  # is offset 0), a local date-time since 1970-01-01T00:00 on the wall
+  # clock.
+  defp encode_item_dispatch(%Time{} = time, opts), do: encode_time(time, opts)
 
-  defp encode_item_dispatch(%DateTime{utc_offset: 0, std_offset: 0} = dt, opts) do
-    with {:ok, item} <- encode_item(DateTime.to_unix(dt, :microsecond), opts) do
-      {:ok, tag(Tags.t_timestamp(), item)}
-    end
-  end
+  defp encode_item_dispatch(%Dextrin.Nanos{value: %Time{}} = time, opts),
+    do: encode_time(time, opts)
 
-  defp encode_item_dispatch(%DateTime{} = dt, opts) do
-    epoch_micros = DateTime.to_unix(dt, :microsecond)
-    offset_minutes = div(dt.utc_offset + dt.std_offset, 60)
+  defp encode_item_dispatch(%DateTime{} = dt, opts), do: encode_datetime(dt, opts)
 
-    with {:ok, micros_item} <- encode_item(epoch_micros, opts),
-         {:ok, offset_item} <- encode_item(offset_minutes, opts) do
-      {:ok, tag(Tags.t_datetime_offset(), array_of([micros_item, offset_item]))}
-    end
-  end
+  defp encode_item_dispatch(%Dextrin.Nanos{value: %DateTime{}} = dt, opts),
+    do: encode_datetime(dt, opts)
+
+  defp encode_item_dispatch(%NaiveDateTime{} = n, opts), do: encode_local(n, opts)
+
+  defp encode_item_dispatch(%Dextrin.Nanos{value: %NaiveDateTime{}} = n, opts),
+    do: encode_local(n, opts)
 
   defp encode_item_dispatch(%Dextrin.Duration{} = d, opts) do
     fields = Enum.reject(Tags.duration_bits(), fn field -> Map.get(d, field) == nil end)
@@ -327,13 +348,37 @@ defmodule Dextrin.Binary.Encoder do
   # ---- extended -----------------------------------------------------------
 
   defp encode_item_dispatch(%Uuid{bytes: raw}, _opts), do: {:ok, tag(Tags.t_uuid(), bytes(raw))}
+
+  defp encode_item_dispatch(%Dextrin.ObjectId{bytes: raw}, _opts),
+    do: {:ok, tag(Tags.t_objectid(), bytes(raw))}
+
+  # RFC 9164, its smallest form: an address as raw bytes, a prefix as its
+  # length and the bytes without their trailing zero bytes.
+  defp encode_item_dispatch(%Dextrin.Ip{address: raw, prefix: prefix}, opts) do
+    ip_tag = if byte_size(raw) == 4, do: Tags.t_ipv4(), else: Tags.t_ipv6()
+
+    case prefix do
+      nil ->
+        {:ok, tag(ip_tag, bytes(raw))}
+
+      length ->
+        with {:ok, length_item} <- encode_item(length, opts),
+             do: {:ok, tag(ip_tag, array_of([length_item, bytes(trim_zeros(raw))]))}
+    end
+  end
+
   defp encode_item_dispatch(%Uri{value: value}, _opts), do: {:ok, tag(Tags.t_uri(), text(value))}
 
+  # With no flags, the bare pattern (the smallest representation).
   defp encode_item_dispatch(%Regex{source: source, opts: re_opts}, opts) do
-    flags_byte = Tags.regex_opts_to_byte(re_opts)
+    case Tags.regex_opts_to_byte(re_opts) do
+      0 ->
+        {:ok, tag(Tags.t_regex(), text(source))}
 
-    with {:ok, flags_item} <- encode_item(flags_byte, opts) do
-      {:ok, tag(Tags.t_regex(), array_of([text(source), flags_item]))}
+      flags_byte ->
+        with {:ok, flags_item} <- encode_item(flags_byte, opts) do
+          {:ok, tag(Tags.t_regex(), array_of([text(source), flags_item]))}
+        end
     end
   end
 
@@ -510,7 +555,7 @@ defmodule Dextrin.Binary.Encoder do
   defp bit_for(:days), do: 1 <<< 3
   defp bit_for(:hours), do: 1 <<< 4
   defp bit_for(:minutes), do: 1 <<< 5
-  defp bit_for(:microseconds), do: 1 <<< 6
+  defp bit_for(:nanoseconds), do: 1 <<< 6
 
   # ---- raw CBOR item builders -----------------------------------------------
 
@@ -560,4 +605,39 @@ defmodule Dextrin.Binary.Encoder do
     do: tag(Tags.t_bignum_pos(), bytes(:binary.encode_unsigned(i)))
 
   defp encode_integer(i), do: tag(Tags.t_bignum_neg(), bytes(:binary.encode_unsigned(-1 - i)))
+
+  defp encode_time(time, opts) do
+    with {:ok, item} <- encode_item(Dextrin.Temporal.time_nanos(time), opts),
+         do: {:ok, tag(Tags.t_time(), item)}
+  end
+
+  # In UTC, the bare nanoseconds; otherwise with the offset (the smallest
+  # representation, DXN.md §2.2).
+  defp encode_datetime(dt, opts) do
+    case Dextrin.Temporal.datetime_parts(dt) do
+      {nanos, 0} ->
+        with {:ok, nanos_item} <- encode_item(nanos, opts),
+             do: {:ok, tag(Tags.t_datetime(), nanos_item)}
+
+      {nanos, offset} ->
+        with {:ok, nanos_item} <- encode_item(nanos, opts),
+             {:ok, offset_item} <- encode_item(offset, opts) do
+          {:ok, tag(Tags.t_datetime(), array_of([nanos_item, offset_item]))}
+        end
+    end
+  end
+
+  defp encode_local(local, opts) do
+    with {:ok, item} <- encode_item(Dextrin.Temporal.local_nanos(local), opts),
+         do: {:ok, tag(Tags.t_local_datetime(), item)}
+  end
+
+  defp trim_zeros(raw),
+    do:
+      raw
+      |> :binary.bin_to_list()
+      |> Enum.reverse()
+      |> Enum.drop_while(&(&1 == 0))
+      |> Enum.reverse()
+      |> :binary.list_to_bin()
 end

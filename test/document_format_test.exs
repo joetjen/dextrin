@@ -53,8 +53,21 @@ defmodule Dextrin.DocumentFormatTest do
              empty: []
              version: 1.50
            }
-           # the end\
+           # the end
            """
+  end
+
+  # The header is `@dxn` and its version, one space between them,
+  # however they were spaced.
+  test "the header keeps one space between its tag and its version" do
+    assert formatted(~s|@dxn   "1.0"\n[1]|) == ~s|@dxn "1.0"\n[\n  1\n]|
+  end
+
+  # A formatter run on save must not take a file's last newline away;
+  # one the source did not end with, it does not add.
+  test "a document that ends with a newline still does" do
+    assert formatted("%{a: 1}\n") == "%{\n  a: 1\n}\n"
+    assert formatted("%{a: 1}") == "%{\n  a: 1\n}"
   end
 
   test "a comment beside an opening bracket stays on its line" do
@@ -90,6 +103,35 @@ defmodule Dextrin.DocumentFormatTest do
       assert Document.to_value(again) == Document.to_value(doc)
       assert comments(once) == comments(text)
       assert Document.format(again) == once
+    end
+  end
+
+  # Jan, 2026-10-20: a nested collection that fits goes on one line, as
+  # Dextrin.Text.Formatter writes it -- unless it holds a comment or a
+  # blank line, which keep it over lines.
+  describe "layout" do
+    test "a nested collection that fits is written on one line" do
+      assert formatted("%{deps: [\"a\" \"b\"], at: %{x: 1, y: 2}}") ==
+               "%{\n  deps: [\"a\" \"b\"]\n  at: %{x: 1 y: 2}\n}"
+    end
+
+    test "the top level breaks however short it is" do
+      assert formatted("[1]") == "[\n  1\n]"
+    end
+
+    test "a comment inside keeps it over lines" do
+      assert formatted("%{deps: [\"a\" # why\n]}") == "%{\n  deps: [\n    \"a\"  # why\n  ]\n}"
+    end
+
+    test "and so does a blank line between its entries" do
+      assert formatted("%{deps: [\"a\"\n\n\"b\"]}") ==
+               "%{\n  deps: [\n    \"a\"\n\n    \"b\"\n  ]\n}"
+    end
+
+    test "the width counts the indent and the key" do
+      {:ok, doc} = Document.parse("%{key: [1 2 3]}")
+      assert Document.format(doc, width: 14) == "%{\n  key: [1 2 3]\n}"
+      assert Document.format(doc, width: 13) == "%{\n  key: [\n    1\n    2\n    3\n  ]\n}"
     end
   end
 

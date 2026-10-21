@@ -13,9 +13,9 @@ defmodule Dextrin do
   struct where Elixir has nothing that fits without losing information
   (`Dextrin.Symbol`, `Dextrin.Tuple`, `Dextrin.OrderedMap`, ...) — see
   each value module under `Dextrin.Value` for the full list. `symbol`
-  and `keyword` in particular always wrap a `String.t()`, never an
-  Elixir atom: decoding untrusted DXN data can never be used to exhaust
-  the atom table.
+  and `keyword` in particular wrap a `String.t()`, not an Elixir atom,
+  unless the input is trusted (`trusted: true`, then a keyword is an
+  atom): decoding DXN data can never exhaust the atom table by default.
 
   `struct` is schema-dependent: without a compiled `.dxns` schema for a
   given name it decodes to an opaque `Dextrin.Struct`; with one
@@ -47,6 +47,7 @@ defmodule Dextrin do
           validate: boolean(),
           pretty: boolean(),
           indent: non_neg_integer(),
+          width: pos_integer(),
           trusted: boolean()
         ]
 
@@ -56,13 +57,12 @@ defmodule Dextrin do
   engine reports more than one (`Ichor.Actions.evaluate/5`'s own
   `Ichor.Error.t() | [Ichor.Error.t()]`).
 
-  Decodes `keyword` as a real Elixir atom by default (`trusted: true`)
-  — see `Dextrin.Registry.put_trusted/2`'s own doc for exactly what
-  this does and doesn't affect. Pass `trusted: false` for any source
-  you *don't* fully control; the default assumes a source you do
-  (your own config, your own application's data, ...), not arbitrary
-  untrusted/network input, where an unbounded `String.to_atom/1` could
-  exhaust the atom table.
+  **Safe by default**: `keyword` decodes as `Dextrin.Keyword.t()`, never
+  an atom, so no input can exhaust the atom table. Pass `trusted: true`
+  for a source you control (your own config, your own application's
+  data) and a keyword decodes as a real Elixir atom -- opt-in, like
+  Jason's `keys: :atoms`; never for network input. See
+  `Dextrin.Registry.put_trusted/2` for exactly what it affects.
   """
   @spec decode(String.t(), opts()) ::
           {:ok, term()} | {:error, Dextrin.Error.t() | [Dextrin.Error.t()]}
@@ -79,10 +79,13 @@ defmodule Dextrin do
   Single-line, minimal-whitespace by default — the smallest text this
   value can round-trip through, with no line-wrapping or indentation
   at all (`Dextrin.Text.Printer`). Pass `pretty: true` for multi-line,
-  indented output instead (`Dextrin.Text.Formatter`) — `indent:` then
-  sets the number of spaces per nesting level (default 2). Both
-  produce the exact same value on the way back through `decode/2`;
-  `pretty`/`indent` are a rendering choice, never a semantic one.
+  indented output instead (`Dextrin.Text.Formatter`): the top-level
+  collection one entry per line, a nested one on one line when it fits.
+  `indent:` then sets the number of spaces per nesting level (default 2),
+  and `width:` the columns a nested collection's one line must fit in
+  (default 80). Both produce the exact same value on the way back through
+  `decode/2`; `pretty`/`indent`/`width` are a rendering choice, never a
+  semantic one.
 
       {:ok, value} = Dextrin.decode("%{x: 1, y: 2}")
 

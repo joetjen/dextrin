@@ -68,8 +68,13 @@ defmodule Dextrin.Text.Printer do
 
   def print(s, _opts) when is_binary(s), do: {:ok, quote_string(s)}
 
-  def print(%Bytes{data: data}, _opts),
+  # A bitstring that is not a binary can be no string: it is bits.
+  def print(bits, opts) when is_bitstring(bits), do: print(Bytes.new(bits), opts)
+
+  def print(%Bytes{data: data}, _opts) when is_binary(data),
     do: {:ok, tag_form("bytes", quote_string(Base.encode64(data)))}
+
+  def print(%Bytes{data: bits}, _opts), do: {:ok, bits_form(bits)}
 
   def print(%Char{codepoint: cp}, _opts), do: {:ok, "?" <> print_char_body(cp)}
 
@@ -100,7 +105,9 @@ defmodule Dextrin.Text.Printer do
 
   def print(%Array{items: items}, opts) do
     with {:ok, printed} <- items |> Tuple.to_list() |> print_all(opts) do
-      {:ok, tag_form("array", "[" <> Enum.join(printed, " ") <> "]")}
+      # `@array[`, the bracket against the tag, is the preferred spelling
+      # (Jan, 2026-10-20); `@array [` still reads.
+      {:ok, "@array[" <> Enum.join(printed, " ") <> "]"}
     end
   end
 
@@ -145,30 +152,29 @@ defmodule Dextrin.Text.Printer do
     end
   end
 
-  def print(%Date{} = date, _opts), do: {:ok, "~D[" <> Date.to_iso8601(date) <> "]"}
-  def print(%Time{} = time, _opts), do: {:ok, "~T[" <> Time.to_iso8601(time) <> "]"}
-
-  def print(%DateTime{utc_offset: 0, std_offset: 0} = dt, _opts) do
-    {:ok,
-     "~U[" <>
-       Date.to_iso8601(DateTime.to_date(dt)) <>
-       " " <> Time.to_iso8601(DateTime.to_time(dt)) <> "Z]"}
-  end
-
-  def print(%DateTime{} = dt, _opts),
-    do: {:ok, tag_form("datetime", quote_string(DateTime.to_iso8601(dt)))}
-
-  def print(%Dextrin.Duration{} = d, _opts) do
-    fields = Tags.duration_bits() |> Enum.map(&Map.get(d, &1))
-    elixir_duration = build_elixir_duration(Tags.duration_bits(), fields)
-    {:ok, tag_form("duration", quote_string(Duration.to_iso8601(elixir_duration)))}
+  # Dates and times are ISO 8601 strings under their tag (DXN.md §1.2,
+  # Jan, 2026-10-20), written by Dextrin.Temporal.
+  def print(value, _opts)
+      when is_struct(value, Date) or is_struct(value, Time) or is_struct(value, DateTime) or
+             is_struct(value, NaiveDateTime) or is_struct(value, Dextrin.Nanos) or
+             is_struct(value, Dextrin.Duration) do
+    {:ok, tag, text} = Dextrin.Temporal.tagged(value)
+    {:ok, tag_form(tag, quote_string(text))}
   end
 
   def print(%Uuid{} = uuid, _opts), do: {:ok, tag_form("uuid", quote_string(Uuid.format(uuid)))}
+
+  def print(%Dextrin.ObjectId{} = id, _opts),
+    do: {:ok, tag_form("objectid", quote_string(Dextrin.ObjectId.format(id)))}
+
+  def print(%Dextrin.Ip{} = ip, _opts),
+    do: {:ok, tag_form("ip", quote_string(Dextrin.Ip.format(ip)))}
+
   def print(%Uri{value: value}, _opts), do: {:ok, tag_form("uri", quote_string(value))}
 
+  # `@regex "pattern"`, its flags in a header when it has any (DXN.md §1.2).
   def print(%Regex{source: source, opts: re_opts}, _opts) do
-    {:ok, "~r/" <> source <> "/" <> Tags.regex_opts_to_flags(re_opts)}
+    {:ok, regex_form(Tags.regex_opts_to_flags(re_opts), quote_string(source))}
   end
 
   def print(%CustomTag{name: name, value: value}, opts) do
@@ -362,38 +368,6 @@ defmodule Dextrin.Text.Printer do
   defp escape_char(cp) when cp < 0x20, do: "\\x{#{Integer.to_string(cp, 16)}}"
   defp escape_char(cp), do: <<cp::utf8>>
 
-  # `Dextrin.Duration`'s plural field names (`:years`, `:months`, ...)
-  # don't match Elixir's built-in `Duration` struct's singular ones
-  # (`:year`, `:month`, ...) — mapped explicitly rather than assumed.
-  defp build_elixir_duration(fields, values) do
-    Enum.zip(fields, values)
-    |> Enum.reduce(%Duration{}, fn
-      {_field, nil}, acc ->
-        acc
-
-      {:years, v}, acc ->
-        %{acc | year: v}
-
-      {:months, v}, acc ->
-        %{acc | month: v}
-
-      {:weeks, v}, acc ->
-        %{acc | week: v}
-
-      {:days, v}, acc ->
-        %{acc | day: v}
-
-      {:hours, v}, acc ->
-        %{acc | hour: v}
-
-      {:minutes, v}, acc ->
-        %{acc | minute: v}
-
-      {:microseconds, micro}, acc ->
-        %{acc | second: div(micro, 1_000_000), microsecond: {rem(micro, 1_000_000), 6}}
-    end)
-  end
-
   # The version a struct is written with: the latest loaded version of
   # its schema, or its own when there is no schema (DXN.md §4.8).
   @doc false
@@ -411,4 +385,22 @@ defmodule Dextrin.Text.Printer do
       pair -> pair
     end)
   end
+
+  @doc false
+  # `@bits {"..." n}` (DXN.md §1.5): the bytes in base64, the unused bits
+  # zero, and the count. Shared with the canonical form.
+  @spec bits_form(bitstring()) :: String.t()
+  def bits_form(bits) do
+    {data, count} = Dextrin.Bits.parts(bits)
+
+    tag_form(
+      "bits",
+      "{" <> quote_string(Base.encode64(data)) <> " " <> Integer.to_string(count) <> "}"
+    )
+  end
+
+  @doc false
+  # `@regex "pattern"`, or `@regex(flags) "pattern"` (DXN.md §1.2).
+  def regex_form("", pattern), do: "@regex " <> pattern
+  def regex_form(flags, pattern), do: "@regex(" <> flags <> ") " <> pattern
 end

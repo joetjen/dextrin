@@ -17,14 +17,14 @@ Elixir-API-level) examples.
     host:     "db.internal"
     port:     5432
     pool:     10
-    timeout:  ~T[00:00:30]
+    timeout:  @time "00:00:30"
   }
   features: @{:billing :notifications}
 }
 ```
 
 ```elixir
-{:ok, config} = File.read!("config.dxn") |> Dextrin.decode()
+{:ok, config} = File.read!("config.dxn") |> Dextrin.decode(trusted: true)
 config.db.host
 #=> "db.internal"
 MapSet.member?(config.features, :billing)
@@ -32,9 +32,10 @@ MapSet.member?(config.features, :billing)
 ```
 
 Shorthand keys (`db:`, `features:`) are DXN `keyword`s, which decode as
-real atoms by default (`trusted: true`) — that's what makes the dot
--access above work directly. Pass `trusted: false` for a config file
-you don't fully trust the contents of, and use
+real atoms when the input is trusted (`trusted: true`, for your own
+config file) — that's what makes the dot-access above work directly.
+Without it -- the default, and what any file you don't fully control
+gets -- they decode as `Dextrin.Keyword`s: use
 `Dextrin.Keyword.new("db")`-style keys (or `Map.fetch/2`) instead.
 
 ## An API payload with an explicit schema
@@ -60,7 +61,7 @@ payload = """
   id:      @uuid "550e8400-e29b-41d4-a716-446655440000"
   email:   "ada@example.com"
   role:    :admin
-  created: ~U[2024-01-01 00:00:00Z]
+  created: @datetime "2024-01-01T00:00:00Z"
 }
 """
 
@@ -168,7 +169,7 @@ companion module:
 ```elixir
 # geo_lib's own mix.exs
 defp deps do
-  [{:dextrin, "~> 0.2", optional: true}]
+  [{:dextrin, "~> 0.3", optional: true}]
 end
 ```
 

@@ -1,7 +1,7 @@
 defmodule Dextrin.MixProject do
   use Mix.Project
 
-  @version "0.2.0"
+  @version "0.3.0"
 
   def project do
     [
@@ -10,6 +10,9 @@ defmodule Dextrin.MixProject do
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
+      # test/fixtures/ holds data and the scripts that wrote it, which are
+      # run against an old release by hand, never as tests.
+      test_ignore_filters: [&String.starts_with?(&1, "test/fixtures/")],
       deps: deps(),
       description: description(),
       package: package(),
@@ -71,8 +74,8 @@ defmodule Dextrin.MixProject do
       # generates lib/dextrin/text/grammar/native.ex ahead of time --
       # it's never referenced by any code that ships, hence `only:
       # :dev, runtime: false`.
-      {:ichor_runtime, "~> 0.4"},
-      {:ichor, "~> 0.5", only: :dev, runtime: false},
+      {:ichor_runtime, "~> 0.6"},
+      {:ichor, "~> 0.7", only: :dev, runtime: false},
 
       # `~> 3.0`, not `~> 2.1` -- 2.4.1 (the version that constraint
       # resolved to) carries a real, published MEDIUM-severity DoS
@@ -94,6 +97,9 @@ defmodule Dextrin.MixProject do
   # (slowest, especially its first PLT build) runs last.
   defp aliases do
     [
+      # HexDocs gets the README through `doc_src/` (see `readme_for_docs/1`);
+      # `mix hex.publish` builds the docs through this alias too.
+      docs: [&readme_for_docs/1, "docs"],
       precommit: [
         "format",
         "compile --warnings-as-errors",
@@ -106,7 +112,8 @@ defmodule Dextrin.MixProject do
   end
 
   defp description do
-    "DXN (Data eXchange Notation) for Elixir -- .dxn text, .dxnb binary, " <>
+    "Under heavy development: not for production use before 1.0.0. " <>
+      "DXN (Data eXchange Notation) for Elixir -- .dxn text, .dxnb binary, " <>
       "and .dxns schema documents, built on the Ichor grammar compiler."
   end
 
@@ -137,7 +144,7 @@ defmodule Dextrin.MixProject do
 
   defp extras do
     [
-      "README.md",
+      {"doc_src/README.md", filename: "readme", source: "README.md"},
       "guides/TUTORIAL.md",
       "guides/EXAMPLES.md",
       "guides/CHEATSHEET.md",
@@ -149,6 +156,21 @@ defmodule Dextrin.MixProject do
       "CONTRIBUTING.md",
       "LICENSE"
     ]
+  end
+
+  # The README as HexDocs is given it (Jan, 2026-10-20): ExDoc renders
+  # no GitHub alert, so each `> [!WARNING]` becomes ExDoc's own warning
+  # admonition, and the README itself stays as GitHub shows it. Agreed
+  # with Ichor and Cooper, which do the same.
+  defp readme_for_docs(_args) do
+    File.mkdir_p!("doc_src")
+
+    readme =
+      "README.md"
+      |> File.read!()
+      |> String.replace(~r/^> \[!WARNING\]$/m, "> #### Warning {: .warning}")
+
+    File.write!("doc_src/README.md", readme)
   end
 
   defp groups_for_extras do

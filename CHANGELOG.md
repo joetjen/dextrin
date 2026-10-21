@@ -7,6 +7,375 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-21
+
+One way to write a value, nanoseconds, `@objectid` and `@ip`, the
+smallest `.dxnb`, and DXNS as a superset of the schema languages DXN is
+compared with. Breaking: sigils are gone, `.dxnb` gains tags a 0.2
+reader does not know, and a schema that misused a refine key no longer
+compiles.
+
+### Migrating from 0.2.x
+
+- **Text: sigils are gone.** Rewrite `~D[2026-10-20]` as
+  `@date "2026-10-20"`, `~T[14:30:00]` as `@time "14:30:00"`,
+  `~U[2026-10-20 14:30:00Z]` as `@datetime "2026-10-20T14:30:00Z"`, a
+  naive date-time as `@local-datetime "2026-10-20T14:30:00"`, and
+  `~r/^a/i` as `@regex(i) "^a"`. A sigil is now `syntax`.
+- **Binary: deploy readers first.** 0.3 writes times, datetimes, local
+  date-times and durations in nanoseconds under tags 217-220,
+  `@objectid` and `@ip` under 221, 52 and 54, and a float in half or
+  single precision when that holds it exactly. A 0.2 reader refuses all
+  of these; a 0.3 reader still reads everything 0.2 wrote.
+- **`Dextrin.Duration`'s seconds are `nanoseconds`**, one field for the
+  seconds and their fraction; a time or datetime finer than a
+  microsecond decodes to a `Dextrin.Nanos`.
+- **`:timestamp` is a datetime in UTC**, `{:refine :datetime %{offsets:
+  ["Z"]}}`; a schema naming it keeps working.
+- **Schemas are checked harder.** An unknown refine key, a refine
+  argument of the wrong kind, `min-contains` without `contains`, and an
+  unknown `format:` are compile errors; a constraint on a value it does
+  not apply to refuses the value instead of raising; `{:enum 1}` no
+  longer takes `1.0`.
+- **A trusted decode keeps six keywords** -- `:nan`,
+  `:positive_infinity`, `:negative_infinity`, `:nil`, `:true`, `:false`
+  -- as `Dextrin.Keyword`, since their atoms are already values.
+- **`@uuid` reads only 8-4-4-4-12 hex digits.**
+- **ichor_runtime 0.6** is the runtime dependency.
+
+### Changed
+
+- **ichor_runtime 0.6** (ichor 0.7 for `mix ichor.gen`), the parser
+  regenerated with it: a syntax error names the line and token where the
+  parse broke and what was expected there, not the document's start;
+  `mix dextrin.check` reports that line.
+- **DXN.md says a pattern PCRE does not compile is `syntax`**, as every
+  implementation with PCRE already refused it, and names Node's limit:
+  without PCRE, it reads any pattern.
+- **Every refine argument is checked when the schema compiles**: a
+  count that is no non-negative integer, a flag that is no boolean,
+  `multiple-of: 0`, `bits: 5`, a `pattern` that is no regex and the like
+  are compile errors (`schema/compile`); some raised at check time
+  before. A compile error writes the value it refuses in DXN, not as
+  Elixir's `inspect` shows it.
+- **A refine constraint refuses a value it does not apply to**: a length
+  on an integer, a range on a string, `bits` on a negative integer.
+  Before, several such checks raised; `finite: false` and
+  `unique: false` took any value at all. A constraint key that is no
+  name is a compile error, no longer a crash.
+- **An unknown refine key is a compile error** (`schema/compile`), as
+  are `min-contains:` and `max-contains:` without `contains:`. A misspelt
+  key (`min-lenght:`) refused every value before, silently.
+- **`.dxnb` writes the smallest form of a float, a UTC datetime and a
+  regex without flags** (Jan, 2026-10-20; DXN.md §2.2): a float in the
+  shortest of CBOR's half, single and double precision that holds it
+  exactly (NaN and the infinities in half), a datetime in UTC as its bare
+  nanoseconds, a regex without flags as its bare pattern. A reader reads
+  every form, half-precision floats included, which it refused before.
+- **One way to write a value: every sigil is gone** (Jan, 2026-10-20;
+  DXN.md §1.2). Breaking. Dates and times are ISO 8601 strings under a
+  tag -- `@date "2026-10-20"`, `@time "14:30:00.5"`, `@datetime
+  "2026-10-20T14:30:00Z"`, and the new `@local-datetime
+  "2026-10-20T14:30:00"` -- and a regex is `@regex "pattern"`, its flags
+  in a header, `@regex(im) "..."`, or inline, `@regex "(?im)..."`.
+  `~D[...]`, `~T[...]`, `~U[...]` and `~r/.../` are refused.
+- **`timestamp` and `datetime` are one type**, `datetime`: an instant
+  with its offset, `Z` for UTC. Breaking. `:timestamp` in a schema is
+  sugar for `{:refine :datetime %{offsets: ["Z"]}}`, so a schema naming it
+  keeps its meaning.
+- **Times, datetimes, local date-times and durations carry nanoseconds**
+  (DXN.md §2.2). A value finer than a microsecond decodes to
+  `Dextrin.Nanos`; `Dextrin.Duration`'s seventh field is `nanoseconds`
+  (was `microseconds`). In `.dxnb` the nanosecond forms have new tags
+  (218 time, 219 datetime, 220 duration, 217 local date-time); 0.2's
+  microsecond tags (1, 210, 211, 212) are still read, as what they
+  meant, and never written, so a tag never changes its meaning.
+- **Refine keys `finite:` and `offsets:`** (DXN.md §4.2), and **NaN lies
+  outside every range**: `min`, `max` and both exclusive bounds refuse it.
+- **The README's size table is measured again**: the pretty layout and
+  the datetime spelling both changed it.
+- **A named type sees the named types beside it** (DXN.md §4.5): a
+  reference to a sibling in the same document resolves, in any order,
+  where it used to fall back to a struct reference; a named type that
+  reaches itself is refused (`schema/compile`).
+- **HexDocs shows the README's development warning as a warning box**
+  (Jan, 2026-10-20): ExDoc renders no GitHub alert, so `mix docs` gives
+  it the README with `> [!WARNING]` turned into ExDoc's own admonition,
+  written to `doc_src/`; the README itself stays as GitHub shows it, and
+  "View Source" still points at it.
+- **The package description opens with the development warning**
+  (Jan, 2026-10-20), "Under heavy development: not for production use
+  before 1.0.0.", so the registry's search results show it too.
+- **An array is written `@array[1 2]`**, its bracket against the tag
+  (Jan, 2026-10-20): the preferred spelling, which the compact text
+  form now writes as the pretty layout and the canonical form already
+  did. `@array [1 2]` still reads, as the same array.
+- **The README opens with a warning** (Jan, 2026-10-20): the library
+  is under heavy development and not for production use before `1.0.0`;
+  things can and will break, and the specification can and will change,
+  between any two releases until then.
+- **`{:one-of ...}` means exactly one variant matches** (Jan,
+  2026-10-20; JSON Schema's `oneOf`), and **`{:any-of ...}`** is the new
+  "one or more" (`anyOf`) -- what `one-of` meant before. Breaking: a
+  schema whose `one-of` variants overlap now refuses a value two of them
+  match; write `any-of` to keep the old meaning. `{:nilable t}` is sugar
+  for `{:any-of :nil t}`.
+- **DXN.md says `.dxnb` writes `-0.0M` as `0.0M`** (Jan, 2026-10-20):
+  CBOR's decimal (tag 4) has no negative zero, so it is the one value
+  the binary form does not keep; text keeps the sign (§1.5, §2.2).
+- **The pretty layout keeps short collections on one line** (Jan,
+  2026-10-20): the top-level collection still breaks, one entry per
+  line, however short; a nested one is written on one line, its entries
+  single-space separated, when that line -- indent and key included --
+  fits the width (`width:`, 80). `encode/2` with `pretty: true`,
+  `Dextrin.Document.format/2` and `mix dextrin.format` all lay out this
+  way. A nested collection holding a comment, or a blank line between
+  its entries, stays over lines.
+- **Decoding is untrusted by default** (Jan, 2026-10-19, ASCO's
+  proposal): `decode/2`, `decode_binary/2` and `Dextrin.Document` decode
+  a keyword as `Dextrin.Keyword.t()`, so no input can exhaust the atom
+  table; `trusted: true` (or `Dextrin.Registry.put_trusted/2`) is the
+  opt-in for a source you control, as Jason's `keys: :atoms`. Breaking
+  for callers that relied on atoms from the default. A `Dextrin.Document`
+  path's atom names a keyword key either way, and `update/3` compares the
+  caller's atoms with the document's keywords by name, answering edits in
+  the caller's atoms where they exist (`String.to_existing_atom/1` --
+  never a new atom).
+- **A field typed with a namespaced reference takes a struct of that
+  name** (DXN.md §4.7): a field typed `geo/Address` accepts
+  `%geo/Address{...}`, and refuses `%Address{...}`. It was the other way
+  round, because a schema `FileResolver` found as `geo/Address` kept the
+  name its file gave it, `Address`. Breaking for documents that wrote the
+  bare name; write the name the reference uses.
+- **DXN.md stays format version 1.0** (Jan, 2026-10-20): the version
+  moves past 1.0 only once the libraries reach 1.0.0, so this release's
+  changes to `.dxns` documents (the body lists the fields, `%schema(N)`
+  carries a version) and `bits` keep `1.0`. A reader accepts any `1.x`
+  header; the `.dxnb` version byte is `1`.
+- **DXN.md gains `bits`**, a run of bits that is not whole bytes:
+  `@bits {"oA==" 3}` in text, private tag 216 (`T_BITS`) around
+  `[bytes, count]` in `.dxnb`, `:bits` in a schema. Bits and bytes are
+  one value space; a whole number of bytes is bytes. The private tag
+  range is 200-216 (§2.5 still said 200-214).
+- DXN.md §5 lists the four errors a document's edits are refused with:
+  `document/not-found`, `document/exists`, `document/ambiguous` and
+  `document/not-a-collection`, which every implementation raised and the
+  conformance suite expects.
+- **A 0.1 schema says it is one**: `fields: @ordered %{...}`,
+  `closed: true` and `forbidden: [...]` are refused (`schema/compile`)
+  naming Dextrin 0.1's syntax and what a schema is written as now,
+  rather than as a field of no known type.
+
+### Added
+
+- **The README compares DXNS with the other schema languages**, says
+  why a DXNS type is never closed, and how to change a schema across
+  services that deploy one at a time.
+- **Sugar** (Jan, 2026-10-20; DXN.md §4.1; the superset's group 9):
+  `:int32`, `:int64`, `:uint32`, `:uint64` and `:float32`, `:number`,
+  `{:const v}`, and `{:if I T E}` (JSON Schema's if/then/else).
+- **Annotations, `{:doc T %{...}}`** (Jan, 2026-10-20; DXN.md §4.1b;
+  the superset's group 8): a `title`, `description`, `examples`,
+  `read-only`, `write-only`, `deprecated` and free `meta` on any type,
+  around a whole schema, named type or generic too, and `values:` for an
+  enum's single values. They change nothing a type takes;
+  `Dextrin.Schema.annotations/2` reads them and `Dextrin.Schema.Compiled`
+  holds a schema's. `mix dextrin.docs` shows them: a title, the
+  description, examples, meta and an enum's values beside the
+  definition, deprecated, read-only and write-only as chips; the example
+  tree carries a few.
+- **`{:tagged name T}`** (Jan, 2026-10-20; DXN.md §4.1; the superset's
+  group 7): a custom tag of that name whose value is a `T` -- or an
+  application's value its registered tag encoder writes as one.
+- **Encoded content** (Jan, 2026-10-20; DXN.md §4.2): `encoding:` (RFC
+  4648's base64, base64url, base32, base16), `media-type:` and
+  `content: T` on strings -- the string, decoded, is a DXN document of
+  type T, `.dxnb` under `application/dxnb` -- and `encodes: T` and
+  `encodes-seq: T` on bytes, CDDL's `.cbor` and `.cborseq`.
+  `Dextrin.Binary.Decoder.decode_sequence/2` reads documents back to
+  back.
+- **`format:`** (Jan, 2026-10-20; DXN.md §4.2a): a string in one of a
+  closed set of 22 formats -- `date`, `time`, `datetime`,
+  `local-datetime`, `duration`, `uuid`, `ipv4`, `ipv6`, `hostname`,
+  `idn-hostname`, `email`, `idn-email`, `uri`, `uri-reference`, `iri`,
+  `iri-reference`, `uri-template`, `json-pointer`,
+  `relative-json-pointer`, `semver`, `mac`, `host-port` --
+  `Dextrin.Schema.Format`. A format DXN has a tag for is read by that
+  tag's reader; every other one by a grammar the spec gives.
+- **Refine keys on scalars** (Jan, 2026-10-20; DXN.md §4.2; the
+  superset's group 5): `min-length`/`max-length` on keywords, symbols,
+  bytes (in bytes) and bits (in bits, under `:bits`); `min-bytes`/
+  `max-bytes` (UTF-8); `pattern` on keywords, symbols and bytes;
+  `min-precision`/`max-precision` and `min-exponent`/`max-exponent` on
+  decimals; `float32: true`; `bits: [0 1 4]` (RFC 8610's `.bits`);
+  `min`/`max`/`exclusive-*` on dates, times, datetimes, local date-times
+  and durations; `before-now`, `after-now`, `within: @duration "PT1H"`;
+  `resolution: :millisecond`.
+- **A list's items in order, and lists' refine keys** (Jan, 2026-10-20;
+  DXN.md §4.1a, §4.2; the superset's group 4). `{:list-items :string
+  {:repeat :integer 0 nil}}` is a list item by item: a type for one item,
+  `{:repeat p min max}` for several (`max` `nil` for no bound), and
+  `{:repeat {:group a b} min max}` for several together; a repeat takes
+  as many items as it can and gives them back one at a time.
+  `{:tuple-of-all T}` is a tuple of any length. The refine keys
+  `contains:`, `min-contains:`, `max-contains:`, `unique:` and
+  `unique-by:` count and compare a collection's elements, two values the
+  same when their canonical forms are; `min-count:`/`max-count:` count an
+  array's too.
+- **`@objectid` and `@ip` are built in** (Jan, 2026-10-20; DXN.md §1.3),
+  like `@uuid`: readable in text, their raw bytes in `.dxnb`.
+  `@objectid "507f1f77bcf86cd799439011"` is BSON's 12-byte ObjectId
+  (`Dextrin.ObjectId`, tag 221), and may be a map key. `@ip "192.0.2.1"`,
+  `"10.0.0.0/8"`, `"2001:db8::1"` and `"2001:db8::/32"` are an address or
+  a prefix (`Dextrin.Ip`), written as RFC 9164 says, CBOR tags 52 and 54;
+  DXNS adds `:objectid`, `:ip` and the refine keys `version:` and
+  `prefix:`. **`.dxnb` uses the smallest representation that keeps a
+  value**, now said in DXN.md §2.2.
+- **`mix dextrin.check` and `Dextrin.Schema.Tree`** (Jan, 2026-10-20): a
+  tree of `.dxns` files read as one -- every entry named from its path
+  (DXN.md §4.6, `Dextrin.Schema.Layout`), the files compiled in the order
+  their references need -- with every problem reported as `file:line`:
+  syntax, compiling, a versioned file holding another version, one
+  version in two files, files needing each other, and a name resolving
+  to nothing unless its namespace is `--extern`. `Dextrin.Schema.compile/3`
+  takes the full names a tree gives a file's entries.
+- **Generic named types** (DXN.md §4.5, Jan, 2026-10-20):
+  `Page: {:generic [t] %shape{items: {:list-of t}}}` declares a named
+  type with parameters, and `{:of Page Order}` uses it. A generic may use
+  itself, guarded; a `%schema` cannot be generic, since a struct has one
+  name on the wire.
+- **Recursive named types** (DXN.md §4.5, Jan, 2026-10-20): a named type
+  or shape may refer to itself, directly or through others, when the
+  cycle passes a field or a collection's elements -- `Comment:
+  %shape{replies?: {:list-of Comment}}`, a JSON-like value type. A cycle
+  with no such guard, `A: {:nilable A}`, is a compile error.
+- **`%shape{...}` and `{:case field %{...}}`** (DXN.md §4.4a, Jan,
+  2026-10-20; design/shapes-and-case.md): a shape is a named, unversioned
+  plain-map type with a `%schema` body, which fills its missing fields'
+  defaults when it decodes; a case chooses a field's type by its sibling
+  field's value, anywhere in the field's type. **`Dextrin.Schema.check/3`**
+  answers whether a value matches a schema, shape or named type without
+  changing it, and **`conform/3`** answers it with the defaults filled.
+- **The conformance adapter answers `media-type`, `identify` and
+  `identify-binary`** (`DXN.md` §6): the form a media type names, and
+  whether a body is worth decoding as text, a schema or binary, so the
+  suite checks `Dextrin.Format` across implementations.
+- **`mix dextrin.docs` and `Dextrin.Schema.Docs`** (Jan, 2026-10-20):
+  HTML documentation for a directory of `.dxns` schemas: a sidebar tree
+  of every namespace and definition at the left of every page; the index
+  and every namespace's page in one design, a section per namespace
+  below it listing its own namespaces and definitions, then its own
+  definitions in full; the pages a directory tree, one `index.html` per
+  namespace; every reference a link, every version shown, a field's
+  position in the binary form; light or dark, the reader's choice kept
+  in localStorage. Names come from the file paths (DXN.md §4.6); a
+  definition's documentation is the comment block directly above it and
+  the comment on its line, in a small Markdown subset. `example/` holds
+  a schema set using every kind of definition, and its generated `doc/`.
+- **New type forms** (DXN.md §4.1): `{:not t}`, `:never` (JSON
+  Schema's `false`), and element types for the collections that had
+  none: `{:array-of t}`, `{:ordered-map-of k v}`, `{:sorted-set-of t}`.
+- **`Dextrin.Format`** (DXN.md §6, ASCO's proposal): `media_type/1`,
+  `extension/1`, `form/1` -- the three media types, and any `+dxn`
+  suffix as text -- and `identifies?/2`, a cheap prefix test of whether
+  a body is worth decoding as a form: binary by the envelope's magic,
+  text and schemas by a first significant `%` after whitespace, comments
+  and a header. Lists and scalars stay unrecognised on purpose: they
+  overlap with JSON (Jan, 2026-10-20).
+
+- `Dextrin.Schema.compile_all/2`: several `.dxns` documents compiled into
+  one registry, in order, over a base registry; the first that does not
+  compile is the refusal, naming which (ASCO's proposal, part 3).
+- **Dotted names** (DXN.md §1.1, Jan 2026-10-19): a name is segments
+  joined by `.`, with at most one `/` between a namespace and a name --
+  `%Foo.Bar/Baz{...}`, `acme.billing/invoice`, `:a.b`, `a.b: 1` -- for
+  structs, symbols, keywords and map keys alike. A name with two `/`, or
+  an empty segment, is refused. The parser is regenerated.
+- DXN.md §4.6 states the file convention a reader that resolves names to
+  files follows -- `Foo.Bar/Baz(N)` in `Foo/Bar/Baz-vN.dxns`,
+  `Foo/Bar/Baz/vN.dxns` or `Foo.Bar.Baz-vN.dxns` (`-v1` optional), or the
+  entry `Baz` in `Foo.Bar.dxns` -- with a version found twice refused.
+- **`Dextrin.Schema.FileResolver` follows DXN.md §4.6**: the four
+  layouts, the first search path that has the name deciding, a file's
+  version its schema's, one version found once, and every version found
+  loaded, so an older struct reaches the materializer. The old
+  `Namespace.dxns` convention is one of the layouts and keeps working.
+- A resolver may answer every version it finds (`{:ok, [compiled]}`) or
+  why they cannot be used (`{:error, error}`), which a decode refuses
+  with; looking up an exact version consults it too.
+
+- **`bits`**, as DXN.md defines it: a bitstring that is not whole
+  bytes -- bare, or in a `Dextrin.Bytes` -- is written `@bits {"oA==" 3}`
+  and `T_BITS` (216), and reads back; `Dextrin.Bits` holds the rules.
+  `:bits` in a schema takes bits and bytes, `:bytes` only whole bytes;
+  bits are no map key.
+- Takes `ichor_runtime` 0.5 and `ichor` 0.6 (was 0.4 and 0.5), for the
+  action errors below; the DXN parser is regenerated with `ichor` 0.6.
+
+### Fixed
+
+- **A generic checked by its own name refuses the value**
+  (`schema/type-mismatch`), where `Dextrin.Schema.check/3` raised: a
+  generic takes no value until `{:of Name ...}` gives its arguments.
+
+- **An enum's literal is the value itself**: `{:enum 1}` took `1.0`,
+  which Elixir's `==` calls equal and DXN does not (§1.5).
+- **`bits` is a built-in tag** for `{:tagged}`, which took it as custom.
+- **The docs show an enum value whose annotations are no map**, where
+  `mix dextrin.docs` raised.
+
+- **A trusted decode keeps `:nan`, `:positive_infinity`,
+  `:negative_infinity`, `:nil`, `:true` and `:false` keywords**
+  (`Dextrin.Keyword.trusted/1`): their atoms are already NaN, the
+  infinities, nil and the booleans, so a trusted round trip turned the
+  keyword into that value.
+- **NaN and the infinities are numbers in a schema**: `min: -Infinity`,
+  `max: Infinity`, `{:enum NaN}` compiled them as keywords.
+- **A final newline is no part of a format, a date or a time**: the
+  grammars' `$` matched before one (PCRE's `D` flag now), and
+  `@time`, `@datetime`, `@local-datetime` and `@duration` read one;
+  `host-port` raised on `"a:80\n"`.
+- **A hostname's 253 are codepoints**, not graphemes; an unknown type's
+  compile error writes it in DXN.
+
+- **A string's length counts codepoints**, as DXN.md §4.2 says, not
+  graphemes: `"e\u0301"` is two long, as in every other implementation.
+- **A `.dxnb` document read inside another keeps the outer one's state**:
+  the shared-item and stringref tables are put back after it.
+
+- **`@uuid` reads only 8-4-4-4-12 hex digits.** It took 32 bare hex
+  digits, or hyphens anywhere, which the other implementations refuse.
+
+- **`@ip` writes every address so it reads back, and refuses a sign**:
+  Erlang's `:inet.ntoa` wrote a link-local address with a non-zero second
+  group (`fe80:1::1`) as `fe80::1%01`, which no reader takes, and its
+  parser took `+1.2.3.4`. Found by node-dextrin's port.
+- **A field naming another file's named type resolves** (DXN.md §4.6):
+  `Dextrin.Schema.FileResolver` compiled each file on its own, so
+  `discount: acme.common/Percentage` named a struct that never came and
+  refused every decimal. A file is now compiled with its full names, over
+  the named types its search path defines.
+- **An error found while parsing text says where it is**: a map key
+  that is not allowed, a value that is not one, a schema violation now
+  carry the line and column of what they are about, and
+  `Dextrin.Error.format/1` shows them. 0.2.0 said they did; they had
+  neither, because Ichor placed no error an action returned.
+- `Dextrin.Schema.compile/2` crashed (`Protocol.UndefinedError`) on a
+  document whose top level is a struct or a tuple -- maps to `is_map/1`
+  -- instead of refusing it; it refuses every document that is not a
+  plain map (`schema/compile`). Found by ASCO.
+- Encoding a bitstring that is not whole bytes crashed the text and
+  binary writers; it is `bits` now.
+- A schema a resolver found under a namespaced name (`geo/Point` in
+  `geo.dxns`) kept the name it had in its file, so reading an older
+  version of it looked for `Point` and missed.
+- `Dextrin.Document.format/2` wrote the header without its space
+  (`@dxn"1.0"`); it keeps one space between the tag and the version,
+  however they were spaced.
+- `Dextrin.Document.format/2` dropped a document's final newline; it now
+  ends with one exactly when the source did. `mix dextrin.format` still
+  writes a file with one final newline.
+
 ## [0.2.0] - 2026-10-19
 
 Versioned schemas, extra fields, the conformance suite's adapter and a

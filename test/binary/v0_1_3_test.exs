@@ -34,7 +34,7 @@ defmodule Dextrin.Binary.V013Test do
 
   test "every value 0.1.3 wrote reads back as its text decodes" do
     assert comparable(Dextrin.decode_binary(fixture("values.dxnb"))) ==
-             comparable(Dextrin.decode(fixture("values.dxn")))
+             comparable(Dextrin.decode(fixture("values.respelled.dxn")))
   end
 
   test "a struct 0.1.3 wrote has no version, and reads as version 1 of the same schema" do
@@ -42,7 +42,11 @@ defmodule Dextrin.Binary.V013Test do
              {:ok,
               Struct.keyed(
                 "User",
-                [{"name", "Ann"}, {"email", "ann@example.com"}, {"role", :admin}],
+                [
+                  {"name", "Ann"},
+                  {"email", "ann@example.com"},
+                  {"role", Dextrin.Keyword.new("admin")}
+                ],
                 1
               )}
   end

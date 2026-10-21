@@ -1,5 +1,11 @@
 # Dextrin
 
+> [!WARNING]
+> **Under heavy development: not for production use before `1.0.0`.**
+> Things can and will break, and the specification can and will change,
+> between any two releases until `1.0.0`. Do not use this library in a
+> production system yet.
+
 [![CI](https://github.com/joetjen/dextrin/actions/workflows/ci.yml/badge.svg)](https://github.com/joetjen/dextrin/actions/workflows/ci.yml)
 [![Hex.pm](https://img.shields.io/hexpm/v/dextrin.svg)](https://hex.pm/packages/dextrin)
 [![Documentation](https://img.shields.io/badge/hex-docs-blue.svg)](https://hexdocs.pm/dextrin)
@@ -18,7 +24,7 @@ This is the reference implementation. [`node-dextrin`](https://github.com/joetje
 below.
 
 ```elixir
-{:ok, value} = Dextrin.decode(~s(%{x: 1, y: 2}))
+{:ok, value} = Dextrin.decode(~s(%{x: 1, y: 2}), trusted: true)
 value
 #=> %{x: 1, y: 2}
 
@@ -26,27 +32,26 @@ Dextrin.encode(value)
 #=> {:ok, "%{x:1,y:2}"}
 
 {:ok, bytes} = Dextrin.encode_binary(value)
-Dextrin.decode_binary(bytes)
+Dextrin.decode_binary(bytes, trusted: true)
 #=> {:ok, %{x: 1, y: 2}}
 ```
 
-A plain map's shorthand keys (`x:`) are themselves DXN `keyword`s — `%{x: 1}`
-and `%{:x => 1}` are the exact same value, and `keyword`'s own Elixir type,
-per `DXN.md` §1.3, is a real atom, which is what both `decode/2` and
-`decode_binary/2` produce by default (`trusted: true`). Encoding accepts a
-bare atom the same way, anywhere a `keyword` is expected — `%{x: 1}` or
-`Dextrin.encode(:ok)` both work with no conversion needed first.
-
-That default assumes a source you control — your own config, your own
-application's data — not arbitrary untrusted/network input, where an
-unbounded `String.to_atom/1` could exhaust the atom table. Pass
-`trusted: false` for that case; `keyword` then decodes as `Dextrin.Keyword.t()`
-instead:
+**Decoding is safe by default.** A plain map's shorthand keys (`x:`) are
+themselves DXN `keyword`s — `%{x: 1}` and `%{:x => 1}` are the exact same
+value — and a keyword decodes as `Dextrin.Keyword.t()`, never an atom, so
+no input can exhaust the atom table:
 
 ```elixir
-Dextrin.decode(~s(%{x: 1, y: 2}), trusted: false)
+Dextrin.decode(~s(%{x: 1, y: 2}))
 #=> {:ok, %{%Dextrin.Keyword{name: "x"} => 1, %Dextrin.Keyword{name: "y"} => 2}}
 ```
+
+**Pass `trusted: true` for a source you control** — your own config, your
+own application's data — and a keyword decodes as a real atom, its own
+Elixir type per `DXN.md` §1.3, as in the first example. Like Jason's
+`keys: :atoms`, it is opt-in; never pass it for network input. Encoding
+takes a bare atom anywhere a `keyword` is expected either way —
+`%{x: 1}` or `Dextrin.encode(:ok)` need no conversion first.
 
 A schema-backed `struct`'s fields are the one place names *do* come back
 as plain strings regardless of `trusted:` — see the
@@ -136,10 +141,10 @@ as a string in JSON, for instance).
 
 | | config file | API response, 100 records | time series, 1,000 points | record with a 4 KiB blob |
 |---|---:|---:|---:|---:|
-| DXN text | 279 / 199 | 18,602 / 4,192 | 55,159 / 13,682 | 5,516 / 4,222 |
-| DXN text, pretty | 362 / 223 | 24,804 / 4,281 | 71,161 / 13,878 | 5,527 / 4,234 |
-| `.dxnb` | 270 / 214 | 14,085 / 3,739 | 33,006 / 13,611 | 4,145 / 4,168 |
-| `.dxnb`, shared | 270 / 214 | 9,117 / 3,678 | 26,017 / 13,339 | 4,145 / 4,168 |
+| DXN text | 279 / 199 | 19,402 / 4,218 | 63,159 / 13,895 | 5,516 / 4,222 |
+| DXN text, pretty | 314 / 216 | 23,504 / 4,249 | 67,161 / 13,961 | 5,527 / 4,234 |
+| `.dxnb` | 264 / 212 | 14,185 / 3,802 | 34,006 / 14,381 | 4,145 / 4,168 |
+| `.dxnb`, shared | 264 / 212 | 9,217 / 3,752 | 27,017 / 14,019 | 4,145 / 4,168 |
 | JSON | 306 / 207 | 19,202 / 4,201 | 56,159 / 13,692 | 5,514 / 4,216 |
 | JSON, pretty | 403 / 229 | 26,253 / 4,287 | 74,160 / 14,182 | 5,527 / 4,231 |
 | BSON | 312 / 231 | 17,621 / 4,448 | 36,903 / 15,700 | 4,161 / 4,184 |
@@ -148,14 +153,16 @@ as a string in JSON, for instance).
 | Protocol Buffers | 141 / 111 | 8,552 / 3,702 | 19,000 / 10,832 | 4,122 / 4,145 |
 
 - **DXN text is about JSON's size** -- keys need no quotes -- while
-  carrying the types JSON drops.
+  carrying the types JSON drops. Data full of dates and times is the
+  exception, about an eighth larger: each datetime names its type
+  (`@datetime "..."`) where JSON writes a bare string.
 - **`.dxnb` sits between JSON and the compact binaries.** Value sharing
   (`encode_binary(value, share: true)`) writes a repeated key or string
-  once; on the API response that brings it within 7% of Protocol
+  once; on the API response that brings it within 8% of Protocol
   Buffers, with no schema needed to read it.
-- **Where it is larger, it is carrying more.** A `.dxnb` timestamp keeps
-  microseconds and its type, where CBOR's and MessagePack's carry whole
-  seconds; a keyword key is tagged as a keyword rather than written as a
+- **Where it is larger, it is carrying more.** A `.dxnb` datetime keeps
+  nanoseconds, its offset and its type, where CBOR's and MessagePack's
+  carry whole seconds; a keyword key is tagged as a keyword rather than written as a
   plain string. Protocol Buffers is smallest because its schema, not the
   data, holds the field names.
 - **Compressed, the gap narrows.** Gzipped, DXN text stays within about
@@ -172,7 +179,7 @@ parser, and through Dextrin:
 | `9223372036854775808` | integer / integer | **9223372036854776000** / `BigInt` | **float** / `DXNInteger` | integer / integer |
 | `19.99` as an exact decimal | **float** / `Decimal` | **float** / `DXNDecimal` | **float** / `DXNDecimal` | **float** / `dextrin.decimal` |
 | `1.0` | float / float | **1, an integer** / float | float, **written back as `1`** / float | float / float |
-| a timestamp | **string** / `DateTime` | **string** / `DXNTimestamp` | **string** / `DXNTimestamp` | **string** / a `praxis.time` instant |
+| a datetime | **string** / `DateTime` | **string** / `DXNDateTime` | **string** / `DXNDateTime` | **string** / a `praxis.time` instant |
 | bytes | **base64 string** / `Dextrin.Bytes` | **base64 string** / `DXNBytes` | **base64 string** / `DXNBytes` | **base64 string** / `dextrin.bytes` |
 | a map keyed by integers | **string keys** / integer keys | **string keys** / integer keys | **string keys** / integer keys | **string keys** / integer keys |
 | a set | **list** / `MapSet` | **array** / `Set` | **array** / `DXNSet` | **vector** / set |
@@ -181,6 +188,103 @@ A bold entry is a value that did not come back as what was written. With
 Dextrin, the same document means the same thing in all four, and every
 implementation is held to that by the
 [Dextrin Conformance Suite](https://github.com/joetjen/praxis/tree/develop/libs_prx/dextrin_conformance).
+
+### How DXNS compares, as a schema language
+
+A `.dxns` schema is DXN data. It is meant to say everything the schema
+languages of the formats above can say, except what has no value or no
+meaning in DXN ([`design/schema-superset.md`](design/schema-superset.md)
+goes through them construct by construct). YAML, TOML and MessagePack
+have no schema language of their own; people use JSON Schema for them.
+
+| | DXNS | JSON Schema | MongoDB `$jsonSchema` | CDDL | Protobuf | Ion Schema |
+|---|---|---|---|---|---|---|
+| Written in the format it describes | ✓ | ✓ | ✓ | – | – | ✓ |
+| Typed records, with versions | ✓ | – | – | – | ~¹ | – |
+| Version changes checked in CI | ✓ | – | – | – | ~¹ | – |
+| Recursive types | ✓ | ✓ | – | ✓ | ✓ | ✓ |
+| Generic types | ✓ | ~² | – | ✓ | – | – |
+| A list's items in order | ✓ | ✓ | ✓ | ✓ | – | ✓ |
+| A type chosen by a sibling field | ✓ | ~³ | – | ~⁴ | ~⁵ | – |
+| String formats, checked the same everywhere | ✓ | ~⁶ | – | ~⁷ | ~⁸ | ~⁷ |
+| Decimals, ratios, dates, times, durations as types | ✓ | – | ~⁹ | ~¹⁰ | – | ~¹¹ |
+| Bytes holding an encoded document | ✓ | ✓ | – | ✓ | – | – |
+| Annotations and free metadata | ✓ | ✓ | ~¹² | – | ✓ | ✓ |
+| Closing a type to unknown fields | –¹³ | ✓ | ✓ | ✓ | – | ✓ |
+| One test suite every implementation passes | ✓ | ~⁶ | – | – | – | – |
+
+¹ Field numbers keep old readers working; checking a change takes a
+tool outside the language, such as `buf breaking`.
+² `$dynamicRef`, since draft 2020-12.
+³ `if`/`then`/`else`; OpenAPI adds a `discriminator` on top.
+⁴ A group choice, `//`, over maps with a literal member.
+⁵ `oneof` picks one field of several, not the type of one.
+⁶ The official test suite exists, but `format` only annotates unless a
+validator opts in, and each implements the formats its own way.
+⁷ Regular expressions (CDDL's `.regexp`, Ion Schema's `regex`); CDDL's
+`.abnf` takes a grammar.
+⁸ Through the separate `protovalidate` rules.
+⁹ `decimal` and `date` BSON types; no times of day or durations.
+¹⁰ Through tags and the prelude (`tdate`, `decfrac`); no durations.
+¹¹ `decimal` and `timestamp`, with precision and offsets; no durations.
+¹² `title` and `description` only.
+¹³ On purpose: see the next section.
+
+### Why a DXNS type is never closed
+
+JSON Schema's `additionalProperties: false`, Ion Schema's `closed` and
+CDDL's maps refuse a field the schema does not list. DXNS has no such
+switch, for two reasons:
+
+- **Closing is the reader's choice, not the type's.** A config loader
+  wants a typo in a hand-written file caught; a message consumer wants a
+  newer producer's fields to pass through untouched. The same `Order`
+  schema serves both, so whether unknown fields are refused belongs to
+  the decode: `Dextrin.decode(text, registry: r, strict: true)` refuses
+  them (`schema/undeclared-field`), and without `strict:` they are kept
+  -- in `.dxnb` as one trailing item (DXN.md §4.7) -- and written back out.
+- **A closed type breaks the next version.** Adding a field to a closed
+  type makes every older reader refuse every newer message, which turns
+  each compatible change into a breaking one. DXN's versions (below)
+  rest on readers that let what they do not know pass.
+
+A check that needs more -- say, refusing exactly the fields another
+schema allows -- runs after the decode, on the value it returns, where
+the application knows what it means.
+
+### Changing a schema across services
+
+Several services reading and writing the same schema never all deploy
+at once. DXNS makes that safe with versions, not with compatibility
+modes (DXN.md §4.8):
+
+- **Every schema has a version**, `%schema(3){...}`, and every version
+  stays loadable beside the others. A writer always writes the latest it
+  has loaded, and says which: `%Order(3){...}`.
+- **A newer message reaches an older reader**: it reads the fields it
+  knows, by name in text and by position in `.dxnb`, and keeps the rest
+  as extra fields. This is why a field is only ever *appended*: in
+  `.dxnb`, an older reader takes positions as they were.
+- **An older message reaches a newer reader** through the schema's
+  *materializer*, one function per schema that upgrades the old fields
+  to the latest version (`Dextrin.Registry.put_struct_materializer/3`).
+  Without one, reading the old version is an error, not a guess.
+- **CI checks the discipline**: `mix dextrin.compat` compares the last
+  release's schemas with the current ones. A version whose content
+  changed is an error -- two documents claiming to be `Order` v3 must
+  mean the same thing -- and it lists, for each schema, what changed
+  since each older version: the materializer's checklist.
+
+So a change deploys like this:
+
+1. **A compatible change** -- fields appended, nothing else -- deploys
+   in either order.
+2. **A breaking change** -- a field removed, moved or retyped -- deploys
+   **readers first**, each with a materializer for the old version, then
+   the writers.
+3. **A schema that services both read and write** changes only
+   compatibly, or is replaced by a new name (`OrderV2`) beside the old
+   one, and the services move over one at a time.
 
 ## Components
 
@@ -193,8 +297,8 @@ implementation is held to that by the
   `Dextrin.Uuid`, `Dextrin.Uri`, `Dextrin.Bytes`, `Dextrin.Char`,
   `Dextrin.CustomTag`) — small wrapper structs for the DXN types
   Elixir has nothing native for without losing information. `keyword`
-  is the one exception with two faces: a real atom by default
-  (`trusted: true`), `Dextrin.Keyword` when decoded untrusted. Every
+  is the one exception with two faces: `Dextrin.Keyword` by default,
+  a real atom when the input is trusted (`trusted: true`). Every
   other scalar/collection (integers, floats, strings, lists, plain
   maps, sets, dates, regexes, ...) decodes to the obvious native
   Elixir value.
@@ -235,7 +339,7 @@ Add `dextrin` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:dextrin, "~> 0.2.0"}
+    {:dextrin, "~> 0.3.0"}
   ]
 end
 ```

@@ -1,0 +1,67 @@
+# Types every Acme service shares.
+#
+# This is a *namespace file*: each entry is `acme.common/<Name>`, and any
+# other schema refers to one by that full name, for example
+# `acme.common/Money`. Keep this file small and stable -- a change here
+# reaches every service at once.
+
+@dxn "1.0"
+
+%{
+  # An amount of money in one currency.
+  #
+  # The amount is exact: always write it as a decimal (`19.99M`), never
+  # as a float. Two amounts are only comparable in the same `currency`.
+  Money: %schema{
+    amount: :decimal                       # never a float
+    currency: CurrencyCode
+    # The rate used when the amount was converted from another
+    # currency, as an exact ratio: `1095/1000` for 1.095.
+    exchange_rate?: :rational
+  }
+
+  # The ISO 4217 codes Acme invoices in.
+  CurrencyCode: {:enum :eur :usd :gbp :chf}
+
+  # An e-mail address, checked only roughly; the address is confirmed
+  # by sending mail to it, not by this pattern.
+  Email: {:refine :string %{pattern: @regex "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", max-length: 254}}
+
+  # An ISO 3166-1 alpha-2 country code, upper case: `DE`, `US`.
+  CountryCode: {:refine :string %{pattern: @regex "^[A-Z]{2}$"}}
+
+  # A string with at least one character in it.
+  NonEmptyString: {:refine :string %{min-length: 1}}
+
+  # A share from 0 to 100, both included.
+  Percentage: {:refine :decimal %{min: 0M, max: 100M}}
+
+  # Labels to filter by. Kept sorted, so two lists of the same tags are
+  # the same value.
+  Tags: {:sorted-set-of NonEmptyString}
+
+  # A postal address.
+  #
+  # - `lines` holds the street and house number, one per line, at most
+  #   three.
+  # - `country` decides how the rest is read: a `postcode` is required
+  #   for most countries but not all, so it is optional here.
+  Address: %schema{
+    lines: {:refine {:list-of NonEmptyString} %{min-count: 1, max-count: 3}}
+    city: NonEmptyString
+    postcode?: :string
+    country: CountryCode
+    kind: %field{
+      type: {:enum :home :work :billing :shipping}
+      default: :home
+      description: "What the address is used for."
+    }
+  }
+
+  # A phone number in E.164 form: a plus, then up to 15 digits.
+  PhoneNumber: {:refine :string %{pattern: @regex "^\\+[1-9][0-9]{1,14}$"}}
+
+  # Free-form key/value data a client may attach. Values are any DXN
+  # value; nothing in Acme reads them.
+  Metadata: {:map-of :string :any}
+}

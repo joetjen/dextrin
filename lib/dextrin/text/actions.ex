@@ -17,6 +17,7 @@ defmodule Dextrin.Text.Actions do
   as the last resort).
   """
 
+  alias Dextrin.Temporal
   alias Dextrin.Text.Escapes
   alias Ichor.Toolkit.Result
 
@@ -117,62 +118,6 @@ defmodule Dextrin.Text.Actions do
 
   def handle_token(:MAP_KEY, text, ctx) do
     {:ok, keyword_value(String.trim_trailing(text, ":"), ctx)}
-  end
-
-  def handle_token(:DATE_SIGIL, text, _ctx) do
-    inner = text |> String.trim_leading("~D[") |> String.trim_trailing("]")
-
-    case Date.from_iso8601(inner) do
-      {:ok, date} ->
-        {:ok, date}
-
-      {:error, reason} ->
-        {:error, action_error("invalid date #{inspect(inner)}: #{inspect(reason)}")}
-    end
-  end
-
-  def handle_token(:TIME_SIGIL, text, _ctx) do
-    inner = text |> String.trim_leading("~T[") |> String.trim_trailing("]")
-
-    case Time.from_iso8601(inner) do
-      {:ok, time} ->
-        {:ok, normalize_microsecond(time)}
-
-      {:error, reason} ->
-        {:error, action_error("invalid time #{inspect(inner)}: #{inspect(reason)}")}
-    end
-  end
-
-  def handle_token(:INSTANT_SIGIL, text, _ctx) do
-    inner = text |> String.trim_leading("~U[") |> String.trim_trailing("]")
-
-    with [date_text, time_text] <- String.split(inner, " ", parts: 2),
-         {:ok, date} <- Date.from_iso8601(date_text),
-         {:ok, time} <- Time.from_iso8601(String.trim_trailing(time_text, "Z")),
-         {:ok, datetime} <- DateTime.new(date, normalize_microsecond(time), "Etc/UTC") do
-      {:ok, datetime}
-    else
-      _ -> {:error, action_error("invalid instant #{inspect(inner)}")}
-    end
-  end
-
-  def handle_token(:REGEX_SIGIL, text, _ctx) do
-    case Regex.run(~r/^~r\/(.*)\/([imsuxfr]*)$/s, text) do
-      [_, pattern, flags] ->
-        # Atom-list form, not `Regex.compile(pattern, flags)` — the
-        # string form triggers a deprecation warning for "r" (Elixir
-        # prefers /U), even though "r" is DXN.md's own valid flag letter.
-        case Regex.compile(pattern, Dextrin.Binary.Tags.regex_flags_to_opts(flags)) do
-          {:ok, regex} ->
-            {:ok, regex}
-
-          {:error, reason} ->
-            {:error, action_error("invalid regex #{inspect(text)}: #{inspect(reason)}")}
-        end
-
-      nil ->
-        {:error, action_error("malformed regex literal #{inspect(text)}")}
-    end
   end
 
   def handle_token(_token, text, _ctx), do: {:ok, text}
@@ -281,6 +226,17 @@ defmodule Dextrin.Text.Actions do
     end
   end
 
+  # `@regex(im) "..."`: a header carries a regex's flags, and stands on
+  # no other tag (DXN.md §1.2).
+  def handle_rule(:tag_form, %{name: name_cap, flags: flags_cap} = captures, ctx) do
+    with {:ok, name, ctx} <- name_cap.eval.(ctx),
+         {:ok, flags, ctx} <- flags_cap.eval.(ctx) do
+      if name == "regex",
+        do: regex_tag(flags, captures.value, ctx),
+        else: {:error, action_error("@#{name} takes no (...) header; only @regex(flags) does")}
+    end
+  end
+
   def handle_rule(:tag_form, %{name: name_cap} = captures, ctx) do
     with {:ok, name, ctx} <- name_cap.eval.(ctx) do
       dispatch_tag(name, captures.value, ctx)
@@ -319,7 +275,7 @@ defmodule Dextrin.Text.Actions do
 
   # A struct field's shorthand key (`x:`) goes through the same
   # `keyword_value/2` `Registry.t()`-driven choice as any other
-  # keyword-shaped key — trusted (default) decodes it as a real atom.
+  # keyword-shaped key — trusted decodes it as a real atom.
   # `Dextrin.Struct.keyed/2` always wants the plain string name either
   # way, regardless of which the caller's `trusted:` setting produced.
   defp field_name(name) when is_atom(name) and name not in [nil, true, false],
@@ -385,7 +341,14 @@ defmodule Dextrin.Text.Actions do
 
   # ---- built-in tag dispatch (DXN.md §1.3) -----------------------------------
 
-  @built_in_tags ~w(ordered sorted-set array uuid uri bytes datetime duration)
+  @built_in_tags ~w(ordered sorted-set array uuid objectid ip uri bytes date time datetime local-datetime duration regex)
+
+  @doc false
+  # The tags DXN.md §1.3 builds in: no custom tag has one of their names.
+  # `@bits` is one, read by a clause of its own rather than through the
+  # list.
+  @spec built_in_tags() :: [String.t()]
+  def built_in_tags, do: ["bits" | @built_in_tags]
 
   defp dispatch_tag("ordered", value_cap, ctx), do: eval_ordered_map(value_cap, ctx)
 
@@ -411,6 +374,24 @@ defmodule Dextrin.Text.Actions do
     end
   end
 
+  defp dispatch_tag("objectid", value_cap, ctx) do
+    with {:ok, text, ctx} <- value_cap.eval.(ctx) do
+      case is_binary(text) && Dextrin.ObjectId.parse(text) do
+        {:ok, id} -> {:ok, id, ctx}
+        _ -> {:error, action_error("invalid objectid #{inspect(text)}")}
+      end
+    end
+  end
+
+  defp dispatch_tag("ip", value_cap, ctx) do
+    with {:ok, text, ctx} <- value_cap.eval.(ctx) do
+      case is_binary(text) && Dextrin.Ip.parse(text) do
+        {:ok, ip} -> {:ok, ip, ctx}
+        _ -> {:error, action_error("invalid ip #{inspect(text)}")}
+      end
+    end
+  end
+
   defp dispatch_tag("uri", value_cap, ctx) do
     with {:ok, text, ctx} <- value_cap.eval.(ctx), do: {:ok, Uri.new(text), ctx}
   end
@@ -424,24 +405,40 @@ defmodule Dextrin.Text.Actions do
     end
   end
 
-  defp dispatch_tag("datetime", value_cap, ctx) do
-    with {:ok, text, ctx} <- value_cap.eval.(ctx),
-         {:ok, datetime} <- parse_offset_datetime(text) do
-      {:ok, datetime, ctx}
-    else
-      {:error, :invalid} -> {:error, action_error("invalid datetime")}
-      {:error, _} = err -> err
+  # `@bits {"..." n}` (DXN.md §1.4): base64 and a bit count. A whole
+  # number of bytes reads as bytes, which is what it is.
+  defp dispatch_tag("bits", value_cap, ctx) do
+    with {:ok, value, ctx} <- value_cap.eval.(ctx) do
+      with %Dextrin.Tuple{items: [text, count]} when is_binary(text) <- value,
+           {:ok, data} <- Base.decode64(text),
+           {:ok, bits} <- Dextrin.Bits.from_parts(data, count) do
+        {:ok, Dextrin.Bytes.new(bits), ctx}
+      else
+        _ ->
+          {:error,
+           action_error(~s|@bits takes {"base64" bit-count}, the count matching the bytes|)}
+      end
     end
   end
 
-  defp dispatch_tag("duration", value_cap, ctx) do
-    with {:ok, text, ctx} <- value_cap.eval.(ctx),
-         {:ok, duration} <- Duration.from_iso8601(text) do
-      {:ok, from_elixir_duration(duration), ctx}
-    else
-      {:error, _reason} -> {:error, action_error("invalid duration")}
-    end
-  end
+  # Dates and times are ISO 8601 strings under their tag (DXN.md §1.2,
+  # Jan, 2026-10-20), read by Dextrin.Temporal.
+  defp dispatch_tag("date", value_cap, ctx),
+    do: temporal(value_cap, ctx, "date", &Temporal.parse_date/1)
+
+  defp dispatch_tag("time", value_cap, ctx),
+    do: temporal(value_cap, ctx, "time", &Temporal.parse_time/1)
+
+  defp dispatch_tag("datetime", value_cap, ctx),
+    do: temporal(value_cap, ctx, "datetime", &Temporal.parse_datetime/1)
+
+  defp dispatch_tag("local-datetime", value_cap, ctx),
+    do: temporal(value_cap, ctx, "local-datetime", &Temporal.parse_local/1)
+
+  defp dispatch_tag("duration", value_cap, ctx),
+    do: temporal(value_cap, ctx, "duration", &Temporal.parse_duration/1)
+
+  defp dispatch_tag("regex", value_cap, ctx), do: regex_tag("", value_cap, ctx)
 
   defp dispatch_tag(name, value_cap, ctx) when name in @built_in_tags do
     dispatch_tag(name, value_cap, ctx)
@@ -476,6 +473,44 @@ defmodule Dextrin.Text.Actions do
   # each map_entry directly, bypassing map_lit's own (order-discarding)
   # handler, so pair order in the source text survives into
   # `Dextrin.OrderedMap.pairs`.
+  defp temporal(value_cap, ctx, tag, parse) do
+    with {:ok, text, ctx} <- value_cap.eval.(ctx) do
+      case is_binary(text) && parse.(text) do
+        {:ok, value} -> {:ok, value, ctx}
+        _ -> {:error, action_error("invalid #{tag} #{inspect(text)}")}
+      end
+    end
+  end
+
+  # A regex: its pattern a string, its flags the header's letters, each
+  # once (DXN.md §1.2).
+  defp regex_tag(flags, value_cap, ctx) do
+    with {:ok, pattern, ctx} <- value_cap.eval.(ctx) do
+      letters = String.graphemes(flags)
+
+      cond do
+        not is_binary(pattern) ->
+          {:error, action_error("@regex takes its pattern as a string")}
+
+        not Enum.all?(letters, &(&1 in ~w(i m s u x f r))) or
+            length(Enum.uniq(letters)) != length(letters) ->
+          {:error, action_error("@regex(#{flags}): the flags are i m s u x f r, each once")}
+
+        true ->
+          # Atom-list form, not `Regex.compile(pattern, flags)` — the
+          # string form triggers a deprecation warning for "r" (Elixir
+          # prefers /U), even though "r" is DXN.md's own valid flag letter.
+          case Regex.compile(pattern, Dextrin.Binary.Tags.regex_flags_to_opts(flags)) do
+            {:ok, regex} ->
+              {:ok, regex, ctx}
+
+            {:error, reason} ->
+              {:error, action_error("invalid regex #{inspect(pattern)}: #{inspect(reason)}")}
+          end
+      end
+    end
+  end
+
   defp eval_ordered_map(value_cap, ctx) do
     # Raw capture nodes are now an ordered `[{name, value}]` list rather
     # than a map (ichor_runtime 0.2), so each nested capture is fetched
@@ -507,107 +542,12 @@ defmodule Dextrin.Text.Actions do
     end
   end
 
-  defp from_elixir_duration(%Duration{} = d) do
-    {micro, precision} = d.microsecond
-
-    total_micro =
-      if d.second == 0 and micro == 0 and precision == 0,
-        do: nil,
-        else: d.second * 1_000_000 + micro
-
-    %Dextrin.Duration{
-      years: zero_to_nil(d.year),
-      months: zero_to_nil(d.month),
-      weeks: zero_to_nil(d.week),
-      days: zero_to_nil(d.day),
-      hours: zero_to_nil(d.hour),
-      minutes: zero_to_nil(d.minute),
-      microseconds: total_micro
-    }
-  end
-
-  defp zero_to_nil(0), do: nil
-  defp zero_to_nil(n), do: n
-
   # `Dextrin.Registry.put_trusted/2`'s own doc has the full reasoning:
-  # trusted (default) decodes a real atom, `DXN.md` §1.3's own natural
-  # mapping; untrusted wraps in `Dextrin.Keyword` instead. `symbol`
+  # trusted decodes a real atom, `DXN.md` §1.3's own natural mapping;
+  # untrusted (the default) wraps in `Dextrin.Keyword` instead. `symbol`
   # deliberately has no equivalent — see that doc.
-  defp keyword_value(name, %Registry{trusted: true}), do: String.to_atom(name)
+  defp keyword_value(name, %Registry{trusted: true}), do: Keyword.trusted(name)
   defp keyword_value(name, _ctx), do: Keyword.new(name)
-
-  defp parse_offset_datetime(text) do
-    with [date_part, time_and_offset] <- String.split(text, "T", parts: 2),
-         {time_part, offset_str} <- split_offset(time_and_offset),
-         {:ok, naive} <- NaiveDateTime.from_iso8601(date_part <> "T" <> time_part),
-         {:ok, offset_seconds} <- parse_offset(offset_str) do
-      {:ok, build_offset_datetime(naive, offset_seconds)}
-    else
-      _ -> {:error, :invalid}
-    end
-  end
-
-  defp split_offset(text) do
-    if String.ends_with?(text, "Z") do
-      {String.trim_trailing(text, "Z"), "Z"}
-    else
-      case Regex.run(~r/^(.*?)([+-]\d{2}:\d{2})$/, text) do
-        [_, time_part, offset] -> {time_part, offset}
-        nil -> {text, nil}
-      end
-    end
-  end
-
-  defp parse_offset("Z"), do: {:ok, 0}
-  defp parse_offset(nil), do: {:error, :invalid}
-
-  defp parse_offset(<<sign, h1, h2, ":", m1, m2>>) when sign in [?+, ?-] do
-    sign_mult = if sign == ?-, do: -1, else: 1
-    hours = String.to_integer(<<h1, h2>>)
-    minutes = String.to_integer(<<m1, m2>>)
-    {:ok, sign_mult * (hours * 3600 + minutes * 60)}
-  end
-
-  defp parse_offset(_), do: {:error, :invalid}
-
-  defp build_offset_datetime(%NaiveDateTime{} = naive, offset_seconds) do
-    {microsecond, _precision} = naive.microsecond
-
-    %DateTime{
-      year: naive.year,
-      month: naive.month,
-      day: naive.day,
-      hour: naive.hour,
-      minute: naive.minute,
-      second: naive.second,
-      microsecond: {microsecond, 6},
-      time_zone: "fixed",
-      zone_abbr: format_offset(offset_seconds),
-      utc_offset: offset_seconds,
-      std_offset: 0
-    }
-  end
-
-  # .dxnb is always integer-microsecond granularity (DXN.md §2.2) — a
-  # value decoded from text must match that representation exactly, or
-  # `12:00:00` (precision 0, an artifact of how many fractional digits
-  # the *source text* happened to have) and its binary round-trip
-  # (always precision 6) would compare unequal via `==` despite being
-  # the same instant. Confirmed empirically via the round-trip test,
-  # not anticipated in the original design.
-  defp normalize_microsecond(%Time{microsecond: {value, _precision}} = time) do
-    %{time | microsecond: {value, 6}}
-  end
-
-  defp format_offset(seconds) do
-    sign = if seconds < 0, do: "-", else: "+"
-    abs_s = abs(seconds)
-    h = div(abs_s, 3600)
-    m = div(rem(abs_s, 3600), 60)
-    "#{sign}#{pad2(h)}:#{pad2(m)}"
-  end
-
-  defp pad2(n), do: n |> Integer.to_string() |> String.pad_leading(2, "0")
 
   # DXN.md §1.6: an arrow entry's key must be one of the eight allowed
   # types. A float key written as `NaN` or `Infinity` decodes to the
