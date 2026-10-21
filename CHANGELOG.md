@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-21
+
+DXNS guides of their own, decoding about four times faster on
+ichor_runtime 0.6.1, and a schema-validation benchmark. Nothing breaks.
+
 ### Documentation
 
 - **DXNS has guides of its own** (Jan, 2026-10-21), in `guides/dxns/`: a
