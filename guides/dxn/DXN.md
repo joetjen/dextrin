@@ -542,7 +542,7 @@ zero).
 
 The schema language, DXNS, has its own reference:
 [DXNS.md](../dxns/DXNS.md). Its sections 1 to 8 were this section's 4.1
-to 4.8, and "DXNS.md §2" is the old "DXNS.md §2".
+to 4.8, and "DXNS.md §2" is the old "DXN.md §4.2".
 
 ---
 

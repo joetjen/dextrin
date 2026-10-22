@@ -81,7 +81,7 @@ self-describing but binary only. YAML and TOML are made for people, and
 have no binary form for machines.
 
 DXN's premise is that a `.dxn` text document and a `.dxnb` binary
-document are the *same* value space: 30 scalar, collection, temporal and
+document are the *same* value space: 31 scalar, collection, temporal and
 extended types ([reference](guides/dxn/DXN.md) §1.3). It is precise
 enough for money (decimals), exact ratios (rationals) and integers of
 any size, has `struct` and `custom-tag` as first-class, schema-describable
