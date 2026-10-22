@@ -318,7 +318,7 @@ defmodule Dextrin.Temporal do
   defp fraction_int(""), do: 0
   defp fraction_int(digits), do: String.to_integer(digits)
 
-  @doc "`P...`: the fields in DXN.md §2.3's order, absent ones left out, `PT0S` when none."
+  @doc "`P...`: the fields in DXN.md §2.3's order, absent and zero ones left out, `PT0S` when none is left (§1.5)."
   @spec duration_text(Dextrin.Duration.t()) :: String.t()
   def duration_text(%Dextrin.Duration{} = d) do
     date = part(d.years, "Y") <> part(d.months, "M") <> part(d.weeks, "W") <> part(d.days, "D")
@@ -331,10 +331,10 @@ defmodule Dextrin.Temporal do
     end
   end
 
-  defp part(nil, _unit), do: ""
+  defp part(n, _unit) when n in [nil, 0], do: ""
   defp part(n, unit), do: Integer.to_string(n) <> unit
 
-  defp seconds_part(nil), do: ""
+  defp seconds_part(n) when n in [nil, 0], do: ""
 
   defp seconds_part(nanos) do
     sign = if nanos < 0, do: "-", else: ""
