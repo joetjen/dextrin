@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A `key/not-allowed` error names the key in DXN**, as Node and PHP
+  do: `@datetime "2026-10-22T10:00:00Z" cannot be a map key`, no longer
+  `~U[2026-10-22 10:00:00.000000Z] cannot be a map key`.
 - **A duration's zero fields are left out again** when it is written, as
   DXN.md §1.5 says, and one that is zero throughout is `PT0S`:
   `@duration "P1DT0H"` is written `@duration "P1D"`, `@duration "P0D"`

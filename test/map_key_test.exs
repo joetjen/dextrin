@@ -13,6 +13,24 @@ defmodule Dextrin.MapKeyTest do
     assert {:error, %Dextrin.Error{category: "key/not-allowed"}} = result
   end
 
+  describe "the refusal" do
+    test "writes the key as DXN writes it, as Node and PHP do" do
+      for {text, key} <- [
+            {~s|%{@datetime "2026-10-22T10:00:00Z" => 1}|, ~s|@datetime "2026-10-22T10:00:00Z"|},
+            {~s|%{%{a: 1} => 1}|, "%{a:1}"},
+            {~s|%{1.5M => 1}|, "1.5M"},
+            {~s|%{[1 "a"] => 1}|, ~s|[1 "a"]|}
+          ] do
+        {:error, %Dextrin.Error{message: message}} = Dextrin.decode(text)
+        assert String.starts_with?(message, key <> " cannot be a map key"), message
+      end
+    end
+
+    test "falls back to Elixir's notation for a term DXN cannot write" do
+      assert %Dextrin.Error{message: "#PID<" <> _} = MapKey.refusal(self())
+    end
+  end
+
   describe "which keys are allowed" do
     test "the eight types are" do
       {:ok, uuid} = Dextrin.Uuid.parse("6f9619ff-8b86-d011-b42d-00c04fc964ff")
