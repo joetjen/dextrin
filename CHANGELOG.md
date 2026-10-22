@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- **The README says how fast it is**: decoding and checking timed for 90 minutes in each implementation, on the same data sets; and the size table's one changed cell (`.dxnb`, the config file gzipped, 210 bytes).
 - The README counts DXN's 31 types (it said 30), and DXN.md §4 names the old section right: "DXNS.md §2" is the old "DXN.md §4.2".
 - **The docs build without a warning**: a stray code fence in
   `guides/EXAMPLES.md` left the rest of the page unfenced, and three
