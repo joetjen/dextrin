@@ -8,7 +8,7 @@ defmodule Dextrin.Schema.Validated do
   materialization has replaced the value with a plain map or
   application struct that carries no name of its own — unlike an
   *opaque* `Dextrin.Struct`, which already carries its own name and
-  never needed this. `Dextrin.Schema.Validator.materialize/4` (decode)
+  never needed this. `Dextrin.Schema.Reader.read/5` (decode)
   and `wrap_and_check/2` (encode-time validation) both wrap every
   successfully-checked struct's result in one of these — one wrapper,
   shared by both directions; `strip/1` removes every occurrence,
