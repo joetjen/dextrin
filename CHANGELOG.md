@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- **The docs build without a warning**: a stray code fence in
+  `guides/EXAMPLES.md` left the rest of the page unfenced, and three
+  moduledocs and two changelog entries named functions that no longer
+  exist (`Dextrin.Schema.Reader.read/5` builds a decoded value now).
+
 ## [0.3.1] - 2026-10-21
 
 DXNS guides of their own, decoding about four times faster on
@@ -580,7 +587,7 @@ to be rewritten, and decoding a checked struct answers a
   schema's order, instead of a plain string-keyed map — so it encodes
   back to the text it came from. An optional field that was absent stays
   absent instead of becoming `nil`.
-- `Dextrin.Schema.Validator.materialize/4` is replaced by `resolve/3`;
+- The validator's `materialize/4` is replaced by `resolve/3`;
   building the value is `Dextrin.Schema.Reader`'s job.
 - **A struct may carry extra fields** (`DXN.md` §4.7), kept in
   `Dextrin.Struct`'s new `extra` list and written back with it: in text
@@ -604,7 +611,7 @@ to be rewritten, and decoding a checked struct answers a
   accepted. `DXN.md` §4.7 states the rule and its test: a host value
   always means the same DXN type, schema or not.
 - **Removed: `closed:`, `forbidden:` and `refine-fn:`**, and with them
-  `Dextrin.Schema.compile/3`'s and `Dextrin.Schema.FileResolver.for_paths/2`'s
+  `Dextrin.Schema.compile/3`'s and the file resolver's `for_paths`
   `predicates` argument. A struct may carry fields its schema does not
   declare; `strict: true` refuses the undeclared ones, and the
   schema's materializer checks what a predicate checked.

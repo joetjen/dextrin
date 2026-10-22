@@ -151,7 +151,6 @@ registry =
 Dextrin.decode(~s|%User(1){name: "ada"}|, registry: registry)
 #=> {:ok, %{name: "ada", email: "ada@example.com"}}
 ```
-```
 
 ## A third-party struct provider, end to end
 
