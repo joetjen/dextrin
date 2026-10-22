@@ -440,7 +440,9 @@ register formally before any non-`dextrin` interop is expected.
 
 **Duration bitmask** (`T_DURATION` payload) — one byte, low bit first;
 each set bit is followed, in bit order, by that field's value as a signed
-integer:
+integer. A writer sets the bit of a field that is present and not zero,
+as text leaves a zero field out (§1.5); a duration that is zero
+throughout has no bit set:
 
 | Bit | Field | Unit |
 |---|---|---|

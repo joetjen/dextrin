@@ -331,7 +331,8 @@ defmodule Dextrin.Binary.Encoder do
     do: encode_local(n, opts)
 
   defp encode_item_dispatch(%Dextrin.Duration{} = d, opts) do
-    fields = Enum.reject(Tags.duration_bits(), fn field -> Map.get(d, field) == nil end)
+    # A zero field is left out, as in text (DXN.md §1.5).
+    fields = Enum.reject(Tags.duration_bits(), fn field -> Map.get(d, field) in [nil, 0] end)
     bitmask = Enum.reduce(fields, 0, fn field, acc -> acc ||| bit_for(field) end)
 
     # The whole payload is one well-formed CBOR array — bitmask as a

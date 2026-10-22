@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A duration's zero fields are left out again** when it is written, as
+  DXN.md §1.5 says, and one that is zero throughout is `PT0S`:
+  `@duration "P1DT0H"` is written `@duration "P1D"`, `@duration "P0D"`
+  `@duration "PT0S"`. `.dxnb` sets no bit for a zero field either, so the
+  two agree, and `P0D` and `PT0S` are one value to `unique:`. Reading
+  still keeps what was written.
+
 ### Documentation
 
 - **The docs build without a warning**: a stray code fence in
