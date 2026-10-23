@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-23
+
+A duration's zero fields are left out again, a `key/not-allowed`
+error names its key in DXN, and the README says how fast Dextrin is.
+Nothing breaks.
+
 ### Fixed
 
 - **A `key/not-allowed` error names the key in DXN**, as Node and PHP
