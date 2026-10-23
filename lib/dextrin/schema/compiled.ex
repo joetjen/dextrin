@@ -38,7 +38,7 @@ defmodule Dextrin.Schema.Compiled do
   What lets `Dextrin.Text.Printer`/`Dextrin.Binary.Encoder` serialize a
   struct registered via `Dextrin.Registry.put_struct_module/3` directly
   — without a caller needing to hand-build a `Dextrin.Struct`
-  themselves first, closing the loop `Dextrin.Schema.Validator.materialize/4`
+  themselves first, closing the loop `Dextrin.Schema.Reader.read/5`
   already closes on the way in.
   """
   @spec field_values(t(), struct()) :: [{String.t(), term()}]

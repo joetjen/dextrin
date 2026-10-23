@@ -81,7 +81,7 @@ self-describing but binary only. YAML and TOML are made for people, and
 have no binary form for machines.
 
 DXN's premise is that a `.dxn` text document and a `.dxnb` binary
-document are the *same* value space: 30 scalar, collection, temporal and
+document are the *same* value space: 31 scalar, collection, temporal and
 extended types ([reference](guides/dxn/DXN.md) §1.3). It is precise
 enough for money (decimals), exact ratios (rationals) and integers of
 any size, has `struct` and `custom-tag` as first-class, schema-describable
@@ -143,8 +143,8 @@ as a string in JSON, for instance).
 |---|---:|---:|---:|---:|
 | DXN text | 279 / 199 | 19,402 / 4,218 | 63,159 / 13,895 | 5,516 / 4,222 |
 | DXN text, pretty | 314 / 216 | 23,504 / 4,249 | 67,161 / 13,961 | 5,527 / 4,234 |
-| `.dxnb` | 264 / 212 | 14,185 / 3,802 | 34,006 / 14,381 | 4,145 / 4,168 |
-| `.dxnb`, shared | 264 / 212 | 9,217 / 3,752 | 27,017 / 14,019 | 4,145 / 4,168 |
+| `.dxnb` | 264 / 210 | 14,185 / 3,802 | 34,006 / 14,381 | 4,145 / 4,168 |
+| `.dxnb`, shared | 264 / 210 | 9,217 / 3,752 | 27,017 / 14,019 | 4,145 / 4,168 |
 | JSON | 306 / 207 | 19,202 / 4,201 | 56,159 / 13,692 | 5,514 / 4,216 |
 | JSON, pretty | 403 / 229 | 26,253 / 4,287 | 74,160 / 14,182 | 5,527 / 4,231 |
 | BSON | 312 / 231 | 17,621 / 4,448 | 36,903 / 15,700 | 4,161 / 4,184 |
@@ -168,6 +168,41 @@ as a string in JSON, for instance).
 - **Compressed, the gap narrows.** Gzipped, DXN text stays within about
   12% of `.dxnb`, and JSON within about a quarter of CBOR; past that,
   the choice is about what each format can say.
+
+### How fast it is
+
+Decoding a document from text and checking it against a schema, timed in
+each implementation on the same data sets: one `Universe` each, about
+4 KB of DXN text, against [`bench/schemas/universe.dxns`](bench/schemas/universe.dxns), a 225-line
+schema set more complex than any one met in practice (recursion,
+generics, cases, refinements, formats, documents inside documents).
+About 30% of the data sets carry exactly one error, of 44 kinds. Each
+implementation ran for 90 minutes on one core of an Apple M2 Max
+(2026-10-22: Elixir 1.19.5 on OTP 28, Node 24.18.1, PHP 8.4.24 without
+opcache), and every verdict matched what the data set was meant to be.
+Times are per data set, in milliseconds.
+
+| | data sets | decode, mean | decode, p99 | check, mean | check, p99 | together, mean | together, p99 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Elixir | 631,260 | 3.59 | 8.88 | 0.15 | 0.40 | 3.74 | 9.13 |
+| Node | 4,698,138 | 0.53 | 0.85 | 0.54 | 1.02 | 1.07 | 1.80 |
+| PHP | 1,316,837 | 1.95 | 2.89 | 0.83 | 1.57 | 2.78 | 4.37 |
+
+- **Node decodes fastest, Elixir checks fastest**: Node decodes about
+  seven times as fast as Elixir, and Elixir checks about four times as
+  fast as Node. Where a decode spends its time differs: Elixir nearly
+  half in its lexer (1.61 ms of 3.59), Node in its parser (0.45 of 0.53), PHP
+  in its lexer (1.31 of 1.95).
+- **A refused data set is checked about twice as fast** as one that is
+  accepted: the check stops at the first error (Elixir 0.09 against
+  0.18 ms, Node 0.31 against 0.63, PHP 0.42 against 1.00).
+- **Node and PHP keep to their means**: a p99 under 1.7 times the mean,
+  where Elixir's is about 2.4 times.
+
+Reproduce it with `mix run bench/schema_validation.exs 5400`; the Node
+and PHP numbers come from their own benchmarks, `bench/schema-validation.cjs`
+and `bench/schema-validation.php`, reading the very same data sets from
+`bench/generate_universes.exs`.
 
 ### What comes back, in each language
 
@@ -339,7 +374,7 @@ Add `dextrin` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:dextrin, "~> 0.3.1"}
+    {:dextrin, "~> 0.3.2"}
   ]
 end
 ```

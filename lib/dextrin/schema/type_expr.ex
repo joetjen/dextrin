@@ -96,7 +96,7 @@ defmodule Dextrin.Schema.TypeExpr do
 
   @doc """
   Whether `value` matches `type` — shared by both decode
-  (`Dextrin.Schema.Validator.materialize/4`) and encode-time
+  (`Dextrin.Schema.Reader.read/5`) and encode-time
   validation (`Dextrin.Schema.Validator.validate_for_encode/3`): the
   same recursive check, the same function, for both directions. It is
   `conform/3` answered as a boolean, so there is one check, not two.
@@ -107,7 +107,7 @@ defmodule Dextrin.Schema.TypeExpr do
   one for this field. Three sources carry that name: an *opaque*,
   unregistered `Dextrin.Struct` carries its own wire name directly; a
   value that went through a registered schema (decode *or* encode
-  -time validation alike) carries it via `Validated` — `materialize/4`
+  -time validation alike) carries it via `Validated` — `Dextrin.Schema.Reader.read/5`
   wraps every result in one regardless of materializer shape, and
   encode-time validation wraps every recognized struct the same way
   before checking it (`Dextrin.Schema.Validator`'s internal

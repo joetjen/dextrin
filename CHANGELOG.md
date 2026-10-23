@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-23
+
+A duration's zero fields are left out again, a `key/not-allowed`
+error names its key in DXN, and the README says how fast Dextrin is.
+Nothing breaks.
+
+### Fixed
+
+- **A `key/not-allowed` error names the key in DXN**, as Node and PHP
+  do: `@datetime "2026-10-22T10:00:00Z" cannot be a map key`, no longer
+  `~U[2026-10-22 10:00:00.000000Z] cannot be a map key`.
+- **A duration's zero fields are left out again** when it is written, as
+  DXN.md §1.5 says, and one that is zero throughout is `PT0S`:
+  `@duration "P1DT0H"` is written `@duration "P1D"`, `@duration "P0D"`
+  `@duration "PT0S"`. `.dxnb` sets no bit for a zero field either, so the
+  two agree, and `P0D` and `PT0S` are one value to `unique:`. Reading
+  still keeps what was written.
+
+### Documentation
+
+- **The README says how fast it is**: decoding and checking timed for 90 minutes in each implementation, on the same data sets; and the size table's one changed cell (`.dxnb`, the config file gzipped, 210 bytes).
+- The README counts DXN's 31 types (it said 30), and DXN.md §4 names the old section right: "DXNS.md §2" is the old "DXN.md §4.2".
+- **The docs build without a warning**: a stray code fence in
+  `guides/EXAMPLES.md` left the rest of the page unfenced, and three
+  moduledocs and two changelog entries named functions that no longer
+  exist (`Dextrin.Schema.Reader.read/5` builds a decoded value now).
+
 ## [0.3.1] - 2026-10-21
 
 DXNS guides of their own, decoding about four times faster on
@@ -580,7 +607,7 @@ to be rewritten, and decoding a checked struct answers a
   schema's order, instead of a plain string-keyed map — so it encodes
   back to the text it came from. An optional field that was absent stays
   absent instead of becoming `nil`.
-- `Dextrin.Schema.Validator.materialize/4` is replaced by `resolve/3`;
+- The validator's `materialize/4` is replaced by `resolve/3`;
   building the value is `Dextrin.Schema.Reader`'s job.
 - **A struct may carry extra fields** (`DXN.md` §4.7), kept in
   `Dextrin.Struct`'s new `extra` list and written back with it: in text
@@ -604,7 +631,7 @@ to be rewritten, and decoding a checked struct answers a
   accepted. `DXN.md` §4.7 states the rule and its test: a host value
   always means the same DXN type, schema or not.
 - **Removed: `closed:`, `forbidden:` and `refine-fn:`**, and with them
-  `Dextrin.Schema.compile/3`'s and `Dextrin.Schema.FileResolver.for_paths/2`'s
+  `Dextrin.Schema.compile/3`'s and the file resolver's `for_paths`
   `predicates` argument. A struct may carry fields its schema does not
   declare; `strict: true` refuses the undeclared ones, and the
   schema's materializer checks what a predicate checked.

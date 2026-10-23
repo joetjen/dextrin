@@ -31,13 +31,24 @@ defmodule Dextrin.MapKey do
     if allowed?(key), do: :ok, else: {:error, refusal(key)}
   end
 
-  @doc "The error for a key that is not allowed, naming it."
+  @doc """
+  The error for a key that is not allowed, naming it as `Dextrin.encode/2`
+  writes it, or as Elixir does when DXN cannot write it.
+  """
   @spec refusal(term()) :: Dextrin.Error.t()
   def refusal(key) do
     Dextrin.Error.action(
-      "#{inspect(key)} cannot be a map key: a key is a string, keyword, integer, uuid, objectid, date, bytes, symbol or char",
+      "#{written(key)} cannot be a map key: a key is a string, keyword, integer, uuid, objectid, date, bytes, symbol or char",
       "key/not-allowed"
     )
+  end
+
+  # The key in DXN, as Node's and PHP's messages write it.
+  defp written(key) do
+    case Dextrin.encode(key) do
+      {:ok, text} -> text
+      {:error, _} -> inspect(key)
+    end
   end
 
   @doc "`:ok` when every key of `pairs` may be a map key, or the first refusal."
