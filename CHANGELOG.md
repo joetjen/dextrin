@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Decoding text is faster**: Dextrin now needs ichor_runtime 0.6.3, and
+  its parser is regenerated with ichor 0.7.3, whose tokenizer tries only
+  the tokens that can begin with the next character.
+
 ## [0.3.2] - 2026-10-23
 
 A duration's zero fields are left out again, a `key/not-allowed`
