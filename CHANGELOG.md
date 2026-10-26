@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- The README's speed table has Elixir's numbers on ichor 0.7.3's parser: decoding 3.45 ms instead of 3.59, lexing 1.07 ms instead of 1.61.
+
 ### Changed
 
 - **Decoding text is faster**: Dextrin now needs ichor_runtime 0.6.3, and
