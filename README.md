@@ -178,26 +178,27 @@ schema set more complex than any one met in practice (recursion,
 generics, cases, refinements, formats, documents inside documents).
 About 30% of the data sets carry exactly one error, of 44 kinds. Each
 implementation ran for 90 minutes on one core of an Apple M2 Max
-(2026-10-22: Elixir 1.19.5 on OTP 28, Node 24.18.1, PHP 8.4.24 without
-opcache), and every verdict matched what the data set was meant to be.
+(Elixir 1.19.5 on OTP 28 with ichor 0.7.3's parser, 2026-10-26; Node
+24.18.1 and PHP 8.4.24 without opcache, 2026-10-22), and every verdict matched what the data set was meant to be.
 Times are per data set, in milliseconds.
 
 | | data sets | decode, mean | decode, p99 | check, mean | check, p99 | together, mean | together, p99 |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Elixir | 631,260 | 3.59 | 8.88 | 0.15 | 0.40 | 3.74 | 9.13 |
+| Elixir | 713,050 | 3.45 | 7.74 | 0.16 | 0.93 | 3.60 | 7.97 |
 | Node | 4,698,138 | 0.53 | 0.85 | 0.54 | 1.02 | 1.07 | 1.80 |
 | PHP | 1,316,837 | 1.95 | 2.89 | 0.83 | 1.57 | 2.78 | 4.37 |
 
 - **Node decodes fastest, Elixir checks fastest**: Node decodes about
-  seven times as fast as Elixir, and Elixir checks about four times as
-  fast as Node. Where a decode spends its time differs: Elixir nearly
-  half in its lexer (1.61 ms of 3.59), Node in its parser (0.45 of 0.53), PHP
-  in its lexer (1.31 of 1.95).
+  six times as fast as Elixir, and Elixir checks about three times as
+  fast as Node. Where a decode spends its time differs: Elixir evenly
+  across lexing, parsing and building the values (1.07, 1.28 and
+  1.10 ms of 3.45), Node in its parser (0.45 of 0.53), PHP in its lexer
+  (1.31 of 1.95).
 - **A refused data set is checked about twice as fast** as one that is
   accepted: the check stops at the first error (Elixir 0.09 against
   0.18 ms, Node 0.31 against 0.63, PHP 0.42 against 1.00).
 - **Node and PHP keep to their means**: a p99 under 1.7 times the mean,
-  where Elixir's is about 2.4 times.
+  where Elixir's is about 2.2 times.
 
 Reproduce it with `mix run bench/schema_validation.exs 5400`; the Node
 and PHP numbers come from their own benchmarks, `bench/schema-validation.cjs`
@@ -374,7 +375,7 @@ Add `dextrin` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:dextrin, "~> 0.3.2"}
+    {:dextrin, "~> 0.3.3"}
   ]
 end
 ```

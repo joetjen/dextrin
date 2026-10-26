@@ -1,7 +1,7 @@
 defmodule Dextrin.MixProject do
   use Mix.Project
 
-  @version "0.3.2"
+  @version "0.3.3"
 
   def project do
     [
@@ -74,8 +74,8 @@ defmodule Dextrin.MixProject do
       # generates lib/dextrin/text/grammar/native.ex ahead of time --
       # it's never referenced by any code that ships, hence `only:
       # :dev, runtime: false`.
-      {:ichor_runtime, "~> 0.6.1"},
-      {:ichor, "~> 0.7.1", only: :dev, runtime: false},
+      {:ichor_runtime, "~> 0.6.3"},
+      {:ichor, "~> 0.7.3", only: :dev, runtime: false},
 
       # `~> 3.0`, not `~> 2.1` -- 2.4.1 (the version that constraint
       # resolved to) carries a real, published MEDIUM-severity DoS
