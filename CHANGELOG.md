@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-26
+
+Decoding text is faster: the parser is regenerated with ichor 0.7.3, on
+ichor_runtime 0.6.3. Nothing breaks.
+
 ### Documentation
 
 - The README's speed table has Elixir's numbers on ichor 0.7.3's parser: decoding 3.45 ms instead of 3.59, lexing 1.07 ms instead of 1.61.

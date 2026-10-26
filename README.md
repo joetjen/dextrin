@@ -375,7 +375,7 @@ Add `dextrin` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:dextrin, "~> 0.3.2"}
+    {:dextrin, "~> 0.3.3"}
   ]
 end
 ```
