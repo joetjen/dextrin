@@ -369,7 +369,49 @@ A string can hold a whole DXN document, encoded, and a byte string a
 }
 ```
 
-## 14. Versions
+## 14. Building on another schema
+
+A schema or a shape can start from others. Its head names them, and its
+body says how it differs: a field declared again replaces the inherited
+one in its place, `- field` leaves one out, and new fields come last.
+
+```dxns
+%{
+  User: %schema{
+    name: :string
+    email: :string
+    nickname?: :string
+  }
+
+  Audit: %shape{changed_by: :string}
+
+  Admin: %schema extends User includes Audit {
+    - nickname
+    role: :string
+  }
+
+  Box: %schema{user: User}
+}
+```
+
+```dxn
+# good: Admin
+%Admin{name: "Ada", email: "ada@example.com", changed_by: "root", role: "owner"}
+```
+
+```dxn
+# bad: Admin
+%Admin{name: "Ada", email: "ada@example.com", changed_by: "root"}
+```
+
+`Admin` is an ordinary schema with the fields `name`, `email`,
+`changed_by` and `role`. Because it **extends** `User`, an `Admin` is
+accepted wherever a `User` is, as long as it is a valid `User` too: a
+`Box` takes one. **includes** takes the fields the same way, without
+that. So a schema may leave out only an optional field of a schema it
+extends; to leave out a required one, include that schema instead.
+
+## 15. Versions
 
 A struct schema has a version, `%schema(2){...}`, 1 when it has none.
 Load several versions of `User` side by side, and data says which one it
@@ -398,7 +440,7 @@ To change a schema that several services share:
 The README's "Changing a schema across services" tells the whole story,
 and [DXNS.md §8](DXNS.md) the rules.
 
-## 15. Many files
+## 16. Many files
 
 Schemas of any size are split into files, and a file's path names what
 it holds: `acme/shop/Order.dxns` holds `acme.shop/Order`, and

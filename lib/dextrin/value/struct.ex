@@ -25,6 +25,11 @@ defmodule Dextrin.Struct do
   they are entries after the fields or the items; in `.dxnb`, one
   trailing tag-215 map. Code relying on a struct is guaranteed only its
   declared fields.
+
+  `bases` and `drops` are what a `%schema` or `%shape` is built from
+  (DXNS.md §4b): `bases` the head's `extends` and `includes` names, as
+  `{:extends | :includes, name, version | nil}` in the order written,
+  and `drops` the body's `- field` names. Every other struct has none.
   """
 
   @type fields :: {:keyed, [{String.t(), term()}]} | {:positional, [term()]}
@@ -33,10 +38,12 @@ defmodule Dextrin.Struct do
           name: String.t(),
           version: pos_integer() | nil,
           fields: fields(),
-          extra: [{term(), term()}]
+          extra: [{term(), term()}],
+          bases: [{:extends | :includes, String.t(), pos_integer() | nil}],
+          drops: [String.t()]
         }
 
-  defstruct [:name, :fields, version: nil, extra: []]
+  defstruct [:name, :fields, version: nil, extra: [], bases: [], drops: []]
 
   @doc "A struct written with names, at `version` when one is given, carrying `extra`."
   @spec keyed(String.t(), [{String.t(), term()}], pos_integer() | nil, [{term(), term()}]) :: t()
@@ -53,6 +60,40 @@ defmodule Dextrin.Struct do
   """
   @spec head(String.t(), pos_integer() | nil) :: String.t()
   def head(name, version), do: "%" <> type_name(name, version)
+
+  @doc """
+  How `struct` opens when written at `version`: its `head/2`, then the
+  `extends` and `includes` clauses a `%schema` or `%shape` is built
+  from (DXNS.md §4b), in the order the bases were written.
+
+      Dextrin.Struct.opening(%Dextrin.Struct{name: "schema", fields: {:keyed, []},
+        bases: [{:extends, "User", 3}, {:includes, "Audit", nil}]}, 2)
+      #=> "%schema(2) extends User(3) includes Audit "
+  """
+  @spec opening(t(), pos_integer() | nil) :: String.t()
+  def opening(%__MODULE__{name: name, bases: []}, version), do: head(name, version)
+
+  def opening(%__MODULE__{name: name, bases: bases}, version) do
+    clauses =
+      bases
+      |> Enum.chunk_by(&elem(&1, 0))
+      |> Enum.map_join(" ", fn [{kind, _, _} | _] = run ->
+        Atom.to_string(kind) <>
+          " " <> Enum.map_join(run, " ", fn {_, base, v} -> type_name(base, v) end)
+      end)
+
+    head(name, version) <> " " <> clauses <> " "
+  end
+
+  @doc """
+  The `- field` entries of a `%schema` or `%shape` that leaves inherited
+  fields out (DXNS.md §4b), as they are written.
+
+      Dextrin.Struct.drop_entries(%Dextrin.Struct{name: "schema", fields: {:keyed, []}, drops: ["a"]})
+      #=> ["- a"]
+  """
+  @spec drop_entries(t()) :: [String.t()]
+  def drop_entries(%__MODULE__{drops: drops}), do: Enum.map(drops, &("- " <> &1))
 
   @doc """
   The struct's name as `.dxnb` writes it: `Name`, or `Name(3)` when it

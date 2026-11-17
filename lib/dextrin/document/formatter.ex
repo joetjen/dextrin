@@ -212,9 +212,20 @@ defmodule Dextrin.Document.Formatter do
        when rule in [:list, :tuple, :set_lit, :map_lit],
        do: collection(node, "", indent, ctx)
 
+  # A struct's head -- `%Name(3)`, and the `extends` and `includes`
+  # words a `%schema` or `%shape` may carry (DXNS.md §4b), one space
+  # apart -- then its body.
   defp body(%Node{rule: :struct_lit, children: children}, indent, ctx) do
-    {head, [body | _]} = Enum.split_while(children, &(not match?(%Node{}, &1)))
-    collection(body, tokens_text(%Node{children: head}), indent, ctx)
+    {head, rest} = Enum.split_while(children, &(not match?(%Node{}, &1)))
+    nodes = Enum.filter(rest, &match?(%Node{}, &1))
+    {words, [body | _]} = Enum.split_while(nodes, &match?(%Node{rule: :head_word}, &1))
+    clauses = Enum.map(words, &(" " <> tokens_text(&1)))
+
+    opening =
+      tokens_text(%Node{children: head}) <>
+        Enum.join(clauses) <> if(words == [], do: "", else: " ")
+
+    collection(body, opening, indent, ctx)
   end
 
   # A tag and its value. Written together, `@array[1 2]` -- the spec's
@@ -320,6 +331,10 @@ defmodule Dextrin.Document.Formatter do
   end
 
   defp item(%Node{rule: :value} = node, indent, ctx), do: value(node, indent, ctx)
+
+  # `- password`: an inherited field left out (DXNS.md §4b).
+  defp item(%Node{rule: :drop_entry} = node, _indent, _ctx),
+    do: "- " <> String.trim_leading(tokens_text(node), "-")
 
   # `prefix` and the value after it: on one line, or, with a comment
   # between them, the comment beside the prefix and the value on the

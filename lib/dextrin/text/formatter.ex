@@ -110,8 +110,8 @@ defmodule Dextrin.Text.Formatter do
          do: render_entries("%{", Map.to_list(map), "}", depth, opts)
   end
 
-  defp layout(%Struct{name: name, fields: {:keyed, pairs}} = struct, depth, opts)
-       when pairs != [] do
+  defp layout(%Struct{fields: {:keyed, pairs}, drops: drops} = struct, depth, opts)
+       when pairs != [] or drops != [] do
     # Wrapped as Dextrin.Keyword before reaching render_entries/5, same
     # as Dextrin.Text.Printer.print/2's own struct clause — struct
     # field names are always keyword-shaped per DXN.md §1.2's map_entry
@@ -120,21 +120,22 @@ defmodule Dextrin.Text.Formatter do
     # alone whether it's a field name or a genuine string-typed map key
     # (see render_entry/4's own doc for why that guess used to be wrong).
     keyed = Enum.map(pairs, fn {k, v} -> {Dextrin.Keyword.new(k), v} end)
-    entries = keyed ++ Printer.extra_entries(struct)
+    dropped = Enum.map(drops, &{{:"$dextrin_drop", &1}, nil})
+    entries = dropped ++ keyed ++ Printer.extra_entries(struct)
 
     with {:ok, body} <- render_entries("{", entries, "}", depth, opts) do
-      {:ok, Struct.head(name, Dextrin.Text.Printer.written_version(struct, opts)) <> body}
+      {:ok, Struct.opening(struct, Dextrin.Text.Printer.written_version(struct, opts)) <> body}
     end
   end
 
   # A positional struct's items, then its extra fields as entries, one
   # per line like the items (DXN.md §1.2).
-  defp layout(%Struct{name: name, fields: {:positional, items}} = struct, depth, opts)
+  defp layout(%Struct{fields: {:positional, items}} = struct, depth, opts)
        when items != [] do
     lines = items ++ Enum.map(Printer.extra_entries(struct), &{:"$dextrin_entry", &1})
 
     with {:ok, body} <- bracketed("[", lines, "]", depth, opts, &render_item_or_entry/3) do
-      {:ok, Struct.head(name, Dextrin.Text.Printer.written_version(struct, opts)) <> body}
+      {:ok, Struct.opening(struct, Dextrin.Text.Printer.written_version(struct, opts)) <> body}
     end
   end
 
@@ -250,6 +251,10 @@ defmodule Dextrin.Text.Formatter do
   # — the shorthand only exists for a bare `identifier` (`DXN.md`
   # §1.2's `map_entry`); any other name has no colon form at all and
   # must render as an ordinary keyword value on the arrow's left side.
+  # `- field`: an inherited field a schema or shape leaves out (DXNS.md
+  # §4b).
+  defp render_entry({:"$dextrin_drop", field}, nil, _depth, _opts), do: {:ok, "- " <> field}
+
   defp render_entry(%Dextrin.Keyword{name: name}, value, depth, opts) do
     render_keyword_entry(name, value, depth, opts)
   end

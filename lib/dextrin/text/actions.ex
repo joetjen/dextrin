@@ -190,30 +190,52 @@ defmodule Dextrin.Text.Actions do
 
   def handle_rule(:struct_lit, %{name: name_cap} = captures, ctx) do
     with {:ok, name, ctx} <- name_cap.eval.(ctx),
-         {:ok, version, ctx} <- struct_version(captures, ctx) do
+         {:ok, version, ctx} <- struct_version(captures, ctx),
+         {:ok, words, ctx} <- eval_list(Map.get(captures, :head_word, []), ctx),
+         {:ok, bases} <- struct_bases(name, words) do
       cond do
         Map.has_key?(captures, :keyed) ->
-          with {:ok, {:keyed, pairs, extra}, ctx} <- captures.keyed.eval.(ctx) do
-            materialize_struct(name, {:keyed, pairs}, version, extra, ctx)
+          with {:ok, {:keyed, pairs, extra, drops}, ctx} <- captures.keyed.eval.(ctx),
+               :ok <- drops_allowed(name, drops) do
+            if bases == [] and drops == [],
+              do: materialize_struct(name, {:keyed, pairs}, version, extra, ctx),
+              else: {:ok, built_from(name, pairs, version, extra, bases, drops), ctx}
           end
 
         Map.has_key?(captures, :positional) ->
           with {:ok, {:positional, items, extra}, ctx} <- captures.positional.eval.(ctx) do
-            materialize_struct(name, {:positional, items}, version, extra, ctx)
+            if bases == [],
+              do: materialize_struct(name, {:positional, items}, version, extra, ctx),
+              else: {:ok, %{Struct.positional(name, items, version, extra) | bases: bases}, ctx}
           end
       end
     end
   end
 
+  # One word of a `%schema` or `%shape` head (DXNS.md §4b), with the
+  # version a base may name.
+  def handle_rule(:head_word, %{word: word_cap} = captures, ctx) do
+    with {:ok, word, ctx} <- word_cap.eval.(ctx),
+         {:ok, version, ctx} <- struct_version(captures, ctx) do
+      {:ok, {symbol_name(word), version}, ctx}
+    end
+  end
+
+  # `- password`: an inherited field the schema or shape leaves out.
+  def handle_rule(:drop_entry, %{field: field_cap}, ctx) do
+    with {:ok, field, ctx} <- field_cap.eval.(ctx), do: {:ok, {:drop, symbol_name(field)}, ctx}
+  end
+
   # A keyed struct's entries: those keyed by a name are its fields, any
   # other map key (DXN.md §1.6) an extra field.
   def handle_rule(:struct_keyed, captures, ctx) do
-    with {:ok, pairs, ctx} <- eval_list(Map.get(captures, :map_entry, []), ctx) do
+    with {:ok, pairs, ctx} <- eval_list(Map.get(captures, :map_entry, []), ctx),
+         {:ok, drops, ctx} <- eval_list(Map.get(captures, :drop_entry, []), ctx) do
       {named, extra} = Enum.split_with(pairs, fn {key, _value} -> field_name(key) != :error end)
 
       {:ok,
-       {:keyed, Enum.map(named, fn {key, value} -> {Struct.extra_key(key), value} end), extra},
-       ctx}
+       {:keyed, Enum.map(named, fn {key, value} -> {Struct.extra_key(key), value} end), extra,
+        Enum.map(drops, fn {:drop, field} -> field end)}, ctx}
     end
   end
 
@@ -293,6 +315,63 @@ defmodule Dextrin.Text.Actions do
   end
 
   defp struct_version(_captures, ctx), do: {:ok, nil, ctx}
+
+  # A symbol's name, whichever form an identifier evaluated to.
+  defp symbol_name(%Symbol{name: name}), do: name
+  defp symbol_name(name) when is_binary(name), do: name
+
+  # The words of a struct's head read as `extends` and `includes`
+  # clauses (DXNS.md §4b): each at most once, each naming one base or
+  # more, only on a `%schema` or a `%shape`.
+  defp struct_bases(_name, []), do: {:ok, []}
+
+  defp struct_bases(name, _words) when name not in ["schema", "shape"],
+    do:
+      {:error,
+       action_error("only a %schema or a %shape names bases in its head; %#{name} does not")}
+
+  defp struct_bases(_name, [{word, _} | _]) when word not in ["extends", "includes"],
+    do: {:error, action_error("a head clause begins with extends or includes, got #{word}")}
+
+  defp struct_bases(_name, words) do
+    {bases, _kind, seen} =
+      Enum.reduce(words, {[], nil, []}, fn
+        {word, nil}, {bases, _kind, seen} when word in ["extends", "includes"] ->
+          kind = String.to_existing_atom(word)
+          {bases, kind, [kind | seen]}
+
+        {base, version}, {bases, kind, seen} ->
+          {[{kind, base, version} | bases], kind, seen}
+      end)
+
+    bases = Enum.reverse(bases)
+    clauses = Enum.reverse(seen)
+
+    cond do
+      length(Enum.uniq(clauses)) != length(clauses) ->
+        {:error, action_error("extends and includes stand at most once each in a head")}
+
+      Enum.any?(clauses, fn kind -> not Enum.any?(bases, &(elem(&1, 0) == kind)) end) or
+          Enum.any?(words, fn {word, version} -> word in ["extends", "includes"] and version end) ->
+        {:error, action_error("extends and includes each name one base or more: extends User(3)")}
+
+      true ->
+        {:ok, bases}
+    end
+  end
+
+  defp drops_allowed(_name, []), do: :ok
+  defp drops_allowed(name, _drops) when name in ["schema", "shape"], do: :ok
+
+  defp drops_allowed(name, _drops),
+    do:
+      {:error,
+       action_error("only a %schema or a %shape drops a field (- name); %#{name} does not")}
+
+  # A `%schema` or `%shape` built from others stays as it is written: the
+  # schema compiler reads it (DXNS.md §4b).
+  defp built_from(name, pairs, version, extra, bases, drops),
+    do: %{Struct.keyed(name, pairs, version, extra) | bases: bases, drops: drops}
 
   defp materialize_struct(name, fields, version, extra, ctx) do
     case ctx do

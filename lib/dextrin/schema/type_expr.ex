@@ -138,8 +138,10 @@ defmodule Dextrin.Schema.TypeExpr do
   def conform({:reference, name}, %Dextrin.Struct{name: struct_name} = value, _context),
     do: when_true(struct_name == name, value)
 
-  def conform({:reference, name}, %Validated{name: validated_name} = value, _context),
-    do: when_true(validated_name == name, value)
+  # A value of a schema that extends `name`, and is a valid `name` as
+  # well, is accepted where a `name` is (DXNS.md §4b).
+  def conform({:reference, name}, %Validated{name: validated_name, also: also} = value, _context),
+    do: when_true(validated_name == name or name in also, value)
 
   # A struct is matched only by a struct (DXNS.md §7): past a struct or
   # checked value of the right name, only the application struct

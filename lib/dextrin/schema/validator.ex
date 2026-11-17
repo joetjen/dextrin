@@ -49,6 +49,39 @@ defmodule Dextrin.Schema.Validator do
     end
   end
 
+  @doc """
+  The schemas a struct of `compiled` with `fields` passes as besides
+  its own (DXNS.md §4b): each one `compiled` extends, at the version it
+  was built with, that the fields are a valid one of -- and in turn what
+  that one extends. `includes` bases, and shapes, are none.
+  """
+  @spec also_valid_as(Compiled.t(), fields(), Registry.t()) :: [String.t()]
+  def also_valid_as(%Compiled{bases: []}, _fields, _registry), do: []
+
+  def also_valid_as(%Compiled{} = compiled, fields, registry) do
+    case to_name_map(compiled, fields) do
+      {:ok, given} -> passes_as(compiled, {:keyed, Map.to_list(given)}, registry)
+      _miscounted -> []
+    end
+  end
+
+  defp passes_as(%Compiled{bases: bases}, fields, registry) do
+    Enum.flat_map(bases, fn
+      {:extends, base, version} when is_integer(version) ->
+        with {:ok, %Compiled{} = schema, _} <-
+               Registry.fetch_struct_schema(registry, base, version),
+             {:ok, _} <- resolve(schema, fields, registry) do
+          [base | passes_as(schema, fields, registry)]
+        else
+          _ -> []
+        end
+
+      _includes_or_shape ->
+        []
+    end)
+    |> Enum.uniq()
+  end
+
   defp to_name_map(_compiled, {:keyed, pairs}), do: {:ok, Map.new(pairs)}
 
   defp to_name_map(%Compiled{fields: schema_fields}, {:positional, items}) do
@@ -244,12 +277,45 @@ defmodule Dextrin.Schema.Validator do
   # results so a wrapped grandchild survives all the way up to
   # whichever ancestor's field type actually needs to see it.
 
+  # `also_valid_as/3` for a value on its way out: each schema `compiled`
+  # extends that `value` passes as well.
+  defp encodes_as(%Compiled{bases: bases} = compiled, value, registry) do
+    value = named_items(compiled, value)
+
+    Enum.flat_map(bases, fn
+      {:extends, base, version} when is_integer(version) ->
+        with {:ok, %Compiled{} = schema, _} <-
+               Registry.fetch_struct_schema(registry, base, version),
+             :ok <- check_compiled(schema, value, registry) do
+          [base | encodes_as(schema, value, registry)]
+        else
+          _ -> []
+        end
+
+      _includes_or_shape ->
+        []
+    end)
+    |> Enum.uniq()
+  end
+
+  # A positional struct's items named by its own schema, so a base, whose
+  # fields are fewer, finds them by name as decoding does.
+  defp named_items(%Compiled{} = compiled, %Dextrin.Struct{fields: {:positional, items}} = value) do
+    case to_name_map(compiled, {:positional, items}) do
+      {:ok, given} -> %{value | fields: {:keyed, Map.to_list(given)}}
+      _miscounted -> value
+    end
+  end
+
+  defp named_items(_compiled, value), do: value
+
   defp wrap_and_check(value, registry) do
     case schema_name_for(value, registry) do
       {:ok, name, compiled} ->
         case check_compiled(compiled, value, registry) do
           :ok ->
-            {:ok, %Validated{name: name, value: value}}
+            {:ok,
+             %Validated{name: name, value: value, also: encodes_as(compiled, value, registry)}}
 
           {:error, %Dextrin.Error{} = error} ->
             {:error,
