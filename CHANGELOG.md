@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A schema tree loads a file after the base it is built from**: `mix dextrin.check` and `Dextrin.Schema.Tree.load/2`
+  ordered the files by the names their fields use, not by the bases a
+  `%schema` or `%shape` head names (DXNS.md §4b), so a file whose only
+  reference to another was its base could compile first and was refused
+  ("no schema or shape is named ...").
+
 ## [0.4.0] - 2026-11-17
 
 A schema or a shape can be built from others: `extends` and

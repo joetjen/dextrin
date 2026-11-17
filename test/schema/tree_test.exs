@@ -74,6 +74,21 @@ defmodule Dextrin.Schema.TreeTest do
     end
   end
 
+  describe "a schema built from another file's" do
+    # A base in another file, its only reference to it (DXNS.md §4b):
+    # "z" sorts after "a", so only the base orders the files.
+    @built %{
+      "a.dxns" => "%{Amateur: %shape extends z/Amateur {x: :integer}}",
+      "z.dxns" => "%{Amateur: %shape{id: :string}}",
+      "b.dxns" => "%{Admin: %schema includes z/Amateur {- id}}"
+    }
+
+    test "loads after its base, the base found by its name" do
+      assert {:ok, registry, _} = Tree.load([tree(@built)])
+      assert {:shape, _, [%{name: "id"}, %{name: "x"}]} = registry.type_aliases["a/Amateur"]
+    end
+  end
+
   describe "the file resolver" do
     # Until 2026-10-20 it compiled a file on its own, so a field naming
     # another file's named type (a shape, an enum) named a struct that

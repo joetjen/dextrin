@@ -231,6 +231,11 @@ defmodule Dextrin.Schema.Tree do
   defp symbols(%Symbol{name: name}), do: [name]
   defp symbols(%Tuple{items: items}), do: Enum.flat_map(items, &symbols/1)
 
+  # A schema or shape built from others needs its bases too (DXNS.md §4b),
+  # named in its head rather than in its fields.
+  defp symbols(%Struct{bases: [_ | _] = bases} = struct),
+    do: Enum.map(bases, &elem(&1, 1)) ++ symbols(%{struct | bases: []})
+
   defp symbols(%Struct{fields: {:keyed, pairs}}),
     do: Enum.flat_map(pairs, fn {_k, v} -> symbols(v) end)
 
