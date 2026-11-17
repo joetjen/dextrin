@@ -114,7 +114,7 @@ defmodule Dextrin.Text.Formatter do
   end
 
   defp layout(%Struct{fields: {:keyed, pairs}, drops: drops, rest: rest} = struct, depth, opts)
-       when pairs != [] or drops != [] or rest != nil do
+       when pairs != [] or drops != [] or rest != [] do
     # Wrapped as Dextrin.Keyword before reaching render_entries/5, same
     # as Dextrin.Text.Printer.print/2's own struct clause — struct
     # field names are always keyword-shaped per DXN.md §1.2's map_entry
@@ -124,7 +124,7 @@ defmodule Dextrin.Text.Formatter do
     # (see render_entry/4's own doc for why that guess used to be wrong).
     keyed = Enum.map(pairs, fn {k, v} -> {Dextrin.Keyword.new(k), v} end)
     dropped = Enum.map(drops, &{{:"$dextrin_drop", &1}, nil})
-    rest = if rest, do: [{{:"$dextrin_rest", elem(rest, 0)}, elem(rest, 1)}], else: []
+    rest = Enum.map(rest, fn {key, value} -> {{:"$dextrin_rest", key}, value} end)
     entries = dropped ++ rest ++ keyed ++ Printer.extra_entries(struct)
 
     with {:ok, body} <- render_entries("{", entries, "}", depth, opts) do

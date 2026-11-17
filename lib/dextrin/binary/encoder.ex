@@ -298,7 +298,7 @@ defmodule Dextrin.Binary.Encoder do
   # `.dxnb` has no place for its head's clauses or its `- field`s.
   # So is one that is closed (`- *`) or types its extras (`* K => V`).
   defp encode_item_dispatch(%Struct{name: name, bases: bases, drops: drops, rest: rest}, _opts)
-       when bases != [] or drops != [] or rest != nil do
+       when bases != [] or drops != [] or rest != [] do
     {:error,
      Dextrin.Error.action(
        "a %#{name} built from others (extends, includes, - field), closed (- *) " <>

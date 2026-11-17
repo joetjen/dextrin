@@ -270,7 +270,7 @@ validator opts in, and each implements the formats its own way.
 
 JSON Schema's `additionalProperties: false`, Ion Schema's `closed` and
 CDDL's maps refuse a field the schema does not list. DXNS can too --
-`- *` in a body closes it, and `* K => V` types every extra instead
+`- *` in a body closes it, and `* K => V` types the extras K takes
 (DXNS.md §4c) -- but a type is open unless it says so, for two reasons:
 
 - **Closing is mostly the reader's choice, not the type's.** A config
@@ -366,10 +366,14 @@ So a change deploys like this:
   `custom-tag` share: register a tag decoder/encoder, a struct
   materializer, or a lazy schema resolver; also carries the
   `trusted:`/`put_trusted/2` flag that decides how `keyword` decodes.
-  Plain immutable data, threaded explicitly — never a process or ETS
-  table.
+  Plain data, threaded explicitly — never a process or ETS table. The
+  one thing in it that changes is a record of which deprecations have
+  warned already (an `:atomics` array), so "once" holds across decodes.
 - **`mix dextrin.*`** — `validate`, `encode`, `decode`, `format`,
-  `compat` (the schema version discipline check, for CI), `gen.schema` (scaffold a `.dxns` file from an existing Elixir
+  `compat` (the schema version discipline check, for CI), `check` (a
+  tree of `.dxns` files), `docs`, `from_json_schema` (JSON Schema,
+  drafts 04 to 2020-12, and MongoDB's `$jsonSchema`, to DXNS),
+  `gen.schema` (scaffold a `.dxns` file from an existing Elixir
   struct), and `gen.unicode` (regenerate the grammar's Unicode
   identifier ranges from the latest UCD data).
 

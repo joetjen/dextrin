@@ -86,7 +86,7 @@ defmodule Dextrin.Schema.TreeTest do
     test "loads after its base, the base found by its name" do
       assert {:ok, registry, _} = Tree.load([tree(@built)])
 
-      assert {:shape, _, [%{name: "id"}, %{name: "x"}], :open} =
+      assert {:shape, _, [%{name: "id"}, %{name: "x"}], %{entries: [], closed: false}} =
                registry.type_aliases["a/Amateur"]
     end
   end

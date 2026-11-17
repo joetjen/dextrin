@@ -30,7 +30,8 @@ defmodule Dextrin.Struct do
   (DXNS.md §4b): `bases` the head's `extends` and `includes` names, as
   `{:extends | :includes, name, version | nil}` in the order written,
   and `drops` the body's `- field` names, `"*"` for `- *` (closed).
-  `rest` is the body's `* K => V`, `{K, V}`, the type of its extras.
+  `rest` is the body's `* K => V` entries, `{K, V}` each in the order
+  written, what its extras must be (DXNS.md §4c).
   Every other struct has none.
   """
 
@@ -43,10 +44,10 @@ defmodule Dextrin.Struct do
           extra: [{term(), term()}],
           bases: [{:extends | :includes, String.t(), pos_integer() | nil}],
           drops: [String.t()],
-          rest: {term(), term()} | nil
+          rest: [{term(), term()}]
         }
 
-  defstruct [:name, :fields, version: nil, extra: [], bases: [], drops: [], rest: nil]
+  defstruct [:name, :fields, version: nil, extra: [], bases: [], drops: [], rest: []]
 
   @doc "A struct written with names, at `version` when one is given, carrying `extra`."
   @spec keyed(String.t(), [{String.t(), term()}], pos_integer() | nil, [{term(), term()}]) :: t()

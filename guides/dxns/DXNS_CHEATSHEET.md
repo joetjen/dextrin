@@ -91,7 +91,7 @@ A `.dxns` file is a DXN map from names to definitions:
 | `media-type` | string | `"type/subtype"`, telling `content` how to read |
 | `content` | string | holds a DXN document of the given type |
 | `encodes`, `encodes-seq` | bytes | one `.dxnb` document, or several, of the given type |
-| `min-count`, `max-count` | list, set, tuple, sorted set, array | how many elements |
+| `min-count`, `max-count` | list, set, tuple, sorted set, array; map, shape, struct | how many elements; a map's entries present |
 | `contains`, `min-contains`, `max-contains` | those collections | how many elements are a given type |
 | `unique`, `unique-by` | those collections | no two elements, or their field, the same |
 | `offsets` | datetime | `["Z" "+01:00"]`: the allowed offsets |
@@ -144,10 +144,10 @@ A constraint refuses a value it does not apply to.
 | `%schema includes Audit {...}` | `Audit`'s fields, then these; no passing as an `Audit` |
 | `extends User(3) Staff` | several bases, `User` at version 3, `Staff` at its latest |
 | `- password` | an inherited field left out (only optional ones of an `extends` base) |
-| `* :string => :integer` | every extra key and value must match these (§4c) |
+| `* :string => :integer` | an extra whose key K takes must have a V value; several entries allowed (§4c) |
 | `Pet(1)` | pinned: version 1 of `Pet` only, taken as read (§5c); `{:at Pet 1}` |
 | `Color: %type(2)[{:enum ...}]` | version 2 of a named type; `Color` alone is the latest (§5c) |
-| `- *` | no extra at all, strict decode or not (§4c) |
+| `- *` | nothing beyond the fields and what the entries take, strict decode or not (§4c) |
 | `id: :uuid` | an inherited field `id` replaced, in its place |
 
 ## Versions

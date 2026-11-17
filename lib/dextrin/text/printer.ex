@@ -293,12 +293,17 @@ defmodule Dextrin.Text.Printer do
   # for an empty-name keyword, which fails to parse back at all).
   # `* K => V`, the type of a `%schema`'s or `%shape`'s extras
   # (DXNS.md §4b): always the arrow, whatever K is.
-  defp print_rest(%Struct{rest: nil}, _opts), do: {:ok, ""}
-
-  defp print_rest(%Struct{rest: {key, value}}, opts) do
-    with {:ok, key} <- print(key, opts),
-         {:ok, value} <- print(value, opts),
-         do: {:ok, "* " <> key <> " => " <> value}
+  defp print_rest(%Struct{rest: rest}, opts) do
+    rest
+    |> Result.reduce_ok([], fn {key, value}, acc ->
+      with {:ok, key} <- print(key, opts),
+           {:ok, value} <- print(value, opts),
+           do: {:ok, ["* " <> key <> " => " <> value | acc]}
+    end)
+    |> case do
+      {:ok, entries} -> {:ok, entries |> Enum.reverse() |> Enum.join(",")}
+      {:error, _} = error -> error
+    end
   end
 
   defp print_entries(pairs, opts) do

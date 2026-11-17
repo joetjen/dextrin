@@ -284,7 +284,7 @@ defmodule Dextrin.Schema.Deprecations do
   # The names `raw` uses: every symbol in it, at no version, and each
   # base of a `%schema` or `%shape` head at the version it names.
   defp used_names(%Dextrin.Struct{bases: bases, fields: fields, rest: rest}) do
-    rest_types = if rest, do: Tuple.to_list(rest), else: []
+    rest_types = Enum.flat_map(rest, &Tuple.to_list/1)
 
     Enum.map(bases, fn {_kind, base, version} -> {base, version} end) ++
       used_names(fields) ++ used_names(rest_types)

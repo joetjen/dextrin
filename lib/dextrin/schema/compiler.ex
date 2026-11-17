@@ -239,13 +239,7 @@ defmodule Dextrin.Schema.Compiler do
     end
   end
 
-  defp resolved_extras({key, value}, aliases) do
-    with {:ok, key} <- resolved(key, aliases, []),
-         {:ok, value} <- resolved(value, aliases, []),
-         do: {:ok, {key, value}}
-  end
-
-  defp resolved_extras(extras, _aliases), do: {:ok, extras}
+  defp resolved_extras(extras, aliases), do: resolved_shape_extras(extras, aliases, [])
 
   defp compile_error(message), do: Dextrin.Error.action(message, "schema/compile")
 
@@ -442,20 +436,21 @@ defmodule Dextrin.Schema.Compiler do
   defp field_drops(drops), do: Enum.reject(drops, &(&1 == "*"))
 
   defp own_extras(%Struct{drops: drops, rest: rest}, scope) do
-    case {"*" in drops, rest} do
-      {true, nil} ->
-        {:ok, :closed}
+    closed = "*" in drops
 
-      {true, _rest} ->
-        {:error, "a body is closed (- *) or types its extras (* K => V), not both"}
-
-      {false, nil} ->
-        {:ok, nil}
-
-      {false, {key, value}} ->
+    if rest == [] and not closed do
+      {:ok, nil}
+    else
+      rest
+      |> Result.reduce_ok([], fn {key, value}, acc ->
         with {:ok, key} <- compile_type_expr(key, scope),
              {:ok, value} <- compile_type_expr(value, scope),
-             do: {:ok, {key, value}}
+             do: {:ok, [{key, value} | acc]}
+      end)
+      |> case do
+        {:ok, entries} -> {:ok, %{entries: Enum.reverse(entries), closed: closed}}
+        {:error, _} = error -> error
+      end
     end
   end
 
@@ -536,13 +531,14 @@ defmodule Dextrin.Schema.Compiler do
     said =
       found
       |> Enum.map(& &1.extras)
-      |> Enum.reject(&(&1 == :open))
+      |> Enum.reject(&(&1 == TypeExpr.open_extras()))
       |> Enum.uniq_by(&in_place(&1, known, []))
 
-    closed_base = Enum.find(found, &(&1.kind == :extends and &1.extras == :closed))
+    closed_base = Enum.find(found, &(&1.kind == :extends and &1.extras.closed))
 
     cond do
-      closed_base && (added_fields(own, closed_base) != [] or own_extras not in [nil, :closed]) ->
+      closed_base &&
+          (added_fields(own, closed_base) != [] or own_extras not in [nil, closed_base.extras]) ->
         {:error,
          compile_error(
            "#{inspect(name)} extends #{closed_base.name}, which is closed (- *): " <>
@@ -560,7 +556,7 @@ defmodule Dextrin.Schema.Compiler do
          )}
 
       true ->
-        {:ok, List.first(said, :open)}
+        {:ok, List.first(said, TypeExpr.open_extras())}
     end
   end
 
@@ -1249,13 +1245,18 @@ defmodule Dextrin.Schema.Compiler do
 
   defp resolved(type_expr, _compiled, _path), do: {:ok, type_expr}
 
-  defp resolved_shape_extras({key, value}, compiled, path) do
-    with {:ok, key} <- resolved(key, compiled, path),
-         {:ok, value} <- resolved(value, compiled, path),
-         do: {:ok, {key, value}}
+  defp resolved_shape_extras(%{entries: entries} = extras, compiled, path) do
+    entries
+    |> Result.reduce_ok([], fn {key, value}, acc ->
+      with {:ok, key} <- resolved(key, compiled, path),
+           {:ok, value} <- resolved(value, compiled, path),
+           do: {:ok, [{key, value} | acc]}
+    end)
+    |> case do
+      {:ok, entries} -> {:ok, %{extras | entries: Enum.reverse(entries)}}
+      {:error, _} = error -> error
+    end
   end
-
-  defp resolved_shape_extras(extras, _compiled, _path), do: {:ok, extras}
 
   # A refine's types -- `contains`, `content`, `encodes`, `encodes-seq` --
   # resolved as its base is.
@@ -1357,7 +1358,8 @@ defmodule Dextrin.Schema.Compiler do
          :ok <- distinct_names(fields),
          :ok <- cases_name_fields(pairs, fields),
          {:ok, extras} <- own_extras(raw, aliases) do
-      {:ok, %Compiled{version: version || 1, fields: fields, extras: extras || :open}}
+      {:ok,
+       %Compiled{version: version || 1, fields: fields, extras: extras || TypeExpr.open_extras()}}
     end
   end
 
@@ -1545,7 +1547,7 @@ defmodule Dextrin.Schema.Compiler do
          :ok <- distinct_names(fields),
          :ok <- cases_name_fields(pairs, fields),
          {:ok, extras} <- own_extras(raw, aliases) do
-      {:ok, {:shape, nil, fields, extras || :open}}
+      {:ok, {:shape, nil, fields, extras || TypeExpr.open_extras()}}
     end
   end
 

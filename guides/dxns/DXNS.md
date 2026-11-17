@@ -225,8 +225,8 @@ stands on.
 | `content` | string | the string, decoded by its encoding if it has one, is a DXN document whose value matches the given type: .dxnb under application/dxnb, text otherwise |
 | `encodes` | bytes | the bytes are a .dxnb document whose value matches the given type (CDDL's .cbor) |
 | `encodes-seq` | bytes | the bytes are .dxnb documents back to back, each with its envelope, each matching the given type; none at all too (CDDL's .cborseq) |
-| `min-count` | list/set/tuple/sorted-set/array | element count >= given integer |
-| `max-count` | list/set/tuple/sorted-set/array | element count <= given integer |
+| `min-count` | list/set/tuple/sorted-set/array/map/ordered-map/shape/struct | element count >= given integer; a map's, a shape's or a struct's entries present, extras included |
+| `max-count` | list/set/tuple/sorted-set/array/map/ordered-map/shape/struct | element count <= given integer, counted as min-count counts it |
 | `contains` | list/set/tuple/sorted-set/array | at least min-contains (1 when not given) and at most max-contains elements match the given type |
 | `min-contains` | with contains | how many elements must match contains, at least |
 | `max-contains` | with contains | how many elements may match contains, at most |
@@ -607,34 +607,47 @@ closed       = "-" , "*" ;                            (* no extras *)
 ```text
 Labels: %shape{name: :string, * :string => :string}
 Point:  %shape{x: :float, y: :float, - *}
-Counts: %schema{total: :integer, * :string => :integer}
+Ext:    %shape{id: :integer, * {:refine :string %{pattern: @regex "^x-"}} => :string, - *}
 ```
 
 **A body may say what it takes beyond its fields** (G1 of
-design/typespec.md, Jan, 2026-11-17). By default the extras are
-**open**: any is kept, and only a strict decode (§7) refuses them.
+design/typespec.md and T674, Jan, 2026-11-17). By default the extras
+are **open**: any is kept, and only a strict decode (§7) refuses them.
 
-- **`* K => V` types the extras**: every key no field declares must
-  match K, and its value V. A struct's named extras are strings, so
-  `* :string => V` takes them. A strict decode keeps typed extras: the
-  body declares them. An extra that does not match is
+- **`* K => V` types the extras K takes**: a key no field declares, and
+  that matches K, must have a value matching V. A body may have several
+  entries; a key several of them take must match every one's V, in the
+  order written. A struct's named extras are strings, so `* :string =>
+  V` takes them. An extra whose value does not match is
   `schema/type-mismatch`; in a shape, extras are conformed like fields.
-- **`- *` closes the body**: no extra at all, strict decode or not. One
-  given is `schema/undeclared-field`.
+- **A key no entry takes is kept**, as any extra is, and a strict decode
+  refuses it.
+- **`- *` closes the body**: nothing beyond the fields and what the
+  entries take, strict decode or not. Anything else given is
+  `schema/undeclared-field`. Alone, `- *` refuses every extra;
+  `* :string => V - *` is "every extra a string key and a V".
 - **K and V are type expressions** of the document, as a field's type
-  is. A body has one `* K => V` or one `- *` at most, not both.
-- **Built from others** (§4b): the result has its body's own entry if
-  it gives one, otherwise what its bases say. Bases that say different
-  things are a compile error unless the body says; a base that says
-  nothing agrees with any. What `extends` a closed base must stay closed
-  and add no field of its own, or it could not pass as that base;
-  `includes` it instead.
+  is. `- *` stands once in a body.
+- **Built from others** (§4b): the result has its body's own entries
+  and `- *` if it gives any, otherwise what its bases say. Bases that say
+  different things are a compile error unless the body says; a base that
+  says nothing agrees with any. What `extends` a closed base must say
+  what it says and add no field of its own, or it could not pass as that
+  base; `includes` it instead.
 - **Only a `%schema` or a `%shape` body** takes either entry, anywhere
   in the body; on any other struct either is `syntax`. `*` begins
   nothing else in DXN. Like `- field`, they have no `.dxnb` form.
 
+*Replaced (2026-11-17, T674):* a body had one `* K => V` at most, every
+extra key had to match its K, and `- *` beside it was a compile error.
+JSON Schema's `patternProperties` gives several patterns, each typing
+only the keys it matches, and `additionalProperties: false` beside
+them; one entry could say neither.
+
 TypeSpec's `...Record<T>` and `model P is Record<T> {...}` are
-`* :string => T`.
+`* :string => T - *`. JSON Schema's `patternProperties` are one entry
+each, `* {:refine :string %{pattern: P}} => S`; `additionalProperties:
+false` is `- *`.
 
 ## 5. Named types
 

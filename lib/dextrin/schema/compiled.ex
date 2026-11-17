@@ -26,9 +26,16 @@ defmodule Dextrin.Schema.Compiled do
   # entry says about it (DXNS.md §1b). `bases` are what it was built from
   # (DXNS.md §4b), each schema at the version it was built with, a shape
   # without one: what an `extends` makes it acceptable as. `extras` are
-  # what it takes beyond its fields (G1): `:open`, `:closed` (`- *`) or
-  # `{key_type, value_type}` (`* K => V`).
-  defstruct [:name, version: 1, fields: [], annotations: %{}, bases: [], extras: :open]
+  # what it takes beyond its fields (DXNS.md §4c): its `* K => V`
+  # entries and whether `- *` closes it.
+  defstruct [
+    :name,
+    version: 1,
+    fields: [],
+    annotations: %{},
+    bases: [],
+    extras: %{entries: [], closed: false}
+  ]
 
   @spec field_names(t()) :: [String.t()]
   def field_names(%__MODULE__{fields: fields}), do: Enum.map(fields, & &1.name)

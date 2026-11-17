@@ -419,8 +419,9 @@ that. So a schema may leave out only an optional field of a schema it
 extends; to leave out a required one, include that schema instead.
 
 A body may also say what it takes beyond its fields. By default anything
-extra is kept. `* K => V` types every extra key and value, and `- *`
-refuses any extra at all, whatever the decode:
+extra is kept. `* K => V` says what the value of an extra whose key K
+takes must be -- a body may have several -- and `- *` refuses anything
+beyond the fields and the entries, whatever the decode:
 
 ```dxns
 %{

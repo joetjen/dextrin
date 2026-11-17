@@ -484,11 +484,13 @@ defmodule Dextrin.Schema.TypeExpr do
     do: {:apply, name, Enum.map(args, &substitute(&1, bound))}
 
   defp substitute({:shape, name, fields, extras}, bound) do
-    extras =
-      case extras do
-        {key, value} -> {substitute(key, bound), substitute(value, bound)}
-        open_or_closed -> open_or_closed
-      end
+    extras = %{
+      extras
+      | entries:
+          Enum.map(extras.entries, fn {key, value} ->
+            {substitute(key, bound), substitute(value, bound)}
+          end)
+    }
 
     {:shape, name, Enum.map(fields, &%{&1 | type: substitute(&1.type, bound)}), extras}
   end
@@ -619,63 +621,77 @@ defmodule Dextrin.Schema.TypeExpr do
   defp default_key(name, %{registry: %Dextrin.Registry{trusted: true}}), do: Keyword.trusted(name)
   defp default_key(name, _context), do: Keyword.new(name)
 
-  # A shape's extras (G1, DXNS.md §4b): open ones kept, and refused by a
-  # strict decode; closed ones (`- *`) refused; typed ones (`* K => V`)
-  # each conformed, key and value.
-  defp shape_extras(:open, [_ | _], _filled, %{registry: %Dextrin.Registry{strict: true}}),
-    do: :error
-
-  defp shape_extras(:open, _pairs, filled, _context), do: {:ok, filled}
-  defp shape_extras(:closed, [], filled, _context), do: {:ok, filled}
-  defp shape_extras(:closed, _pairs, _filled, _context), do: :error
-
-  defp shape_extras({key_type, value_type}, pairs, filled, context) do
+  # A shape's extras (G1 and T674, DXNS.md §4c), each conformed as
+  # `extra_conformed/4` says.
+  defp shape_extras(extras, pairs, filled, context) do
     Enum.reduce_while(pairs, {:ok, filled}, fn {key, value}, {:ok, acc} ->
-      with {:ok, _key} <- conform(key_type, key, context),
-           {:ok, value} <- conform(value_type, value, context) do
-        {:cont, {:ok, Map.put(acc, key, value)}}
-      else
-        :error -> {:halt, :error}
+      case extra_conformed(extras, key, value, context) do
+        {:ok, value} -> {:cont, {:ok, Map.put(acc, key, value)}}
+        _refused -> {:halt, :error}
       end
     end)
   end
 
   @typedoc """
-  What a schema or shape takes beyond its fields (G1, DXNS.md §4b): any
-  extra, none (`- *`), or those whose key and value match a type each
-  (`* K => V`).
+  What a schema or shape takes beyond its fields (DXNS.md §4c): its
+  `* K => V` entries in order, and whether `- *` closes it.
   """
-  @type extras :: :open | :closed | {t(), t()}
+  @type extras :: %{entries: [{t(), t()}], closed: boolean()}
+
+  @doc "Extras that say nothing: any extra is kept, and a strict decode refuses it."
+  @spec open_extras() :: extras()
+  def open_extras, do: %{entries: [], closed: false}
+
+  # One extra, `key => value`, against `extras`: its value must match the
+  # V of every entry whose K takes the key, in order. A key no entry
+  # takes is kept, unless the body is closed or the decode strict.
+  defp extra_conformed(%{entries: entries, closed: closed}, key, value, context) do
+    case Enum.filter(entries, fn {key_type, _} -> conform(key_type, key, context) != :error end) do
+      [] ->
+        cond do
+          closed -> {:unmatched, :closed}
+          strict?(context) -> {:unmatched, :strict}
+          true -> {:ok, value}
+        end
+
+      matched ->
+        Enum.reduce_while(matched, {:ok, value}, fn {_key_type, value_type}, {:ok, acc} ->
+          case conform(value_type, acc, context) do
+            {:ok, conformed} -> {:cont, {:ok, conformed}}
+            :error -> {:halt, {:mismatch, value_type}}
+          end
+        end)
+    end
+  end
+
+  defp strict?(%{registry: %Dextrin.Registry{strict: true}}), do: true
+  defp strict?(_context), do: false
 
   @doc """
   Why `extras` refuse `pairs`, the `{key, value}`s a struct or map
   carries that no field declares: `nil` when they pass, otherwise
-  `{message, category}`. Open extras take any (a strict decode refuses
-  them elsewhere); closed ones none; typed ones each key matching K and
-  its value V.
+  `{message, category}`. A key some `* K => V` takes must match its V;
+  one none takes is refused when the body is closed or the decode
+  strict.
   """
   @spec extras_refusal(extras(), [{term(), term()}], map()) :: nil | {String.t(), String.t()}
-  def extras_refusal(:open, _pairs, _context), do: nil
-  def extras_refusal(_extras, [], _context), do: nil
-
-  def extras_refusal(:closed, [{key, _} | _], _context),
-    do:
-      {"#{shown(key)} is no declared field, and the body is closed (- *)",
-       "schema/undeclared-field"}
-
-  def extras_refusal({key_type, value_type}, pairs, context) do
+  def extras_refusal(extras, pairs, context) do
     Enum.find_value(pairs, fn {key, value} ->
-      cond do
-        conform(key_type, key, context) == :error ->
-          {"extra key #{shown(key)} does not match the key type of * K => V",
-           "schema/type-mismatch"}
+      case extra_conformed(extras, key, value, context) do
+        {:ok, _conformed} ->
+          nil
 
-        conform(value_type, value, context) == :error ->
+        {:unmatched, :closed} ->
+          {"#{shown(key)} is no declared field, and the body is closed (- *)",
+           "schema/undeclared-field"}
+
+        {:unmatched, :strict} ->
+          {"#{shown(key)} is no declared field, and the decode is strict",
+           "schema/undeclared-field"}
+
+        {:mismatch, value_type} ->
           why = explain(value_type, value, context) || "does not match the value type of * K => V"
           {"extra #{shown(key)}: #{why}", "schema/type-mismatch"}
-
-        true ->
-          nil
       end
     end)
   end
@@ -1292,6 +1308,20 @@ defmodule Dextrin.Schema.TypeExpr do
       _ -> nil
     end
   end
+
+  # A map's, a shape's or a struct's count is its entries present, extras
+  # included (T674: JSON Schema's minProperties and maxProperties).
+  defp count_of(%Validated{as_read: %Dextrin.Struct{} = struct}), do: count_of(struct)
+  defp count_of(%Validated{value: value}), do: count_of(value)
+  defp count_of(%OrderedMap{pairs: pairs}), do: length(pairs)
+
+  defp count_of(%Dextrin.Struct{fields: {:keyed, pairs}, extra: extra}),
+    do: length(pairs) + length(extra)
+
+  defp count_of(%Dextrin.Struct{fields: {:positional, items}, extra: extra}),
+    do: length(items) + length(extra)
+
+  defp count_of(map) when is_map(map) and not is_struct(map), do: map_size(map)
 
   defp count_of(value) do
     case items_of(value) do

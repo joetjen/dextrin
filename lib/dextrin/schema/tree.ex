@@ -237,8 +237,10 @@ defmodule Dextrin.Schema.Tree do
     do: Enum.map(bases, &elem(&1, 1)) ++ symbols(%{struct | bases: []})
 
   # A body's `* K => V` names types too (DXNS.md §4c).
-  defp symbols(%Struct{rest: {key, value}} = struct),
-    do: symbols(key) ++ symbols(value) ++ symbols(%{struct | rest: nil})
+  defp symbols(%Struct{rest: [_ | _] = rest} = struct),
+    do:
+      Enum.flat_map(rest, fn {key, value} -> symbols(key) ++ symbols(value) end) ++
+        symbols(%{struct | rest: []})
 
   defp symbols(%Struct{fields: {:keyed, pairs}}),
     do: Enum.flat_map(pairs, fn {_k, v} -> symbols(v) end)
@@ -307,7 +309,7 @@ defmodule Dextrin.Schema.Tree do
   end
 
   defp compiled_references(%Compiled{fields: fields, extras: extras}) do
-    extra_types = if is_tuple(extras), do: Elixir.Tuple.to_list(extras), else: []
+    extra_types = Enum.flat_map(extras.entries, &Elixir.Tuple.to_list/1)
 
     Enum.flat_map(fields, &type_references(&1.type)) ++
       Enum.flat_map(extra_types, &type_references/1)
@@ -319,7 +321,7 @@ defmodule Dextrin.Schema.Tree do
   defp type_references({:reference, name, _version}), do: [name]
 
   defp type_references({:shape, _name, fields, extras}) do
-    extra_types = if is_tuple(extras), do: Elixir.Tuple.to_list(extras), else: []
+    extra_types = Enum.flat_map(extras.entries, &Elixir.Tuple.to_list/1)
 
     Enum.flat_map(fields, &type_references(&1.type)) ++
       Enum.flat_map(extra_types, &type_references/1)

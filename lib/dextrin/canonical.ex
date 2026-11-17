@@ -172,8 +172,9 @@ defmodule Dextrin.Canonical do
   defp shorthand_name(_), do: :error
 
   # `* K => V` (DXNS.md §4b), always with the arrow.
-  defp rest_entry(%Struct{rest: nil}), do: ""
-  defp rest_entry(%Struct{rest: {key, value}}), do: "* " <> text(key) <> " => " <> text(value)
+  defp rest_entry(%Struct{rest: rest}),
+    do:
+      Enum.map_join(rest, " ", fn {key, value} -> "* " <> text(key) <> " => " <> text(value) end)
 
   # A keyed struct's entries: a field name is written as shorthand when
   # it is an identifier, and every entry keeps its place.

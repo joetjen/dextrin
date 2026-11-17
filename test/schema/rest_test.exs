@@ -44,8 +44,15 @@ defmodule Dextrin.Schema.RestTest do
       r = registry(@rest)
       assert takes?(r, "Tags", ~s|%{name: "a", "x" => 1, "y" => 2}|)
       refute takes?(r, "Tags", ~s|%{name: "a", "x" => "one"}|)
-      refute takes?(r, "Tags", ~s|%{name: "a", :x => 1}|)
       assert takes?(r, "Tags", ~s|%{name: "a"}|)
+    end
+
+    # A key K does not take is no business of the entry (T674); `- *`
+    # beside it refuses such a key, as a lone `* K => V` did until then.
+    test "a key K does not take is kept, unless - * stands beside it" do
+      assert takes?(registry(@rest), "Tags", ~s|%{name: "a", :x => 1}|)
+      r = registry("%{T: %shape{name: :string * :string => :integer - *}}")
+      refute takes?(r, "T", ~s|%{name: "a", :x => 1}|)
     end
 
     test "a declared field is no extra, whatever the rest says" do
@@ -104,8 +111,63 @@ defmodule Dextrin.Schema.RestTest do
                "schema/undeclared-field"
     end
 
-    test "- * does not go with * K => V" do
-      assert compile_error("%{P: %shape{x: :integer - * * :string => :any}}") =~ "* K => V"
+    # Until T674 (Jan, 2026-11-17) a body had one `* K => V` at most, and
+    # not beside `- *`. JSON Schema's patternProperties needs several,
+    # and additionalProperties: false beside them.
+    test "beside entries, - * refuses only what no entry takes" do
+      r =
+        registry(
+          "%{P: %shape{x: :integer * {:refine :string %{pattern: @regex \"^x-\"}} => :integer - *}}"
+        )
+
+      assert takes?(r, "P", ~s|%{x: 1, "x-a" => 2}|)
+      refute takes?(r, "P", ~s|%{x: 1, "x-a" => "two"}|)
+      refute takes?(r, "P", ~s|%{x: 1, "y" => 2}|)
+    end
+  end
+
+  describe "several * K => V" do
+    @several """
+    %{
+      P: %shape{
+        * {:refine :string %{pattern: @regex "^a"}} => :integer
+        * {:refine :string %{pattern: @regex "b$"}} => {:refine :integer %{min: 10}}
+      }
+    }
+    """
+
+    test "a key matches the V of every entry whose K takes it" do
+      r = registry(@several)
+      assert takes?(r, "P", ~s|%{"a" => 1, "b" => 10, "ab" => 12}|)
+      refute takes?(r, "P", ~s|%{"ab" => 3}|)
+      refute takes?(r, "P", ~s|%{"b" => 3}|)
+    end
+
+    test "a key no entry takes is kept, unless the body is closed or the decode strict" do
+      r = registry(@several)
+      assert takes?(r, "P", ~s|%{"zzz" => "anything"}|)
+
+      {:ok, value} = Dextrin.decode(~s|%{"zzz" => 1}|)
+      strict = %{r | strict: true}
+      assert {:error, _} = Schema.check(value, strict, "P")
+
+      {:ok, value} = Dextrin.decode(~s|%{"a" => 1}|)
+      assert Schema.check(value, strict, "P") == :ok
+    end
+
+    test "a struct's extras follow the same rule" do
+      r =
+        registry(
+          "%{C: %schema{n: :integer * {:refine :string %{pattern: @regex \"^x\"}} => :integer - *}}"
+        )
+
+      assert {:ok, _} = Dextrin.decode(~s|%C{n: 1, "xa" => 2}|, registry: r)
+
+      assert category(Dextrin.decode(~s|%C{n: 1, "xa" => "s"}|, registry: r)) ==
+               "schema/type-mismatch"
+
+      assert category(Dextrin.decode(~s|%C{n: 1, "ya" => 2}|, registry: r)) ==
+               "schema/undeclared-field"
     end
   end
 
@@ -126,11 +188,12 @@ defmodule Dextrin.Schema.RestTest do
       assert message =~ "%Foo"
     end
 
-    test "a body takes one * K => V at most" do
-      assert {:error, %Dextrin.Error{message: message}} =
-               Dextrin.decode("%shape{* :string => :any * :keyword => :any}")
-
-      assert message =~ "once"
+    test "several entries are written back in their order" do
+      text = "%{P: %shape{* :string => :any * :keyword => :integer - *}}"
+      {:ok, doc} = Dextrin.decode(text)
+      {:ok, printed} = Dextrin.encode(doc)
+      assert printed =~ ~r/\* :string => :any.*\* :keyword => :integer/
+      assert {:ok, ^doc} = Dextrin.decode(printed)
     end
   end
 

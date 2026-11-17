@@ -199,7 +199,11 @@ defmodule Dextrin.Schema.Reader do
   # A strict decode refuses any extra field on a schema-backed struct
   # whose extras are open; closed or typed ones say themselves which
   # they take (G1).
-  defp strictly(%Registry{strict: true}, %Compiled{name: name, extras: :open}, [{key, _} | _]) do
+  defp strictly(
+         %Registry{strict: true},
+         %Compiled{name: name, extras: %{entries: [], closed: false}},
+         [{key, _} | _]
+       ) do
     {:error,
      Dextrin.Error.action(
        "struct #{inspect(name)} carries #{inspect(key)}, which its schema does not declare",

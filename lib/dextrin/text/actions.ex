@@ -205,7 +205,7 @@ defmodule Dextrin.Text.Actions do
           with {:ok, {:keyed, pairs, extra, drops, rest}, ctx} <- captures.keyed.eval.(ctx),
                :ok <- drops_allowed(name, drops),
                :ok <- rest_allowed(name, rest) do
-            if bases == [] and drops == [] and rest == nil,
+            if bases == [] and drops == [] and rest == [],
               do: materialize_struct(name, {:keyed, pairs}, version, extra, ctx),
               else: {:ok, built_from(name, pairs, version, extra, {bases, drops, rest}), ctx}
           end
@@ -253,7 +253,7 @@ defmodule Dextrin.Text.Actions do
     with {:ok, pairs, ctx} <- eval_list(Map.get(captures, :map_entry, []), ctx),
          {:ok, drops, ctx} <- eval_list(Map.get(captures, :drop_entry, []), ctx),
          {:ok, rests, ctx} <- eval_list(Map.get(captures, :rest_entry, []), ctx),
-         {:ok, rest} <- one_rest(rests),
+         rest = Enum.map(rests, fn {:rest, key, val} -> {key, val} end),
          :ok <- closed_once(drops) do
       {named, extra} = Enum.split_with(pairs, fn {key, _value} -> field_name(key) != :error end)
 
@@ -398,13 +398,7 @@ defmodule Dextrin.Text.Actions do
       else: :ok
   end
 
-  defp one_rest([]), do: {:ok, nil}
-  defp one_rest([{:rest, key, val}]), do: {:ok, {key, val}}
-
-  defp one_rest(_rests),
-    do: {:error, action_error("a body types its extras (* K => V) once at most")}
-
-  defp rest_allowed(_name, nil), do: :ok
+  defp rest_allowed(_name, []), do: :ok
   defp rest_allowed(name, _rest) when name in ["schema", "shape"], do: :ok
 
   defp rest_allowed(name, _rest),
