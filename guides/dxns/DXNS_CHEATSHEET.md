@@ -39,7 +39,7 @@ A `.dxns` file is a DXN map from names to definitions:
 | `:uuid`, `:objectid`, `:ip`, `:uri`, `:regex` | `@uuid "..."`, `@objectid "..."`, `@ip "..."`, `@uri "..."`, `@regex "..."` |
 | `:list`, `:tuple`, `:map`, `:ordered-map`, `:set`, `:sorted-set`, `:array` | a collection of that kind, any elements |
 | `:timestamp` | a datetime in UTC: `{:refine :datetime %{offsets: ["Z"]}}` |
-| `:int32`, `:int64`, `:uint32`, `:uint64` | an integer in that range |
+| `:int8`, `:int16`, `:int32`, `:int64`, `:uint8`, `:uint16`, `:uint32`, `:uint64` | an integer in that range |
 | `:float32` | a float that single precision holds exactly |
 | `:number` | any integer, float, decimal or rational |
 
@@ -67,7 +67,7 @@ A `.dxns` file is a DXN map from names to definitions:
 | `{:case field %{v => T, :else => U}}` | the type the sibling `field`'s value chooses |
 | `{:tagged acme.money T}` | the custom tag `@acme.money` around a `T` |
 | `{:doc T %{description: "..."}}` | a `T`, annotated (see below) |
-| `{:generic [t] body}` | a named type with parameters |
+| `{:generic [t {u Bound Default}] body}` | a named type with parameters; `{u Bound}` limits one, a default lets a use leave it out |
 | `{:of Name T}` | one use of a generic |
 | `%shape{...}` | a plain map with these fields |
 | `%schema(N){...}` | a struct schema, version `N` (1 when left out) |
@@ -107,7 +107,7 @@ A constraint refuses a value it does not apply to.
 `date`, `time`, `datetime`, `local-datetime`, `duration`, `uuid`, `ipv4`,
 `ipv6`, `hostname`, `idn-hostname`, `email`, `idn-email`, `uri`,
 `uri-reference`, `iri`, `iri-reference`, `uri-template`, `json-pointer`,
-`relative-json-pointer`, `semver`, `mac`, `host-port`.
+`relative-json-pointer`, `semver`, `mac`, `host-port`, `http-date`.
 
 ## Annotations
 
@@ -119,6 +119,11 @@ A constraint refuses a value it does not apply to.
 | `deprecated` | boolean or string | on its way out, with the reason |
 | `meta` | map | anything else, kept as written |
 | `values` | map | on an enum: each value's own annotations |
+| `secret` | boolean | not to be logged or shown |
+| `key` | boolean or string | the field identifies its value; a string is another name |
+| `visibility` | list | `:create`, `:read`, `:update`, `:delete`, `:query`: the stages that see it |
+| `messages` | map | a refine key to the message its refusal reports |
+| `discriminator` | name | on an any-of or one-of: the field choosing the variant |
 
 ## Fields
 
@@ -127,6 +132,7 @@ A constraint refuses a value it does not apply to.
 | `name: T` | required |
 | `name?: T` | optional: may be absent |
 | `name: %field{type: T, default: v}` | absent means `v` |
+| `at: %field{type: :timestamp, computed: :now}` | absent means the moment it is filled |
 | `name: %field{type: T, description: "..."}` | documented |
 | `name: {:nilable T}` | present, but may be `nil` |
 

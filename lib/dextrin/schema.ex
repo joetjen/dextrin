@@ -178,8 +178,15 @@ defmodule Dextrin.Schema do
             ok
 
           :error ->
-            {:error,
-             Dextrin.Error.action("value does not match #{inspect(name)}", "schema/type-mismatch")}
+            context = TypeExpr.context(registry)
+
+            message =
+              case TypeExpr.explain(type_expr, value, context) do
+                nil -> "value does not match #{inspect(name)}"
+                why -> "value does not match #{inspect(name)}: #{why}"
+              end
+
+            {:error, Dextrin.Error.action(message, "schema/type-mismatch")}
         end
 
       :error ->

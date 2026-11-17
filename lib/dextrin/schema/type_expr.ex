@@ -191,7 +191,7 @@ defmodule Dextrin.Schema.TypeExpr do
       ) do
     case Map.fetch(aliases, name) do
       {:ok, {:generic, params, body}} when length(params) == length(args) ->
-        conform(substitute(body, Map.new(Enum.zip(params, args))), value, context)
+        conform(instantiate(params, body, args), value, context)
 
       _ ->
         :error
@@ -567,7 +567,7 @@ defmodule Dextrin.Schema.TypeExpr do
   end
 
   defp shape_field(%{default: default} = field, :error, context) when default != :none,
-    do: {:put, default_key(field.name, context), default}
+    do: {:put, default_key(field.name, context), Dextrin.Schema.Field.default_value(field)}
 
   defp shape_field(%{required: true}, :error, _context), do: :error
   defp shape_field(_field, :error, _context), do: :absent
@@ -651,6 +651,200 @@ defmodule Dextrin.Schema.TypeExpr do
   # The value itself, not one equal to it: `1` is no `1.0` (DXN.md §1.5),
   # where Elixir's `==` says it is.
   defp keyword_aware_eq?(literal, value), do: literal === value
+
+  @doc """
+  A generic's body with `args` standing where its parameters stand: the
+  type one `{:of Name ...}` of it means.
+  """
+  @spec instantiate([String.t()], t(), [t()]) :: t()
+  def instantiate(params, body, args),
+    do: substitute(body, Map.new(Enum.zip(Enum.map(params, &param_name/1), args)))
+
+  @doc """
+  A generic parameter's name: a bare parameter is its name, one with a
+  bound or a default `{name, bound, default}` (G2 of design/typespec.md).
+  """
+  @spec param_name(String.t() | {String.t(), t(), t() | :none}) :: String.t()
+  def param_name({name, _bound, _default}), do: name
+  def param_name(name) when is_binary(name), do: name
+
+  # ---- why a value is refused ------------------------------------------------
+
+  @doc """
+  Why `type` refuses `value`, in words, or `nil` when there is nothing
+  more to say than that it does not match. Asked only after `conform/3`
+  refused, so a check that passes never pays for it.
+
+  It follows a refusal to where a document said something about it: a
+  `messages` annotation's message for the constraint that refused (G5
+  of design/typespec.md), and a `discriminator` annotation's choice of
+  variant (G3) -- the variant the field names, and why that one
+  refuses, instead of every variant's refusal.
+  """
+  @spec explain(t(), term(), context()) :: String.t() | nil
+  def explain({:doc, type, %{"discriminator" => field} = notes}, value, context) do
+    case variants(type) do
+      nil -> explain({:doc, type, Map.delete(notes, "discriminator")}, value, context)
+      types -> discriminated(field, types, value, context)
+    end
+  end
+
+  def explain({:doc, type, %{"messages" => messages}}, value, context) do
+    case undoc(type) do
+      {:refine, base, constraints} ->
+        with {:ok, conformed} <- conform(base, value, context),
+             key when is_binary(key) <- failing_key(conformed, constraints, base, context),
+             {:ok, message} <- Map.fetch(messages, key) do
+          message
+        else
+          _ -> explain(type, value, context)
+        end
+
+      _ ->
+        explain(type, value, context)
+    end
+  end
+
+  def explain({:doc, type, _notes}, value, context), do: explain(type, value, context)
+
+  def explain(
+        {kind, name},
+        value,
+        %{registry: %Dextrin.Registry{type_aliases: aliases}} = context
+      )
+      when kind in [:named] do
+    case Map.fetch(aliases, name) do
+      {:ok, type} -> explain(type, value, context)
+      :error -> nil
+    end
+  end
+
+  def explain(
+        {:apply, name, args},
+        value,
+        %{registry: %Dextrin.Registry{type_aliases: aliases}} = context
+      ) do
+    case Map.fetch(aliases, name) do
+      {:ok, {:generic, params, body}} -> explain(instantiate(params, body, args), value, context)
+      _ -> nil
+    end
+  end
+
+  def explain({:shape, _name, fields}, value, context)
+      when is_map(value) and not is_struct(value) do
+    siblings =
+      Map.new(value, fn {key, v} -> {key_name(key), v} end)
+
+    inner = %{context | siblings: siblings}
+
+    Enum.find_value(fields, fn field ->
+      case field_of(value, field.name) do
+        {:ok, v} ->
+          case conform(field.type, v, inner) do
+            {:ok, _} -> nil
+            :error -> field_refused(field.name, explain(field.type, v, inner))
+          end
+
+        :none ->
+          if field.required and field.default == :none,
+            do: "field #{inspect(field.name)} is missing",
+            else: nil
+      end
+    end)
+  end
+
+  def explain(_type, _value, _context), do: nil
+
+  defp shown(value) do
+    case Dextrin.encode(value) do
+      {:ok, text} -> text
+      _ -> inspect(value)
+    end
+  end
+
+  defp field_refused(name, nil), do: "field #{inspect(name)} does not match its type"
+  defp field_refused(name, why), do: "field #{inspect(name)}: #{why}"
+
+  defp undoc({:doc, type, _notes}), do: undoc(type)
+  defp undoc(type), do: type
+
+  defp variants({:doc, type, _notes}), do: variants(type)
+  defp variants({form, types}) when form in [:any_of, :one_of], do: types
+  defp variants(_type), do: nil
+
+  # The variant whose discriminating field takes the value's, and why
+  # that variant refuses it.
+  defp discriminated(field, types, value, context) do
+    case field_of(value, field) do
+      :none ->
+        "field #{inspect(field)} is missing; it chooses the variant"
+
+      {:ok, chosen} ->
+        case Enum.find(types, &takes_discriminator?(&1, field, chosen, context)) do
+          nil ->
+            "#{field} #{shown(chosen)} names no variant"
+
+          type ->
+            why = explain(type, value, context) || "it does not match"
+            "#{field} #{shown(chosen)} chooses #{variant_name(type)}: #{why}"
+        end
+    end
+  end
+
+  defp takes_discriminator?(type, field, chosen, context) do
+    case variant_field(type, field, context) do
+      nil -> false
+      field_type -> match?({:ok, _}, conform(field_type, chosen, context))
+    end
+  end
+
+  # The type a variant gives its field `name`, looked up through names.
+  defp variant_field({:doc, type, _}, name, context), do: variant_field(type, name, context)
+
+  defp variant_field(
+         {:named, n},
+         name,
+         %{registry: %Dextrin.Registry{type_aliases: aliases}} = context
+       ) do
+    case Map.fetch(aliases, n) do
+      {:ok, type} -> variant_field(type, name, context)
+      :error -> nil
+    end
+  end
+
+  defp variant_field({:shape, _, fields}, name, _context) do
+    case Enum.find(fields, &(&1.name == name)) do
+      nil -> nil
+      field -> field.type
+    end
+  end
+
+  defp variant_field(_type, _name, _context), do: nil
+
+  defp variant_name({:doc, type, _}), do: variant_name(type)
+  defp variant_name({kind, name}) when kind in [:named, :reference], do: name
+  defp variant_name({:shape, name, _}) when is_binary(name), do: name
+  defp variant_name(_type), do: "a variant"
+
+  # The first constraint, in a fixed order, that `value` fails.
+  defp failing_key(value, constraints, base, context) do
+    constraints
+    |> Map.keys()
+    |> Enum.sort()
+    |> Enum.find(fn key ->
+      not satisfies_constraints?(
+        value,
+        Map.take(constraints, [key | companions(key)]),
+        base,
+        context
+      )
+    end)
+  end
+
+  # The keys a constraint reads beside its own.
+  defp companions("contains"), do: ["min-contains", "max-contains"]
+  defp companions("content"), do: ["encoding", "media-type"]
+  defp companions(_key), do: []
 
   # ---- refine constraints -----------------------------------------------------
 

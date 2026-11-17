@@ -63,6 +63,13 @@ defmodule Dextrin.Schema.Format do
   @mac "^[0-9A-Fa-f]{2}([:-])[0-9A-Fa-f]{2}(?:\\1[0-9A-Fa-f]{2}){4}(?:(?:\\1[0-9A-Fa-f]{2}){2})?$"
   @port "^(?:0|[1-9][0-9]{0,4})$"
 
+  # RFC 7231 §7.1.1.1's IMF-fixdate; the date, the time and the weekday
+  # are checked after it matches.
+  @days ~w(Mon Tue Wed Thu Fri Sat Sun)
+  @months ~w(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec)
+  @http_date "^(#{Enum.join(@days, "|")}), ([0-9]{2}) (#{Enum.join(@months, "|")}) ([0-9]{4}) " <>
+               "([0-9]{2}):([0-9]{2}):([0-9]{2}) GMT$"
+
   @grammars %{
     "hostname" => @hostname,
     "idn-hostname" => @idn_hostname,
@@ -75,7 +82,7 @@ defmodule Dextrin.Schema.Format do
 
   @names ~w(date time datetime local-datetime duration uuid ipv4 ipv6 hostname idn-hostname
             email idn-email uri uri-reference iri iri-reference uri-template json-pointer
-            relative-json-pointer semver mac host-port)
+            relative-json-pointer semver mac host-port http-date)
 
   @doc "Every format's name, sorted."
   @spec names() :: [String.t()]
@@ -129,6 +136,26 @@ defmodule Dextrin.Schema.Format do
 
         host_port_host?(host) and regex(@port) |> Regex.match?(port) and
           String.to_integer(port) <= 65_535
+    end
+  end
+
+  defp check("http-date", text) do
+    case Regex.run(regex(@http_date), text, capture: :all_but_first) do
+      [day, dd, month, yyyy, hh, mm, ss] ->
+        month = Enum.find_index(@months, &(&1 == month)) + 1
+
+        case Date.new(String.to_integer(yyyy), month, String.to_integer(dd)) do
+          {:ok, date} ->
+            Date.day_of_week(date) == Enum.find_index(@days, &(&1 == day)) + 1 and
+              String.to_integer(hh) <= 23 and String.to_integer(mm) <= 59 and
+              String.to_integer(ss) <= 60
+
+          {:error, _} ->
+            false
+        end
+
+      nil ->
+        false
     end
   end
 

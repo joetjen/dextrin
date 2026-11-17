@@ -121,7 +121,7 @@ defmodule Dextrin.Schema.Validator do
         check_type(name, value, type, TypeExpr.context(registry, given))
 
       :error when default != :none ->
-        {:ok, default}
+        {:ok, Field.filled(default)}
 
       :error when required ->
         violation("missing required field #{inspect(name)}", "schema/missing-field")
@@ -145,7 +145,10 @@ defmodule Dextrin.Schema.Validator do
 
       :error ->
         violation(
-          "field #{inspect(name)} does not match its declared type",
+          case TypeExpr.explain(type, value, context) do
+            nil -> "field #{inspect(name)} does not match its declared type"
+            why -> "field #{inspect(name)} does not match its declared type: #{why}"
+          end,
           "schema/type-mismatch"
         )
     end

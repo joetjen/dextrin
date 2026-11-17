@@ -40,12 +40,25 @@ defmodule Dextrin.Schema.Compiler do
   # The scope key the document's names travel under (see compile/3).
   @names :"$names"
 
+  # The scope key the registry and the document travel under, for what
+  # needs more than the named types: a generic parameter's bound
+  # (G2 of design/typespec.md) asks which schema extends which.
+  @lookup :"$lookup"
+
+  # The scope key a generic parameter's bound travels under, inside its
+  # generic's body: `{@bound, name}`.
+  @bound :"$bound"
+
   # A refine's keys whose argument is a type, compiled and resolved as
   # its base is.
   @type_keys ~w(contains content encodes encodes-seq)
 
   # The sized integers' ranges.
   @sized %{
+    "int8" => {-128, 127},
+    "int16" => {-32_768, 32_767},
+    "uint8" => {0, 255},
+    "uint16" => {0, 65_535},
     "int32" => {-2_147_483_648, 2_147_483_647},
     "int64" => {-9_223_372_036_854_775_808, 9_223_372_036_854_775_807},
     "uint32" => {0, 4_294_967_295},
@@ -101,12 +114,27 @@ defmodule Dextrin.Schema.Compiler do
         match?(%Struct{name: "schema"}, undoc(v))
       end)
 
+    document = Map.new(alias_entries ++ schema_entries)
+
     with {:ok, registry, built} <-
            compile_aliases(alias_entries, base_registry, names, schema_entries) do
       Result.reduce_ok(schema_entries, registry, fn {name, entry}, registry ->
-        case schema_entry(name, entry, built, Map.put(registry.type_aliases, @names, names)) do
+        aliases =
+          registry.type_aliases
+          |> Map.put(@names, names)
+          |> Map.put(@lookup, %{registry: registry, document: document})
+
+        lookup = %{
+          document: document,
+          compiled: registry.type_aliases,
+          scope: aliases,
+          registry: registry
+        }
+
+        case schema_entry(name, entry, built, aliases) do
           {:ok, %Compiled{} = compiled} ->
-            Registry.add_struct_schema(registry, name, %{compiled | name: name})
+            with :ok <- discriminators(%{name => {:shape, name, compiled.fields}}, lookup, built),
+                 do: Registry.add_struct_schema(registry, name, %{compiled | name: name})
 
           {:error, reason} ->
             {:error, compile_error("schema #{inspect(name)}: #{reason}")}
@@ -172,9 +200,15 @@ defmodule Dextrin.Schema.Compiler do
   # schema comes back in `built`, by name.
   defp compile_aliases(alias_entries, registry, names, schema_entries) do
     siblings = Map.new(alias_entries, fn {name, _} -> {name, {:named, name}} end)
-    scope = registry.type_aliases |> Map.merge(siblings) |> Map.put(@names, names)
-    {extending, plain} = Enum.split_with(alias_entries, fn {_, v} -> built_from?(v) end)
     document = Map.new(alias_entries ++ schema_entries)
+
+    scope =
+      registry.type_aliases
+      |> Map.merge(siblings)
+      |> Map.put(@names, names)
+      |> Map.put(@lookup, %{registry: registry, document: document})
+
+    {extending, plain} = Enum.split_with(alias_entries, fn {_, v} -> built_from?(v) end)
 
     with {:ok, compiled} <-
            Result.reduce_ok(plain, %{}, fn {name, raw_value}, acc ->
@@ -196,8 +230,12 @@ defmodule Dextrin.Schema.Compiler do
              end
            ),
          {:ok, compiled} <- with_built_shapes(compiled, extending, built),
-         :ok <- guarded(compiled) do
-      known = Map.merge(registry.type_aliases, compiled)
+         :ok <- guarded(compiled),
+         :ok <- discriminators(compiled, %{lookup | compiled: compiled}, built) do
+      known =
+        registry.type_aliases
+        |> Map.merge(compiled)
+        |> Map.put(@lookup, %{registry: registry, document: document})
 
       Result.reduce_ok(alias_entries, registry, fn {name, _}, registry ->
         case entry_resolved(Map.fetch!(compiled, name), known, [name]) do
@@ -211,6 +249,101 @@ defmodule Dextrin.Schema.Compiler do
       end
     end
   end
+
+  # ---- discriminators (G3 of design/typespec.md) ------------------------------
+
+  # Every variant under a `discriminator` has that field: the field a
+  # value's variant is chosen by.
+  defp discriminators(compiled, lookup, built) do
+    compiled
+    |> Enum.sort()
+    |> Enum.find_value(:ok, fn {name, type} ->
+      type
+      |> discriminated()
+      |> Enum.find_value(fn {field, variants} ->
+        Enum.find_value(variants, fn variant ->
+          case variant_fields(variant, lookup, built, []) do
+            {:ok, names} ->
+              if field in names,
+                do: nil,
+                else:
+                  compile_error(
+                    "#{inspect(name)}: its discriminator #{field} is no field of #{variant_label(variant)}"
+                  )
+
+            :error ->
+              compile_error(
+                "#{inspect(name)}: its discriminator #{field} needs every variant to be a schema or a shape; #{variant_label(variant)} is not"
+              )
+          end
+        end)
+      end)
+      |> case do
+        nil -> nil
+        error -> {:error, error}
+      end
+    end)
+  end
+
+  # Every `{:doc {:any-of ...} %{discriminator: f}}` in `type`, as
+  # `{f, variants}`.
+  defp discriminated({:doc, inner, %{"discriminator" => field}}),
+    do: [{field, variant_list(inner)} | discriminated(inner)]
+
+  defp discriminated(%Field{type: type}), do: discriminated(type)
+
+  defp discriminated(type) when is_tuple(type),
+    do: type |> Elixir.Tuple.to_list() |> Enum.flat_map(&discriminated/1)
+
+  defp discriminated(types) when is_list(types), do: Enum.flat_map(types, &discriminated/1)
+  defp discriminated(_leaf), do: []
+
+  defp variant_list({:doc, inner, _}), do: variant_list(inner)
+  defp variant_list({_form, types}), do: types
+
+  # The names of a variant's fields: a shape's, or a schema's of the
+  # document or one loaded.
+  defp variant_fields({:doc, inner, _}, lookup, built, seen),
+    do: variant_fields(inner, lookup, built, seen)
+
+  defp variant_fields({:shape, _name, fields}, _lookup, _built, _seen),
+    do: {:ok, Enum.map(fields, & &1.name)}
+
+  defp variant_fields({:named, name}, lookup, built, seen) do
+    known = Map.merge(lookup.registry.type_aliases, lookup.compiled)
+
+    case {Map.fetch(known, name), name in seen} do
+      {{:ok, type}, false} -> variant_fields(type, lookup, built, [name | seen])
+      _ -> :error
+    end
+  end
+
+  defp variant_fields({:reference, name}, lookup, built, _seen) do
+    cond do
+      Map.has_key?(built, name) ->
+        {:ok, Enum.map(built[name].fields, & &1.name)}
+
+      match?(%Struct{name: "schema", fields: {:keyed, _}}, undoc(Map.get(lookup.document, name))) ->
+        %Struct{fields: {:keyed, pairs}} = undoc(Map.fetch!(lookup.document, name))
+
+        case compile_fields(pairs, lookup.scope) do
+          {:ok, fields} -> {:ok, Enum.map(fields, & &1.name)}
+          _ -> :error
+        end
+
+      true ->
+        case Registry.fetch_struct_schema(lookup.registry, name) do
+          {:ok, %Compiled{fields: fields}, _} -> {:ok, Enum.map(fields, & &1.name)}
+          _ -> :error
+        end
+    end
+  end
+
+  defp variant_fields(_type, _lookup, _built, _seen), do: :error
+
+  defp variant_label({:doc, inner, _}), do: variant_label(inner)
+  defp variant_label({kind, name}) when kind in [:named, :reference], do: name
+  defp variant_label(_type), do: "an inline variant"
 
   # ---- built from others (DXNS.md §4b) ---------------------------------------
 
@@ -347,7 +480,7 @@ defmodule Dextrin.Schema.Compiler do
   # at. A base of the document that is itself built is built first.
   defp found_bases(name, bases, path, lookup, built) do
     Enum.reduce_while(bases, {:ok, [], built}, fn {kind, base, version}, {:ok, acc, built} ->
-      full = Map.get(lookup.scope[@names], base, base)
+      full = base_target(Map.get(lookup.scope[@names], base, base), lookup, [])
 
       case found_base(full, version, path, lookup, built) do
         {:ok, fields, at, built} ->
@@ -367,11 +500,67 @@ defmodule Dextrin.Schema.Compiler do
   end
 
   defp found_base(base, version, path, lookup, built) do
-    case Map.fetch(lookup.document, base) do
-      {:ok, entry} -> document_base(base, undoc(entry), version, path, lookup, built)
-      :error -> loaded_base(base, version, lookup.registry, built)
+    case {Map.fetch(lookup.document, base), generic_use(base, lookup)} do
+      {_, {:ok, fields}} when version == nil ->
+        {:ok, fields, nil, built}
+
+      {_, {:ok, _fields}} ->
+        {:error, "a shape has no versions, so #{base}(#{version}) names none"}
+
+      {{:ok, entry}, :none} ->
+        document_base(base, undoc(entry), version, path, lookup, built)
+
+      {:error, :none} ->
+        loaded_base(base, version, lookup.registry, built)
     end
   end
+
+  # A base named by a named type that stands for a schema or a shape
+  # (`Human: Person`) is that schema or shape (G6 of design/typespec.md):
+  # its name, followed through such names.
+  defp base_target(name, lookup, seen) do
+    known = Map.merge(lookup.registry.type_aliases, lookup.compiled)
+
+    schema_or_shape? =
+      match?(
+        %Struct{name: kind} when kind in ["schema", "shape"],
+        undoc(Map.get(lookup.document, name))
+      )
+
+    case {schema_or_shape?, name in seen, Map.fetch(known, name)} do
+      {false, false, {:ok, type}} ->
+        case undoc_type(type) do
+          {kind, target} when kind in [:reference, :named] ->
+            base_target(target, lookup, [name | seen])
+
+          _ ->
+            name
+        end
+
+      _ ->
+        name
+    end
+  end
+
+  # A named type that is one use of a generic standing for a shape
+  # (`PageOfInt: {:of Page :integer}`): that shape's fields.
+  defp generic_use(name, lookup) do
+    known = Map.merge(lookup.registry.type_aliases, lookup.compiled)
+
+    with {:ok, type} <- Map.fetch(known, name),
+         {:apply, generic, args} <- undoc_type(type),
+         {:ok, definition} <- Map.fetch(known, generic),
+         {:generic, params, body} <- undoc_type(definition),
+         {:ok, args} <- filled_args(generic, args, known),
+         fields when is_list(fields) <- shape_fields(TypeExpr.instantiate(params, body, args)) do
+      {:ok, fields}
+    else
+      _ -> :none
+    end
+  end
+
+  defp undoc_type({:doc, type, _notes}), do: undoc_type(type)
+  defp undoc_type(type), do: type
 
   defp document_base(base, %Struct{name: "shape"}, version, _path, _lookup, _built)
        when version != nil,
@@ -521,27 +710,162 @@ defmodule Dextrin.Schema.Compiler do
   defp unguarded_names({:generic, _params, body}), do: unguarded_names(body)
   defp unguarded_names(_guarded_or_leaf), do: []
 
-  # Whether `name` is a generic taking `count` arguments.
-  defp applies(name, count, known) do
+  # `args` for the generic `name`: every parameter given or defaulted,
+  # the defaults filled in, each argument within its parameter's bound
+  # (G2 of design/typespec.md). A sibling not yet compiled takes them as
+  # they are; they are filled once it is.
+  defp filled_args(name, args, known) do
     case Map.fetch(known, name) do
-      {:ok, {:generic, params, _}} when length(params) == count ->
-        :ok
-
       {:ok, {:generic, params, _}} ->
-        {:error,
-         "#{name} takes #{length(params)} type argument(s), {:of #{name} ...} gives #{count}"}
+        given = length(args)
+        required = Enum.count(params, &(param_default(&1) == :none))
+
+        cond do
+          given < required or given > length(params) ->
+            {:error,
+             "#{name} takes #{arity(required, length(params))} type argument(s), {:of #{name} ...} gives #{given}"}
+
+          true ->
+            filled = args ++ Enum.map(Enum.drop(params, given), &param_default/1)
+
+            case Enum.find(Enum.zip(params, filled), fn {p, arg} ->
+                   not within_bound?(arg, param_bound(p), known)
+                 end) do
+              nil ->
+                {:ok, filled}
+
+              {p, arg} ->
+                {:error,
+                 "{:of #{name} ...}'s #{TypeExpr.param_name(p)} takes what its bound takes; #{inspect_arg(arg)} is outside it"}
+            end
+        end
 
       {:ok, {:named, _}} ->
-        :ok
+        {:ok, args}
 
       _ ->
         {:error, "{:of #{name} ...} names no generic"}
     end
   end
 
+  defp arity(n, n), do: "#{n}"
+  defp arity(required, total), do: "#{required} to #{total}"
+
+  # A generic's parameters' bounds, under the scope keys a use inside its
+  # body reads them by.
+  defp param_bounds(params),
+    do: Map.new(params, &{{@bound, TypeExpr.param_name(&1)}, param_bound(&1)})
+
+  defp param_bound({_name, bound, _default}), do: bound
+  defp param_bound(_name), do: :any
+
+  defp param_default({_name, _bound, default}), do: default
+  defp param_default(_name), do: :none
+
+  defp inspect_arg({kind, name}) when kind in [:named, :reference, :param], do: name
+  defp inspect_arg({:primitive, name}), do: ":" <> name
+  defp inspect_arg(type), do: inspect_type(type)
+
+  # Whether `arg` is `bound`, or narrower: a refine or annotation of it,
+  # a name standing for it, a const or enum whose values it takes, or a
+  # schema that extends it. Nothing broader is worked out: DXNS has no
+  # general subtyping, so anything else is outside.
+  # Whether `arg` is within `bound`. A type of the same document not yet
+  # compiled stands as `{:named, name}` for itself; the check waits for
+  # `resolved/3`, which asks again with every definition in hand.
+  defp within_bound?(arg, bound, known) do
+    if pending?(arg, known) or pending?(bound, known),
+      do: true,
+      else: within?(arg, bound, known)
+  end
+
+  defp pending?({:named, name}, known), do: Map.get(known, name) == {:named, name}
+  defp pending?(_type, _known), do: false
+
+  defp within?(_arg, :any, _known), do: true
+  defp within?(arg, bound, _known) when arg == bound, do: true
+
+  defp within?({:doc, arg, _}, bound, known), do: within_bound?(arg, bound, known)
+  defp within?(arg, {:doc, bound, _}, known), do: within_bound?(arg, bound, known)
+  defp within?({:refine, arg, _}, bound, known), do: within_bound?(arg, bound, known)
+
+  defp within?({:enum, literals}, bound, known),
+    do: Enum.all?(literals, &TypeExpr.matches?(bound_resolved(bound, known), &1))
+
+  # A parameter passed on is within a bound when its own bound is.
+  defp within?({:param, name}, bound, known) do
+    case Map.fetch(known, {@bound, name}) do
+      {:ok, own} -> within_bound?(own, bound, known)
+      :error -> false
+    end
+  end
+
+  defp within?({:named, name}, bound, known) do
+    case Map.fetch(known, name) do
+      {:ok, {:named, ^name}} -> false
+      {:ok, type} -> within_bound?(type, bound, known)
+      :error -> false
+    end
+  end
+
+  defp within?({:reference, name}, {:reference, base}, known),
+    do: extends?(name, base, known, [])
+
+  defp within?(arg, {:named, name}, known) do
+    case Map.fetch(known, name) do
+      {:ok, {:named, ^name}} -> false
+      {:ok, bound} -> within_bound?(arg, bound, known)
+      :error -> false
+    end
+  end
+
+  defp within?(_arg, _bound, _known), do: false
+
+  defp bound_resolved({:named, name} = bound, known) do
+    case Map.fetch(known, name) do
+      {:ok, {:named, ^name}} -> bound
+      {:ok, type} -> bound_resolved(type, known)
+      :error -> bound
+    end
+  end
+
+  defp bound_resolved(bound, _known), do: bound
+
+  # Whether the schema `name` extends `base`, directly or through others,
+  # in this document or as loaded.
+  defp extends?(name, name, _known, _seen), do: true
+
+  defp extends?(name, base, known, seen) do
+    if name in seen do
+      false
+    else
+      name
+      |> extended_bases(known)
+      |> Enum.any?(&extends?(&1, base, known, [name | seen]))
+    end
+  end
+
+  defp extended_bases(name, known) do
+    lookup = Map.get(known, @lookup, %{registry: nil, document: %{}})
+
+    case undoc(Map.get(lookup.document, name)) do
+      %Struct{name: "schema", bases: bases} ->
+        for {:extends, base, _} <- bases, do: base
+
+      _ ->
+        with %Registry{} = registry <- lookup.registry,
+             {:ok, %Compiled{bases: bases}, _} <- Registry.fetch_struct_schema(registry, name) do
+          for {:extends, base, _} <- bases, do: base
+        else
+          _ -> []
+        end
+    end
+  end
+
   defp takes_arguments(name, known) do
     {:generic, params, _} = Map.fetch!(known, name)
-    "#{name} is generic: write {:of #{name} #{Enum.join(params, " ")}}, with a type for each"
+
+    "#{name} is generic: write {:of #{name} #{Enum.map_join(params, " ", &TypeExpr.param_name/1)}}, with a type for each"
   end
 
   # A shape carries its own name; every other named type is its type.
@@ -551,10 +875,14 @@ defmodule Dextrin.Schema.Compiler do
          scope
        )
        when is_list(params) do
-    with {:ok, names} <- parameter_names(params),
-         scope = Map.merge(scope, Map.new(names, &{&1, {:param, &1}})),
+    with {:ok, params} <- parameters(params, scope),
+         names = Enum.map(params, &TypeExpr.param_name/1),
+         scope =
+           scope
+           |> Map.merge(Map.new(names, &{&1, {:param, &1}}))
+           |> Map.merge(param_bounds(params)),
          {:ok, body} <- compile_named(name, body, scope) do
-      {:ok, {:generic, names, body}}
+      {:ok, {:generic, params, body}}
     end
   end
 
@@ -586,26 +914,69 @@ defmodule Dextrin.Schema.Compiler do
     end
   end
 
-  # `{:generic [t ...] body}`'s parameters: distinct bare symbols.
-  defp parameter_names(params) do
-    names = Enum.map(params, fn p -> match?(%Symbol{}, p) && p.name end)
+  # `{:generic [t ...] body}`'s parameters, distinct: a bare symbol, or
+  # `{t bound}` or `{t bound default}` (G2 of design/typespec.md), the
+  # bound and default compiled in the scope around the generic. A bare
+  # parameter stays its name; one with a bound or default is
+  # `{name, bound, default}`, `:none` for no default.
+  defp parameters(params, scope) do
+    with {:ok, params} <-
+           Result.reduce_ok(params, [], fn p, acc ->
+             with {:ok, param} <- parameter(p, scope), do: {:ok, [param | acc]}
+           end) do
+      params = Enum.reverse(params)
+      names = Enum.map(params, &TypeExpr.param_name/1)
 
-    cond do
-      names == [] or false in names ->
-        {:error, "a generic's parameters are symbols: {:generic [t ...] body}"}
+      cond do
+        params == [] ->
+          {:error, "a generic's parameters are symbols: {:generic [t ...] body}"}
 
-      length(Enum.uniq(names)) != length(names) ->
-        {:error, "a generic names a parameter twice"}
+        length(Enum.uniq(names)) != length(names) ->
+          {:error, "a generic names a parameter twice"}
 
-      true ->
-        {:ok, names}
+        defaulted_then_required?(params) ->
+          {:error, "a generic's parameter without a default cannot follow one with a default"}
+
+        bad = Enum.find(params, &default_outside_bound?(&1, scope)) ->
+          {:error, "#{TypeExpr.param_name(bad)}'s default is outside its own bound"}
+
+        true ->
+          {:ok, params}
+      end
     end
   end
+
+  defp parameter(%Symbol{name: name}, _scope), do: {:ok, name}
+
+  defp parameter(%Tuple{items: [%Symbol{name: name}, bound | rest]}, scope)
+       when length(rest) <= 1 do
+    with {:ok, bound} <- compile_type_expr(bound, scope),
+         {:ok, default} <- maybe_compile(List.first(rest, :none), scope),
+         do: {:ok, {name, bound, default}}
+  end
+
+  defp parameter(other, _scope),
+    do:
+      {:error,
+       "a generic's parameter is a symbol, {t bound} or {t bound default}, not #{shown(other)}"}
+
+  defp defaulted_then_required?(params) do
+    params
+    |> Enum.map(&(param_default(&1) != :none))
+    |> Enum.chunk_every(2, 1, :discard)
+    |> Enum.any?(&(&1 == [true, false]))
+  end
+
+  defp default_outside_bound?({_name, bound, default}, scope) when default != :none,
+    do: not within_bound?(default, bound, scope)
+
+  defp default_outside_bound?(_param, _scope), do: false
 
   # A named type's own definition resolved: a generic's body, with its
   # parameters left standing, or the type itself.
   defp entry_resolved({:generic, params, body}, known, path) do
-    with {:ok, body} <- resolved(body, known, path), do: {:ok, {:generic, params, body}}
+    with {:ok, body} <- resolved(body, Map.merge(known, param_bounds(params)), path),
+         do: {:ok, {:generic, params, body}}
   end
 
   defp entry_resolved(type_expr, known, path), do: resolved(type_expr, known, path)
@@ -630,12 +1001,12 @@ defmodule Dextrin.Schema.Compiler do
   # `{:of Name type ...}` stays a use of the generic, its arguments
   # resolved; the generic's body is filled in when it is checked.
   defp resolved({:apply, name, args}, compiled, path) do
-    with :ok <- applies(name, length(args), compiled),
-         {:ok, args} <-
+    with {:ok, args} <-
            Result.reduce_ok(args, [], fn arg, acc ->
              with {:ok, arg} <- resolved(arg, compiled, path), do: {:ok, [arg | acc]}
            end),
-         do: {:ok, {:apply, name, Enum.reverse(args)}}
+         {:ok, args} <- filled_args(name, Enum.reverse(args), compiled),
+         do: {:ok, {:apply, name, args}}
   end
 
   defp resolved({:generic, _, _}, _compiled, _path),
@@ -879,13 +1250,20 @@ defmodule Dextrin.Schema.Compiler do
 
     case value do
       %Struct{name: "field", fields: {:keyed, field_pairs}} ->
-        with {:ok, type} <- compile_type_expr(get(field_pairs, "type", :any_keyword), aliases) do
+        with {:ok, type} <- compile_type_expr(get(field_pairs, "type", :any_keyword), aliases),
+             {:ok, default} <-
+               field_default(
+                 get(field_pairs, "default", :none),
+                 get(field_pairs, "computed", :none),
+                 type,
+                 aliases
+               ) do
           {:ok,
            %Field{
              name: name,
              required: required,
              type: type,
-             default: get(field_pairs, "default", :none),
+             default: default,
              description: get(field_pairs, "description")
            }}
         end
@@ -896,6 +1274,48 @@ defmodule Dextrin.Schema.Compiler do
         end
     end
   end
+
+  # A field's default: the value written, or one computed when the field
+  # is filled (G8 of design/typespec.md). `computed: :now` takes a date,
+  # time, datetime or local date-time, possibly refined, annotated or
+  # nilable, and never stands beside a `default`.
+  defp field_default(default, :none, _type, _aliases), do: {:ok, default}
+
+  defp field_default(default, _computed, _type, _aliases) when default != :none,
+    do: {:error, "a %field has a default or is computed, not both"}
+
+  defp field_default(:none, computed, type, aliases) do
+    cond do
+      name_of(computed) != "now" ->
+        {:error, "a %field is computed: :now, the one value there is; not #{shown(computed)}"}
+
+      kind = temporal_kind(type, aliases) ->
+        {:ok, {:computed, "now", kind}}
+
+      true ->
+        {:error,
+         "a %field computed: :now is a date, time, datetime or local-datetime, not #{inspect_type(type)}"}
+    end
+  end
+
+  defp temporal_kind({:primitive, kind}, _aliases)
+       when kind in ["date", "time", "datetime", "local-datetime"],
+       do: kind
+
+  defp temporal_kind({form, type, _}, aliases) when form in [:refine, :doc],
+    do: temporal_kind(type, aliases)
+
+  defp temporal_kind({:nilable, type}, aliases), do: temporal_kind(type, aliases)
+
+  defp temporal_kind({:named, name}, aliases) do
+    case Map.fetch(aliases, name) do
+      {:ok, {:named, ^name}} -> nil
+      {:ok, type} -> temporal_kind(type, aliases)
+      :error -> nil
+    end
+  end
+
+  defp temporal_kind(_type, _aliases), do: nil
 
   # Every `{:case field ...}` written in `pairs`' field types names one
   # of `fields` -- told from the source, so a named type the case
@@ -1027,8 +1447,8 @@ defmodule Dextrin.Schema.Compiler do
        when args != [] do
     name = full_name(written, aliases)
 
-    with :ok <- applies(name, length(args), aliases),
-         {:ok, args} <- map_compile(args, aliases),
+    with {:ok, args} <- map_compile(args, aliases),
+         {:ok, args} <- filled_args(name, args, aliases),
          do: {:ok, {:apply, name, args}}
   end
 
@@ -1415,7 +1835,20 @@ defmodule Dextrin.Schema.Compiler do
   defp name_of(name) when is_binary(name), do: name
   defp name_of(_other), do: nil
 
-  @annotation_keys ~w(title description examples read-only write-only deprecated meta values)
+  @annotation_keys ~w(title description examples read-only write-only deprecated meta values
+                      discriminator secret key visibility messages)
+
+  # The stages a field may be seen in (TypeSpec's Lifecycle; G5 of
+  # design/typespec.md).
+  @visibilities ~w(create read update delete query)
+
+  # Every refine key, the names `messages` may give a message for.
+  @refine_keys ~w(min max exclusive-min exclusive-max multiple-of min-length max-length
+                  min-bytes max-bytes pattern format encoding media-type content encodes
+                  encodes-seq min-count max-count contains min-contains max-contains unique
+                  unique-by finite float32 min-precision max-precision min-exponent
+                  max-exponent bits before-now after-now within resolution offsets version
+                  prefix)
 
   # A doc's annotations by name, each of its kind (DXNS.md §1b); `type`
   # is what they annotate, `:schema` for a whole schema, so `values` can
@@ -1432,7 +1865,7 @@ defmodule Dextrin.Schema.Compiler do
         end
       end)
       |> case do
-        {:ok, named} -> annotated_values(named)
+        {:ok, named} -> with :ok <- visibility_alone(named), do: annotated_values(named)
         error -> error
       end
     end
@@ -1440,6 +1873,13 @@ defmodule Dextrin.Schema.Compiler do
 
   defp annotations(raw, _type),
     do: {:error, "a doc's annotations are a map, %{description: ...}, not #{shown(raw)}"}
+
+  # `read-only` says `visibility: [:read]`; the two together would say
+  # it twice, perhaps differently.
+  defp visibility_alone(%{"visibility" => _, "read-only" => _}),
+    do: {:error, "a doc's read-only and visibility say the same thing; give visibility alone"}
+
+  defp visibility_alone(_named), do: :ok
 
   defp annotation(key, value, _type) when key in ["title", "description"],
     do: if(is_binary(value), do: :ok, else: {:takes, "a string"})
@@ -1486,6 +1926,59 @@ defmodule Dextrin.Schema.Compiler do
   defp annotation("values", _value, _type),
     do: {:takes, "a map of an enum's values to their annotations, on an enum"}
 
+  defp annotation("secret", value, _type),
+    do: if(is_boolean(value), do: :ok, else: {:takes, "true or false"})
+
+  defp annotation("key", value, _type),
+    do:
+      if(is_boolean(value) or is_binary(value), do: :ok, else: {:takes, "true, false or a name"})
+
+  defp annotation("visibility", value, _type) when is_list(value) do
+    case Enum.reject(value, &(name_of(&1) in @visibilities)) do
+      [] ->
+        :ok
+
+      [other | _] ->
+        {:error,
+         "a doc's visibility names #{shown(other)}, which is none of #{Enum.join(@visibilities, ", ")}"}
+    end
+  end
+
+  defp annotation("visibility", _value, _type),
+    do: {:takes, "a list of #{Enum.join(@visibilities, ", ")}"}
+
+  defp annotation("messages", value, _type) when is_map(value) and not is_struct(value) do
+    Enum.find_value(Enum.sort(value), :ok, fn {key, message} ->
+      cond do
+        name_of(key) not in @refine_keys ->
+          {:error, "a doc's messages are for refine keys; #{shown(key)} is none"}
+
+        not is_binary(message) ->
+          {:error, "a doc's messages are strings, not #{shown(message)}"}
+
+        true ->
+          nil
+      end
+    end)
+  end
+
+  defp annotation("messages", _value, _type),
+    do: {:takes, "a map of refine keys to messages"}
+
+  defp annotation("discriminator", value, type) do
+    cond do
+      not (match?(%Keyword{}, value) or match?(%Symbol{}, value) or is_binary(value)) ->
+        {:takes, "a field's name"}
+
+      not variants?(type) ->
+        {:error,
+         "a doc's discriminator stands on an any-of or a one-of, not #{inspect_type(type)}"}
+
+      true ->
+        :ok
+    end
+  end
+
   defp annotation(key, _value, _type),
     do: {:error, "#{key} is no annotation; a doc holds #{Enum.join(@annotation_keys, ", ")}"}
 
@@ -1493,7 +1986,7 @@ defmodule Dextrin.Schema.Compiler do
   defp annotated_values(%{"values" => values} = named) do
     {:ok,
      %{
-       named
+       plain_names(named)
        | "values" =>
            Map.new(values, fn {literal, notes} ->
              {:ok, notes} = annotations(notes, :value)
@@ -1502,7 +1995,43 @@ defmodule Dextrin.Schema.Compiler do
      }}
   end
 
-  defp annotated_values(named), do: {:ok, named}
+  defp annotated_values(named), do: {:ok, plain_names(named)}
+
+  # The annotations whose values are names, as strings: what a reader
+  # compares, whatever spelling the document gave.
+  defp plain_names(named) do
+    named
+    |> then(
+      &if(Map.has_key?(&1, "discriminator"),
+        do: Map.update!(&1, "discriminator", fn d -> name_of(d) end),
+        else: &1
+      )
+    )
+    |> then(
+      &if(Map.has_key?(&1, "visibility"),
+        do: Map.update!(&1, "visibility", fn v -> Enum.map(v, fn n -> name_of(n) end) end),
+        else: &1
+      )
+    )
+    |> then(
+      &if(Map.has_key?(&1, "messages"),
+        do: Map.update!(&1, "messages", fn m -> Map.new(m, fn {k, v} -> {name_of(k), v} end) end),
+        else: &1
+      )
+    )
+  end
+
+  defp variants?({:doc, type, _notes}), do: variants?(type)
+  defp variants?({form, _types}) when form in [:any_of, :one_of], do: true
+  defp variants?(_type), do: false
+
+  defp inspect_type({form, _}) when is_atom(form),
+    do: String.replace(Atom.to_string(form), "_", "-")
+
+  defp inspect_type({form, _, _}) when is_atom(form),
+    do: String.replace(Atom.to_string(form), "_", "-")
+
+  defp inspect_type(type), do: inspect(type)
 
   # An entry's value without the `{:doc ...}` around it.
   defp undoc(%Tuple{items: [%Keyword{name: "doc"}, inner, _]}), do: inner

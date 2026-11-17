@@ -40,7 +40,7 @@ schema of their own, which would be circular.
 | `ordered-map-of` | `{:ordered-map-of key-type val-type}` | ordered map: every key matches key-type, every value matches val-type |
 | `sorted-set-of` | `{:sorted-set-of elem}` | sorted set whose every element matches elem |
 | `tagged` | `{:tagged acme.money T}` | a custom tag of that name whose value matches T; an application's value as its registered tag encoder writes it |
-| `sized` | `:int32 :int64 :uint32 :uint64` | sugar: {:refine :integer %{min: ..., max: ...}} over that range; :float32 is {:refine :float %{float32: true}} |
+| `sized` | `:int8 :int16 :int32 :int64 :uint8 :uint16 :uint32 :uint64` | sugar: {:refine :integer %{min: ..., max: ...}} over that range; :float32 is {:refine :float %{float32: true}} |
 | `number` | `:number` | sugar: {:any-of :integer :float :decimal :rational} |
 | `const` | `{:const v}` | sugar: {:enum v}, the one value v |
 | `if` | `{:if I T E}` | a value that matches I must match T, any other E (JSON Schema's if/then/else); E is :any when left out |
@@ -136,6 +136,37 @@ whole entry: a named type, a generic, a `%shape` or a `%schema`.
 | `deprecated` | boolean or string | true, or the reason, when the type is on its way out |
 | `meta` | map | anything else, kept as written, meaning nothing to a check |
 | `values` | map | on an enum: each of its values to that value's own annotations (no values of their own) |
+| `secret` | boolean | the value is not to be logged or shown |
+| `key` | boolean or string | the field identifies the value it is in; a string is another name for it |
+| `visibility` | list | the stages that see the field, any of `:create`, `:read`, `:update`, `:delete` and `:query`; `[]` is none |
+| `messages` | map | a refine key to the message a refusal by that constraint reports |
+| `discriminator` | name | on an `any-of` or a `one-of`: the field whose value chooses the variant |
+
+`read-only: true` says what `visibility: [:read]` says; a doc giving
+both is a compile error. `messages` names refine keys only, and its
+message replaces a refusal's own words for that constraint:
+
+```dxn
+Code: {:doc {:refine :string %{pattern: @regex "^[a-z]+$"}} %{messages: %{pattern: "lower case only"}}}
+```
+
+**A variant's name is its `title`.** A union whose variants have
+names -- TypeSpec's `union Breed { beagle: Beagle, ... }` -- annotates
+each: `{:any-of {:doc Beagle %{title: "beagle"}} ...}`.
+
+**`discriminator` changes nothing a value is checked against**: it
+names the field that tells the variants apart, for a reader, a code
+generator and a refusal. Every variant is a schema or a shape with that
+field, or the doc is a compile error. A value the union refuses is
+explained by the variant its field chooses -- `kind "cat" chooses Cat:
+field "meows" ...` -- or by none matching: `kind "cow" names no
+variant`.
+
+```dxn
+Pet: {:doc {:one-of Cat Dog} %{discriminator: :kind}}
+Cat: %shape{kind: {:const "cat"}, meows: :boolean}
+Dog: %shape{kind: {:const "dog"}, barks: :boolean}
+```
 
 Any other key is a compile error (`schema/compile`), as is a value of
 the wrong kind; `meta` is where what DXNS does not name goes.
@@ -281,6 +312,7 @@ newline is no part of a hostname. The tags' readers end there too:
 | `semver` | Semantic Versioning 2.0.0, below |
 | `mac` | six or eight pairs of hex digits, one separator, : or -, throughout |
 | `host-port` | HOST:PORT, split at the last colon: HOST a hostname, an IPv4 address or [IPv6], PORT 0 to 65535 without leading zeros |
+| `http-date` | RFC 7231's IMF-fixdate, `Sun, 06 Nov 1994 08:49:37 GMT`: a real date, its weekday the date's own, hour 00 to 23, minute 00 to 59, second 00 to 60; not the obsolete RFC 850 or asctime forms |
 
 The grammars:
 
@@ -350,7 +382,8 @@ version      = positive integer ;
 field_entry  = ( identifier , [ "?" ] , ":" , type_expr )
              | ( identifier , [ "?" ] , ":" , field_form ) ;
 field_form   = "%field{" , "type:" , type_expr ,
-                 [ "default:" , value ] , [ "description:" , string ] ,
+                 [ "default:" , value | "computed:" , ":now" ] ,
+                 [ "description:" , string ] ,
                "}" ;
 ```
 
@@ -371,6 +404,12 @@ schema's body only.
 
 **The header holds only the version** (§8). A schema written without
 one, `%schema{...}`, is version 1.
+
+**`computed: :now` is a default computed when it is used** (Jan,
+2026-11-17): a field of a date, time, datetime or local-datetime type --
+refined, annotated or nilable too -- takes the moment it is filled, in
+UTC, wherever a default would be filled. Any other type, any other
+value than `:now`, or a `default:` beside it, is a compile error.
 
 `%field{type:, default:, description:}` is reached only when a field
 needs metadata beyond a bare `type_expr` — a default value (used when
@@ -461,8 +500,10 @@ is expected; one that includes `User` is not.
 
 - **A base** is a `%schema` or a `%shape`, in this document or another
   (§6); each kind may be built from each, and the body's own form
-  decides what the result is. A base that is neither -- a named type of
-  another kind, a generic -- is a compile error. A schema named twice
+  decides what the result is. A named type standing for one -- `Human:
+  Person`, or `PageOfInt: {:of Page :integer}` whose generic is a shape
+  -- is that one as a base. A base that is none of these -- a named type
+  of another kind, a generic -- is a compile error. A schema named twice
   in one head is a compile error.
 - **`User(3)`** names a version of a schema base, which must be loaded.
   **Without one, the base is the latest version loaded when the result
@@ -573,6 +614,23 @@ above.
 Page: {:generic [t] %shape{items: {:list-of t}, next?: :string}}
 Orders: {:of Page Order}
 List: {:generic [t] {:any-of :nil %shape{head: t, tail: {:of List t}}}}
+```
+
+**A parameter may have a bound and a default** (Jan, 2026-11-17):
+`t`, `{t bound}` or `{t bound default}`. A use may leave out the
+parameters that have defaults, from the end; a parameter without one
+may not follow a parameter with one. An argument -- a default too --
+must be within its parameter's bound, or the use is a compile error:
+it is the bound itself, a refine or annotation of it, a name standing
+for it, a `{:const}` or `{:enum}` whose every value the bound takes, or
+a schema that `extends` it. DXNS has no subtyping beyond that, so
+nothing else is within a bound.
+
+```text
+Page: {:generic [t {size :integer :integer}] %shape{items: {:list-of t}, size?: size}}
+Named: {:generic [{t :string}] %shape{name: t}}
+Orders: {:of Page Order}               # size is :integer
+Tags: {:of Named {:enum "a" "b"}}      # within :string
 ```
 
 **A `%schema` cannot be generic**: a struct goes on the wire under its

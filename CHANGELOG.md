@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+What DXNS lacked to say every TypeSpec type exactly
+(design/typespec.md):
+
+- **Generic parameters with a bound and a default** (DXNS.md §5):
+  `{:generic [t {size :integer :integer}] ...}`. A use may leave out
+  defaulted parameters, and an argument outside its bound is a compile
+  error.
+- **A base may be a named type standing for a schema or a shape**
+  (DXNS.md §4b), a generic's use included: `PageOfInt: {:of Page
+  :integer}`, then `%schema includes PageOfInt {...}`.
+- **Annotation keys** `discriminator`, `secret`, `key`, `visibility`
+  and `messages` (DXNS.md §1b). A `messages` entry replaces a
+  constraint's refusal with its own words. A `discriminator` explains a
+  refusal by the variant its field chooses, and every variant must have
+  that field.
+- **Format `http-date`** (DXNS.md §2a): RFC 7231's IMF-fixdate.
+- **`%field{type: :timestamp, computed: :now}`** (DXNS.md §4): a
+  default computed in UTC when the field is filled, for date and time
+  types.
+- **Sized sugar `:int8`, `:int16`, `:uint8`, `:uint16`** (DXNS.md §1).
+- A refusal now says why, where it can: `field "a" does not match its
+  declared type: ...`.
+
 ### Fixed
 
 - **A schema tree loads a file after the base it is built from**: `mix dextrin.check` and `Dextrin.Schema.Tree.load/2`

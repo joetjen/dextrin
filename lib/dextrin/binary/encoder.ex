@@ -496,7 +496,7 @@ defmodule Dextrin.Binary.Encoder do
         {:ok, value}
 
       :error when default != :none ->
-        {:ok, default}
+        {:ok, Dextrin.Schema.Field.filled(default)}
 
       :error ->
         {:error,

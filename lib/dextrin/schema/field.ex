@@ -19,4 +19,24 @@ defmodule Dextrin.Schema.Field do
         }
 
   defstruct [:name, required: true, type: :any, default: :none, description: nil]
+
+  @doc """
+  The value a missing field takes: its default, or for a computed one
+  (`%field{computed: :now}`, G8 of design/typespec.md) the value
+  computed now. A computed default is `{:computed, "now", kind}`, `kind`
+  the temporal type it fills: `"date"`, `"time"`, `"datetime"` or
+  `"local-datetime"`, all of them in UTC.
+  """
+  @spec default_value(t()) :: term() | :none
+  def default_value(%__MODULE__{default: default}), do: filled(default)
+
+  @doc "A field's `default` as the value it fills: computed now, or as written."
+  @spec filled(term()) :: term()
+  def filled({:computed, "now", kind}), do: now(kind)
+  def filled(default), do: default
+
+  defp now("date"), do: Date.utc_today()
+  defp now("time"), do: Time.utc_now()
+  defp now("datetime"), do: DateTime.utc_now()
+  defp now("local-datetime"), do: NaiveDateTime.utc_now()
 end
