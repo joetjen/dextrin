@@ -51,14 +51,17 @@ defmodule Dextrin.Convert.JsonSchema do
     end
 
     # JSON's null is DXN's nil from the start, so a keyword set to null
-    # reads as one left out.
-    {value, :ok, rest} = :json.decode(text, :ok, %{object_finish: finish, null: nil})
+    # reads as one left out. Elixir's JSON, not OTP's :json, which OTP 26
+    # does not have.
+    case JSON.decode(text, :ok, object_finish: finish, null: nil) do
+      {value, :ok, rest} ->
+        if String.trim(rest) == "",
+          do: {:ok, value},
+          else: {:error, "text after the JSON value"}
 
-    if String.trim(rest) == "",
-      do: {:ok, value},
-      else: {:error, "text after the JSON value"}
-  rescue
-    error -> {:error, "not JSON: #{Exception.message(error)}"}
+      {:error, why} ->
+        {:error, "not JSON: #{inspect(why)}"}
+    end
   end
 
   @doc """

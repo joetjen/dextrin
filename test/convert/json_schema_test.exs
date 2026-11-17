@@ -142,6 +142,13 @@ defmodule Dextrin.Convert.JsonSchemaTest do
     refute takes?(registry(doc), "Root", ~s|{"b": "x"}|)
   end
 
+  test "text that is not JSON is refused, saying where it came from" do
+    assert {:error, why} = JsonSchema.to_dxns({"a.json", ~s|{"type":|})
+    assert why =~ "a.json: not JSON"
+    assert {:error, why} = JsonSchema.to_dxns({"b.json", "1 2"})
+    assert why =~ "text after the JSON value"
+  end
+
   test "something not a schema is refused" do
     assert {:error, why} = JsonSchema.to_dxns({"a.json", "12"})
     assert why =~ "object or a boolean"
