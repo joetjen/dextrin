@@ -1,9 +1,10 @@
 defmodule Dextrin.Schema.Compiler do
   @moduledoc """
   Compiles a parsed `.dxns` document (an ordinary decoded DXN value —
-  a `.dxns` file is valid `.dxn`, no new grammar; what makes it a
-  *schema* document is purely the shape of the value it parses to: a
-  map from name to type expression) into `Dextrin.Schema.Compiled`
+  a `.dxns` file is valid `.dxn`, whose one piece of grammar for schemas
+  is what a `%schema` or `%shape` is built from, DXNS.md §4b; what makes
+  it a *schema* document is purely the shape of the value it parses to:
+  a map from name to type expression) into `Dextrin.Schema.Compiled`
   entries.
 
   A struct schema is written `%schema(N){field: type, ...}` (DXN.md
@@ -33,7 +34,7 @@ defmodule Dextrin.Schema.Compiler do
   """
 
   alias Dextrin.{Keyword, OrderedMap, Registry, Struct, Symbol, Tuple}
-  alias Dextrin.Schema.{Compiled, Field, TypeExpr}
+  alias Dextrin.Schema.{Bases, Compiled, Field, TypeExpr}
   alias Ichor.Toolkit.Result
 
   # The scope key the document's names travel under (see compile/3).
@@ -100,9 +101,10 @@ defmodule Dextrin.Schema.Compiler do
         match?(%Struct{name: "schema"}, undoc(v))
       end)
 
-    with {:ok, registry} <- compile_aliases(alias_entries, base_registry, names) do
+    with {:ok, registry, built} <-
+           compile_aliases(alias_entries, base_registry, names, schema_entries) do
       Result.reduce_ok(schema_entries, registry, fn {name, entry}, registry ->
-        case compile_entry(entry, Map.put(registry.type_aliases, @names, names)) do
+        case schema_entry(name, entry, built, Map.put(registry.type_aliases, @names, names)) do
           {:ok, %Compiled{} = compiled} ->
             Registry.add_struct_schema(registry, name, %{compiled | name: name})
 
@@ -116,6 +118,43 @@ defmodule Dextrin.Schema.Compiler do
   def compile(other, _base_registry, _names),
     do: {:error, compile_error("a .dxns document is a map, got #{inspect(other)}")}
 
+  # A schema built from others (DXNS.md §4b) takes the fields `built`
+  # holds for it, each now resolved; any other is compiled from its body.
+  defp schema_entry(name, entry, built, aliases) do
+    case Map.fetch(built, name) do
+      {:ok, %{fields: fields, bases: bases}} ->
+        with {:ok, notes} <- entry_annotations(entry),
+             {:ok, fields} <- resolved_fields(fields, aliases) do
+          {:ok,
+           %Compiled{
+             version: undoc(entry).version || 1,
+             fields: fields,
+             bases: bases,
+             annotations: notes
+           }}
+        end
+
+      :error ->
+        compile_entry(entry, aliases)
+    end
+  end
+
+  defp entry_annotations(%Tuple{items: [%Keyword{name: "doc"}, _inner, raw]}),
+    do: annotations(raw, :schema)
+
+  defp entry_annotations(_entry), do: {:ok, %{}}
+
+  defp resolved_fields(fields, aliases) do
+    Result.reduce_ok(fields, [], fn field, acc ->
+      with {:ok, type} <- resolved(field.type, aliases, []),
+           do: {:ok, [%{field | type: type} | acc]}
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      {:error, _} = error -> error
+    end
+  end
+
   defp compile_error(message), do: Dextrin.Error.action(message, "schema/compile")
 
   # Every named type in a document sees every other (design/
@@ -125,12 +164,20 @@ defmodule Dextrin.Schema.Compiler do
   # give, never matters. A named type may reach itself only through a
   # guard -- a field, or a collection's elements (Jan, 2026-10-20) --
   # and there the reference stays by name, looked up when it is checked.
-  defp compile_aliases(alias_entries, registry, names) do
+  #
+  # A schema or shape built from others (DXNS.md §4b) is built here too,
+  # once the plain named types are compiled and before any is resolved:
+  # its bases may be any schema or shape of the document, or one already
+  # loaded. A built shape joins the named types; what was built for a
+  # schema comes back in `built`, by name.
+  defp compile_aliases(alias_entries, registry, names, schema_entries) do
     siblings = Map.new(alias_entries, fn {name, _} -> {name, {:named, name}} end)
     scope = registry.type_aliases |> Map.merge(siblings) |> Map.put(@names, names)
+    {extending, plain} = Enum.split_with(alias_entries, fn {_, v} -> built_from?(v) end)
+    document = Map.new(alias_entries ++ schema_entries)
 
     with {:ok, compiled} <-
-           Result.reduce_ok(alias_entries, %{}, fn {name, raw_value}, acc ->
+           Result.reduce_ok(plain, %{}, fn {name, raw_value}, acc ->
              case compile_named(name, raw_value, scope) do
                {:ok, type_expr} ->
                  {:ok, Map.put(acc, name, type_expr)}
@@ -139,6 +186,16 @@ defmodule Dextrin.Schema.Compiler do
                  {:error, compile_error("named type #{inspect(name)}: #{reason}")}
              end
            end),
+         lookup = %{document: document, compiled: compiled, scope: scope, registry: registry},
+         {:ok, built} <-
+           Result.reduce_ok(
+             extending ++ Enum.filter(schema_entries, fn {_, v} -> built_from?(v) end),
+             %{},
+             fn {name, _}, built ->
+               build(name, [], lookup, built)
+             end
+           ),
+         {:ok, compiled} <- with_built_shapes(compiled, extending, built),
          :ok <- guarded(compiled) do
       known = Map.merge(registry.type_aliases, compiled)
 
@@ -148,7 +205,265 @@ defmodule Dextrin.Schema.Compiler do
           {:error, reason} -> {:error, compile_error("named type #{inspect(name)}: #{reason}")}
         end
       end)
+      |> case do
+        {:ok, registry} -> {:ok, registry, built}
+        {:error, _} = error -> error
+      end
     end
+  end
+
+  # ---- built from others (DXNS.md §4b) ---------------------------------------
+
+  defp built_from?(entry) do
+    case undoc(entry) do
+      %Struct{name: kind, bases: bases, drops: drops} when kind in ["schema", "shape"] ->
+        bases != [] or drops != []
+
+      _ ->
+        false
+    end
+  end
+
+  # The fields of the document's entry `name`, built from its bases, kept
+  # in `built` with the bases as `Compiled` records them. `path` holds
+  # the entries being built, so one that reaches itself is seen.
+  defp build(name, path, lookup, built) do
+    cond do
+      Map.has_key?(built, name) ->
+        {:ok, built}
+
+      name in path ->
+        {:error, compile_error("#{inspect(name)} is built from itself")}
+
+      true ->
+        %Struct{bases: bases, drops: drops} = raw = undoc(Map.fetch!(lookup.document, name))
+
+        with :ok <- has_bases(name, raw),
+             :ok <- distinct_bases(name, bases),
+             {:ok, own} <- own_fields(name, raw, lookup.scope),
+             {:ok, found, built} <- found_bases(name, bases, [name | path], lookup, built),
+             {:ok, fields} <- merged(name, found, own, drops, lookup),
+             :ok <- built_cases(name, fields) do
+          recorded = Enum.map(found, &{&1.kind, &1.name, &1.version})
+          {:ok, Map.put(built, name, %{fields: fields, bases: recorded})}
+        end
+    end
+  end
+
+  defp has_bases(name, %Struct{bases: []}),
+    do:
+      {:error, compile_error("#{inspect(name)} drops a field, but names no base to drop it from")}
+
+  defp has_bases(_name, %Struct{name: "shape", version: version}) when version != nil,
+    do: {:error, compile_error("a shape has no version: %shape extends Base {field: type, ...}")}
+
+  defp has_bases(_name, %Struct{fields: {:positional, _}, name: kind}),
+    do:
+      {:error, compile_error("a #{kind} lists its fields by name: %#{kind}(N){field: type, ...}")}
+
+  defp has_bases(_name, _raw), do: :ok
+
+  defp distinct_bases(name, bases) do
+    case bases
+         |> Enum.map(&elem(&1, 1))
+         |> Enum.frequencies()
+         |> Enum.find(fn {_, n} -> n > 1 end) do
+      nil -> :ok
+      {base, _} -> {:error, compile_error("#{inspect(name)} names #{base} twice in its head")}
+    end
+  end
+
+  defp own_fields(name, %Struct{fields: {:keyed, pairs}}, scope) do
+    with {:ok, fields} <- compile_fields(pairs, scope),
+         :ok <- distinct_names(fields) do
+      {:ok, fields}
+    else
+      {:error, reason} -> {:error, compile_error("#{inspect(name)}: #{reason}")}
+    end
+  end
+
+  defp merged(name, found, own, drops, lookup) do
+    known = Map.merge(lookup.registry.type_aliases, lookup.compiled)
+    same? = fn a, b -> comparable(a, known) == comparable(b, known) end
+
+    case Bases.merge(found, own, drops, same?) do
+      {:ok, fields} -> {:ok, fields}
+      {:error, reason} -> {:error, compile_error("#{inspect(name)}: #{reason}")}
+    end
+  end
+
+  # `field` as it compares with the same field found another way: a
+  # base of this document still names its sibling types, one already
+  # loaded has them in place.
+  defp comparable(field, known), do: %{field | type: in_place(field.type, known, [])}
+
+  defp in_place({:named, name} = reference, known, path) do
+    case Map.fetch(known, name) do
+      {:ok, type} -> if name in path, do: reference, else: in_place(type, known, [name | path])
+      :error -> reference
+    end
+  end
+
+  defp in_place(type, known, path) when is_tuple(type),
+    do: type |> Elixir.Tuple.to_list() |> Enum.map(&in_place(&1, known, path)) |> List.to_tuple()
+
+  defp in_place(types, known, path) when is_list(types),
+    do: Enum.map(types, &in_place(&1, known, path))
+
+  defp in_place(%Field{} = field, known, path),
+    do: %{field | type: in_place(field.type, known, path)}
+
+  defp in_place(%{} = map, known, path) when not is_struct(map),
+    do: Map.new(map, fn {k, v} -> {k, in_place(v, known, path)} end)
+
+  defp in_place(leaf, _known, _path), do: leaf
+
+  # A `{:case}` in a field names a field of the result (DXNS.md §4b), so
+  # one whose field was dropped is refused.
+  defp built_cases(name, fields) do
+    names = MapSet.new(fields, & &1.name)
+
+    case Enum.find(Enum.flat_map(fields, &case_names(&1.type)), &(not MapSet.member?(names, &1))) do
+      nil ->
+        :ok
+
+      missing ->
+        {:error, compile_error("#{inspect(name)}: {:case #{missing} ...} names no field of it")}
+    end
+  end
+
+  defp case_names({:case, field, branches, otherwise}),
+    do: [field | Enum.flat_map([otherwise | Enum.map(branches, &elem(&1, 1))], &case_names/1)]
+
+  defp case_names({:shape, _, _}), do: []
+
+  defp case_names(type) when is_tuple(type),
+    do: type |> Elixir.Tuple.to_list() |> Enum.flat_map(&case_names/1)
+
+  defp case_names(types) when is_list(types), do: Enum.flat_map(types, &case_names/1)
+  defp case_names(_leaf), do: []
+
+  # Each base of the head, found: its fields and the version it was taken
+  # at. A base of the document that is itself built is built first.
+  defp found_bases(name, bases, path, lookup, built) do
+    Enum.reduce_while(bases, {:ok, [], built}, fn {kind, base, version}, {:ok, acc, built} ->
+      full = Map.get(lookup.scope[@names], base, base)
+
+      case found_base(full, version, path, lookup, built) do
+        {:ok, fields, at, built} ->
+          {:cont, {:ok, [%{kind: kind, name: full, fields: fields, version: at} | acc], built}}
+
+        {:error, %Dextrin.Error{}} = error ->
+          {:halt, error}
+
+        {:error, reason} ->
+          {:halt, {:error, compile_error("#{inspect(name)}: base #{base}: #{reason}")}}
+      end
+    end)
+    |> case do
+      {:ok, acc, built} -> {:ok, Enum.reverse(acc), built}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp found_base(base, version, path, lookup, built) do
+    case Map.fetch(lookup.document, base) do
+      {:ok, entry} -> document_base(base, undoc(entry), version, path, lookup, built)
+      :error -> loaded_base(base, version, lookup.registry, built)
+    end
+  end
+
+  defp document_base(base, %Struct{name: "shape"}, version, _path, _lookup, _built)
+       when version != nil,
+       do: {:error, "a shape has no versions, so #{base}(#{version}) names none"}
+
+  defp document_base(base, %Struct{name: kind} = raw, version, path, lookup, built)
+       when kind in ["schema", "shape"] do
+    cond do
+      built_from?(raw) ->
+        with {:ok, built} <- build(base, path, lookup, built),
+             do: at_version(base, raw, version, built[base].fields, lookup, built)
+
+      kind == "shape" ->
+        {:ok, shape_fields(Map.fetch!(lookup.compiled, base)), nil, built}
+
+      true ->
+        with {:ok, %Compiled{fields: fields}} <- compile_entry(raw, lookup.scope),
+             do: at_version(base, raw, version, fields, lookup, built)
+    end
+  end
+
+  defp document_base(_base, _raw, _version, _path, _lookup, _built),
+    do: {:error, "a base is a %schema or a %shape"}
+
+  # A schema of the document, at the version the head asks for: its own,
+  # or one already loaded. Without a version, the latest of them.
+  defp at_version(_base, %Struct{name: "shape"}, nil, fields, _lookup, built),
+    do: {:ok, fields, nil, built}
+
+  defp at_version(base, %Struct{version: own}, version, fields, lookup, built) do
+    own = own || 1
+
+    # What is loaded, the resolver asked as for any other base.
+    latest =
+      case Registry.fetch_struct_schema(lookup.registry, base) do
+        {:ok, %Compiled{version: loaded}, _registry} -> max(own, loaded)
+        _none -> own
+      end
+
+    case version || latest do
+      ^own -> {:ok, fields, own, built}
+      other -> loaded_base(base, other, lookup.registry, built)
+    end
+  end
+
+  defp loaded_base(base, version, registry, built) do
+    found =
+      if version,
+        do: Registry.fetch_struct_schema(registry, base, version),
+        else: Registry.fetch_struct_schema(registry, base)
+
+    case found do
+      {:ok, %Compiled{fields: fields, version: at}, _registry} ->
+        {:ok, fields, at, built}
+
+      _not_a_schema ->
+        case Map.fetch(registry.type_aliases, base) do
+          {:ok, type} ->
+            cond do
+              version != nil -> {:error, "#{base}(#{version}) is not loaded"}
+              shape = shape_fields(type) -> {:ok, shape, nil, built}
+              true -> {:error, "a base is a %schema or a %shape"}
+            end
+
+          :error when version != nil ->
+            {:error, "#{base}(#{version}) is not loaded"}
+
+          :error ->
+            {:error, "no schema or shape is named #{base}"}
+        end
+    end
+  end
+
+  defp shape_fields({:shape, _, fields}), do: fields
+  defp shape_fields({:doc, type, _}), do: shape_fields(type)
+  defp shape_fields(_other), do: nil
+
+  # A built shape joins the named types under its name, as a plain one
+  # does, with its annotations.
+  defp with_built_shapes(compiled, extending, built) do
+    Result.reduce_ok(extending, compiled, fn {name, entry}, compiled ->
+      shape = {:shape, name, built[name].fields}
+
+      case entry do
+        %Tuple{items: [%Keyword{name: "doc"}, _inner, raw]} ->
+          with {:ok, notes} <- annotations(raw, shape),
+               do: {:ok, Map.put(compiled, name, {:doc, shape, notes})}
+
+        _ ->
+          {:ok, Map.put(compiled, name, shape)}
+      end
+    end)
   end
 
   # Every cycle among `compiled`'s named types passes a guard: a field
@@ -612,6 +927,15 @@ defmodule Dextrin.Schema.Compiler do
 
   # `%shape{field: type, ...}` (design/shapes-and-case.md): a plain map's
   # fields, as a schema's are written; no version, never positional.
+  # A shape built from others is a named entry of its document (DXNS.md
+  # §4b), so that its bases are found before it is used.
+  defp compile_type_expr(%Struct{name: "shape", bases: bases, drops: drops}, _aliases)
+       when bases != [] or drops != [],
+       do:
+         {:error,
+          "a shape built from others is an entry of its own, Name: %shape extends Base {...}, " <>
+            "used by its name"}
+
   defp compile_type_expr(%Struct{name: "shape", version: nil, fields: {:keyed, pairs}}, aliases) do
     with {:ok, fields} <- compile_fields(pairs, aliases),
          :ok <- distinct_names(fields),

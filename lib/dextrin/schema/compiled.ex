@@ -17,12 +17,15 @@ defmodule Dextrin.Schema.Compiled do
           name: String.t(),
           version: pos_integer(),
           fields: [Field.t()],
-          annotations: %{optional(String.t()) => term()}
+          annotations: %{optional(String.t()) => term()},
+          bases: [{:extends | :includes, String.t(), pos_integer() | nil}]
         }
 
   # `annotations` are what a `{:doc %schema{...} %{...}}` around the
-  # entry says about it (DXNS.md §1b).
-  defstruct [:name, version: 1, fields: [], annotations: %{}]
+  # entry says about it (DXNS.md §1b). `bases` are what it was built from
+  # (DXNS.md §4b), each schema at the version it was built with, a shape
+  # without one: what an `extends` makes it acceptable as.
+  defstruct [:name, version: 1, fields: [], annotations: %{}, bases: []]
 
   @spec field_names(t()) :: [String.t()]
   def field_names(%__MODULE__{fields: fields}), do: Enum.map(fields, & &1.name)

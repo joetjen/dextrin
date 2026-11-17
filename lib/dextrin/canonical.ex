@@ -82,15 +82,20 @@ defmodule Dextrin.Canonical do
 
   # A keyed struct's extra fields follow its declared ones as entries,
   # in the order they were written (DXN.md §1.5).
-  defp text(%Struct{name: name, version: version, fields: {:keyed, pairs}, extra: extra}),
-    do: Struct.head(name, version) <> "{" <> field_entries(pairs ++ extra) <> "}"
+  defp text(%Struct{version: version, fields: {:keyed, pairs}, extra: extra} = struct) do
+    body =
+      Enum.reject(Struct.drop_entries(struct) ++ [field_entries(pairs ++ extra)], &(&1 == ""))
+      |> Enum.join(" ")
+
+    Struct.opening(struct, version) <> "{" <> body <> "}"
+  end
 
   # A positional struct's extras in canonical order of their keys, as
   # §1.5 fixes: in `.dxnb` they are a map, and its order is not data.
-  defp text(%Struct{name: name, version: version, fields: {:positional, values}, extra: extra}) do
+  defp text(%Struct{version: version, fields: {:positional, values}, extra: extra} = struct) do
     sorted = Enum.sort_by(extra, fn {key, _} -> text(key) end)
     body = Enum.reject([items(values), field_entries(sorted)], &(&1 == "")) |> Enum.join(" ")
-    Struct.head(name, version) <> "[" <> body <> "]"
+    Struct.opening(struct, version) <> "[" <> body <> "]"
   end
 
   # Dates and times are ISO 8601 strings under their tag (DXN.md §1.5,

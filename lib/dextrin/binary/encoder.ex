@@ -294,6 +294,17 @@ defmodule Dextrin.Binary.Encoder do
   # loaded version of its schema, or its own -- as part of the type
   # name (DXN.md §2.4, §4.8).
 
+  # A `%schema` or `%shape` built from others (DXNS.md §4b) is text only:
+  # `.dxnb` has no place for its head's clauses or its `- field`s.
+  defp encode_item_dispatch(%Struct{name: name, bases: bases, drops: drops}, _opts)
+       when bases != [] or drops != [] do
+    {:error,
+     Dextrin.Error.action(
+       "a %#{name} built from others (extends, includes, - field) has no .dxnb form",
+       "encode/unsupported"
+     )}
+  end
+
   defp encode_item_dispatch(%Struct{fields: {:positional, items}} = struct, opts) do
     encode_struct(type_name(struct, opts), items, struct.extra, opts)
   end

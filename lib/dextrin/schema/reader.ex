@@ -120,7 +120,8 @@ defmodule Dextrin.Schema.Reader do
          {:ok, pairs} <- Validator.resolve(reading, fields, registry),
          {:ok, value} <-
            built(registry, materializer(registry, name), reading, latest, pairs, extra) do
-      {:ok, %Validated{name: name, value: value}, registry}
+      also = Validator.also_valid_as(reading, fields, registry)
+      {:ok, %Validated{name: name, value: value, also: also}, registry}
     end
   end
 

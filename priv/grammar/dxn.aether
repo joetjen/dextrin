@@ -119,8 +119,17 @@ map_entry := (short_key:MAP_KEY short_val:value) | (arrow_key:value "=>" arrow_v
 ; (DXNS.md §8). "(" begins nothing else in DXN, so this needs no new
 ; token and no lookahead. Inline rather than a rule of its own: a rule
 ; made only of terminals is captured as its text.
-struct_lit        := "%" name:IDENTIFIER ("(" version:INTEGER ")")? (keyed:struct_keyed | positional:struct_positional)
-struct_keyed      := "{" map_entry* "}"
+; A `%schema` or `%shape` head may name what it is built from
+; (DXNS.md §4b): `extends User(3) Staff includes Audit`. The words are
+; plain identifiers here, so `extends` stays an ordinary symbol
+; everywhere else; the actions read them as clauses, and refuse them on
+; any other struct.
+struct_lit        := "%" name:IDENTIFIER ("(" version:INTEGER ")")? head_word* (keyed:struct_keyed | positional:struct_positional)
+head_word         := word:IDENTIFIER ("(" version:INTEGER ")")?
+; `- password`: an inherited field left out (DXNS.md §4b), a schema's or
+; a shape's only; "-" before a digit is a number's sign, one token with it.
+struct_keyed      := "{" (map_entry | drop_entry)* "}"
+drop_entry        := "-" field:IDENTIFIER
 ; A positional struct's items come first, then any extra fields as
 ; entries (DXN.md §1.2): an item is a value not followed by `=>`, so
 ; `3 => :x` is an entry, and an item after an entry is a syntax error.

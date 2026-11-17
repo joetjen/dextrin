@@ -12,8 +12,10 @@ For a first look, read the [tutorial](TUTORIAL.md); for a quick one, the
 [examples](DXNS_EXAMPLES.md).
 
 
-A `.dxns` file is valid `.dxn` — DXN.md §1's grammar, unchanged, no schema
--specific syntax. What makes a document a *schema* document is purely
+A `.dxns` file is valid `.dxn` — DXN.md §1's grammar, whose one piece
+written for schemas is what a `%schema` or `%shape` may carry to be
+built from others: `extends` and `includes` in its head, `- field` in
+its body (§4b). What makes a document a *schema* document is purely
 the shape of the value it decodes to: a `map` whose values are either
 `%schema{...}` (a struct schema) or a `type_expr` (a **named type**,
 §5) -- a `%shape{...}` (§4a) among them. `%schema{}`/`%shape{}`/`%field{}` (§4) are recognized by name directly,
@@ -413,6 +415,116 @@ may stand anywhere in a field's type -- inside `nilable`, `list-of`,
 `any-of` -- and a `field` naming no field of the schema or shape it is
 written in is a compile error.
 
+## 4b. Extending and including (`extends`, `includes`, `- field`)
+
+```ebnf
+schema_form  = ( "%schema" | "%shape" ) , [ "(" , version , ")" ] ,
+               { clause } , "{" , { field_entry | drop } , "}" ;
+clause       = ( "extends" | "includes" ) , base , { base } ;
+base         = identifier , [ "(" , version , ")" ] ;
+drop         = "-" , identifier ;
+```
+
+```text
+Person: %shape{name: :string, born?: :date}
+
+User: %schema(3) extends Person {
+  email: :string,
+  password?: :string
+}
+
+Admin: %schema(1) extends User includes Audit {
+  - password,                # an inherited field Admin does not have
+  email: :uri,               # an override: the whole field, in its place
+  role: :string              # a field of Admin's own, after the inherited ones
+}
+```
+
+**A schema or a shape may be built from others** (Jan, 2026-11-17).
+Its head names its **bases**, and its body says how it differs from
+them. The result is an ordinary schema or shape under its own name. If `Audit`
+is `%shape{changed_by: :string}`, `Admin` above is exactly
+
+```text
+Admin: %schema(1){name: :string, born?: :date, email: :uri,
+                  changed_by: :string, role: :string}
+```
+
+and everything else -- text, `.dxnb`, enforcement (§7), versions and
+materializers (§8) -- sees only that. Nothing about the bases travels
+on the wire: an `Admin` is written `%Admin(1){...}`, `"Admin(1)"` in
+`.dxnb`.
+
+**`extends` and `includes` build the same result, and differ in one
+thing**: an `Admin` that extends `User` is accepted wherever a `User`
+is expected; one that includes `User` is not.
+
+- **A base** is a `%schema` or a `%shape`, in this document or another
+  (§6); each kind may be built from each, and the body's own form
+  decides what the result is. A base that is neither -- a named type of
+  another kind, a generic -- is a compile error. A schema named twice
+  in one head is a compile error.
+- **`User(3)`** names a version of a schema base, which must be loaded.
+  **Without one, the base is the latest version loaded when the result
+  is compiled.** A reader that resolves names to files loads every
+  version of a base it finds first (§6), so this does not depend on
+  reading order. A base loaded later, a newer version or a replacement
+  (§8), does not change a result already loaded. A shape has no
+  versions; a version on one is a compile error.
+- **`- field`** in the body names an inherited field the result does
+  not have; `- password` and `-password` are the same, and a writer
+  writes the first. A field no base has, one named twice, or one the
+  body declares again, is a compile error, and so is a required field
+  of an `extends` base: no value without it could pass as that base --
+  `includes` is for that. Where it stands in the body does not matter.
+- **A field a base has, declared again, is an override**: it replaces
+  the inherited field whole -- type, `?`, default and description -- and
+  keeps its place. Any other field is the result's own.
+- **The same field from two bases** is one field when both are
+  identical (type, `?`, default and description), as a field reached
+  twice through a common base is. Two that differ are a compile error,
+  unless the body overrides that field or drops it.
+- **The fields are in this order**: the bases' in the order the head
+  names the bases, `extends` and `includes` alike, each base's in its
+  own order. A field that arrives again keeps its first place, and
+  overrides stay where they are. The result's own fields come last, as
+  written. That is the order of a positional struct (§4).
+- **Chains**: a base may itself have bases. A schema that reaches
+  itself through them is a compile error. A `{:case}` (§4a) in an
+  inherited field names the result's fields, so a case whose field was
+  dropped is a compile error.
+- **Only a `%schema` or a `%shape` takes clauses and `- field`**: each
+  clause at most once, in either order. On any other struct either is
+  `syntax` (DXN.md §1.2). In a head, `extends` and `includes` are words
+  of the grammar, so no base can be named that. A schema or shape with
+  clauses or `- field` has no `.dxnb` form: writing one is
+  `encode/unsupported`.
+
+**An extending value is accepted where its base is expected.** A field
+typed `User` accepts an `Admin` that extends `User`, as it accepts a
+`User`, and so does a field typed by anything `User` extends in turn.
+The value is checked against its own schema (`Admin`) and then against
+the base's fields, so it is accepted only when it is a valid `User` as
+well: an `Admin` whose override is wider than the field it replaces
+is refused there (`schema/type-mismatch`). The application receives
+the `Admin`. **`includes` cuts the chain**: an `Admin` that includes
+`User` is accepted neither where a `User` is expected nor where
+anything `User` extends is.
+
+**Every mistake in the head or against a base is `schema/compile`**
+(DXN.md §5) -- an unknown base, an unloaded version, a version on a
+shape, a base named twice, a dropped or overridden field no base has,
+a field dropped twice, a field both dropped and declared, a required
+field dropped from an `extends` base, two different fields of one name, a cycle -- and a
+clause outside a schema or shape head is `syntax`.
+
+**Versions** (§8) apply to the result. Version discipline compares
+results, so if a base changes under a result that names no base
+version, the same result version then means something else, and the
+check reports it like any other changed version. Before such a schema
+ships, its author either bumps its version or names the base's. The
+result has its own materializer; no base's is inherited.
+
 ## 5. Named types
 
 Any top-level entry whose value is not a `%schema{}` defines a **named
@@ -531,8 +643,9 @@ struct:
 make it match.** An integer is not a string, however easy the
 conversion; a map is not a struct. A field typed `User` accepts only a
 `User` struct: a struct named `User` (checked against `User`'s schema,
-or opaque when there is none, DXN.md §1.4), or the application value a reader
-has registered as `User`'s. Everything else is a type error, plain maps
+or opaque when there is none, DXN.md §1.4), a struct of a schema that
+`extends` `User` and is a valid `User` as well (§4b), or the application
+value a reader has registered as `User`'s. Everything else is a type error, plain maps
 included; whoever needs a struct writes it as one.
 
 **Representation is not conversion.** A language without integers may

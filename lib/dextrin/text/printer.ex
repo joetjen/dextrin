@@ -135,20 +135,22 @@ defmodule Dextrin.Text.Printer do
          do: {:ok, "%{" <> entries <> "}"}
   end
 
-  def print(%Struct{name: name, fields: {:keyed, pairs}} = struct, opts) do
+  def print(%Struct{fields: {:keyed, pairs}} = struct, opts) do
     keyed = Enum.map(pairs, fn {k, v} -> {Dextrin.Keyword.new(k), v} end)
 
-    with {:ok, entries} <- print_entries(keyed ++ extra_entries(struct), opts),
-         do: {:ok, Struct.head(name, written_version(struct, opts)) <> "{" <> entries <> "}"}
+    with {:ok, entries} <- print_entries(keyed ++ extra_entries(struct), opts) do
+      body = Enum.reject(Struct.drop_entries(struct) ++ [entries], &(&1 == "")) |> Enum.join(",")
+      {:ok, Struct.opening(struct, written_version(struct, opts)) <> "{" <> body <> "}"}
+    end
   end
 
   # A positional struct's items, then its extra fields as entries
   # (DXN.md §1.2).
-  def print(%Struct{name: name, fields: {:positional, items}} = struct, opts) do
+  def print(%Struct{fields: {:positional, items}} = struct, opts) do
     with {:ok, printed} <- print_all(items, opts),
          {:ok, extra} <- print_entries(extra_entries(struct), opts) do
       body = Enum.reject([Enum.join(printed, ","), extra], &(&1 == "")) |> Enum.join(",")
-      {:ok, Struct.head(name, written_version(struct, opts)) <> "[" <> body <> "]"}
+      {:ok, Struct.opening(struct, written_version(struct, opts)) <> "[" <> body <> "]"}
     end
   end
 

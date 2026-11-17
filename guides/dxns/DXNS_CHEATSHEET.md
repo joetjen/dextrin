@@ -130,6 +130,16 @@ A constraint refuses a value it does not apply to.
 | `name: %field{type: T, description: "..."}` | documented |
 | `name: {:nilable T}` | present, but may be `nil` |
 
+## Building on others
+
+| Written | Means |
+|---|---|
+| `%schema extends User {...}` | `User`'s fields, then these; an `Admin` passes as a `User` |
+| `%schema includes Audit {...}` | `Audit`'s fields, then these; no passing as an `Audit` |
+| `extends User(3) Staff` | several bases, `User` at version 3, `Staff` at its latest |
+| `- password` | an inherited field left out (only optional ones of an `extends` base) |
+| `id: :uuid` | an inherited field `id` replaced, in its place |
+
 ## Versions
 
 | Written | Means |

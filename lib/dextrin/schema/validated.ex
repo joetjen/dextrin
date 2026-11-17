@@ -21,9 +21,11 @@ defmodule Dextrin.Schema.Validated do
 
   alias Dextrin.{Array, CustomTag, OrderedMap, SortedSet, Struct}
 
-  @type t :: %__MODULE__{name: String.t(), value: term()}
+  @type t :: %__MODULE__{name: String.t(), value: term(), also: [String.t()]}
 
-  defstruct [:name, :value]
+  # `also` names the schemas the value passes as besides its own: those
+  # its schema extends, and that it is a valid one of (DXNS.md §4b).
+  defstruct [:name, :value, also: []]
 
   @doc "Recursively removes every Validated wrapper from a decoded value tree."
   @spec strip(term()) :: term()

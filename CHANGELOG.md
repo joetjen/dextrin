@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A schema or a shape can be built from others** (DXNS.md §4b):
+  `%schema(1) extends User includes Audit { - password, role: :string }`
+  takes the fields of its bases, overrides those it declares again,
+  leaves out each `- field` and adds its own. The result is an ordinary
+  schema under its own name, so text, `.dxnb`, validation and versions
+  are unchanged. A struct of a schema that `extends` another is
+  accepted wherever that one is expected, when it is a valid one as
+  well; `includes` builds the same fields without that. DXN text gains
+  the head clauses and `- field` for `%schema` and `%shape`; on any
+  other struct they are a syntax error, and a schema written with them
+  has no `.dxnb` form (`encode/unsupported`).
+
 ## [0.3.3] - 2026-10-26
 
 Decoding text is faster: the parser is regenerated with ichor 0.7.3, on
