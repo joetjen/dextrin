@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-17
+
+A schema or a shape can be built from others: `extends` and
+`includes` in its head, `- field` in its body (DXNS.md §4b). Nothing
+breaks: the new syntax was a syntax error before.
+
 ### Added
 
 - **A schema or a shape can be built from others** (DXNS.md §4b):
