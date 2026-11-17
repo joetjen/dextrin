@@ -84,4 +84,46 @@ defmodule Dextrin.Schema.CompatTest do
     assert %{problems: []} =
              Compat.check(loaded([@v1]), loaded([@v1, "%{Other: %schema{x: :integer}}"]))
   end
+
+  describe "named types with versions (Way B, DXNS.md §5c)" do
+    @c1 "%{Color: {:enum :red :green}}"
+    @c2 "%{Color: %type(2)[{:enum :red :green :blue}]}"
+
+    test "a new version passes; a version whose definition changed is a problem" do
+      assert %{problems: []} = Compat.check(loaded([@c1]), loaded([@c1, @c2]))
+
+      assert %{problems: [%{type: "Color", version: 1, problem: :changed_without_new_version}]} =
+               Compat.check(loaded([@c1]), loaded(["%{Color: {:enum :red}}"]))
+    end
+
+    test "a version that went down is a problem" do
+      assert %{problems: [%{type: "Color", problem: :version_went_down, from: 2, to: 1}]} =
+               Compat.check(loaded([@c1, @c2]), loaded([@c1]))
+    end
+  end
+
+  test "annotations are no change: deprecating a version that shipped passes" do
+    deprecated =
+      ~s(%{User: {:doc %schema{name: {:doc :string %{deprecated: "use full_name"}}} %{deprecated: true}}})
+
+    assert %{problems: []} = Compat.check(loaded([@v1]), loaded([deprecated]))
+
+    color = ~s(%{Color: {:doc {:enum :red :green} %{deprecated: true}}})
+
+    assert %{problems: []} =
+             Compat.check(loaded(["%{Color: {:enum :red :green}}"]), loaded([color]))
+  end
+
+  test "closing a version, or typing its extras otherwise, is a change" do
+    base = "%{User: %schema{name: :string}}"
+
+    for changed <- [
+          "%{User: %schema{name: :string - *}}",
+          "%{User: %schema{name: :string * :string => :integer}}"
+        ] do
+      assert %{problems: [%{problem: :changed_without_new_version}]} =
+               Compat.check(loaded([base]), loaded([changed])),
+             changed
+    end
+  end
 end

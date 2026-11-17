@@ -31,6 +31,34 @@ What DXNS lacked to say every TypeSpec type exactly
 - **Sized sugar `:int8`, `:int16`, `:uint8`, `:uint16`** (DXNS.md §1).
 - A refusal now says why, where it can: `field "a" does not match its
   declared type: ...`.
+- **Typed and closed extras** (DXNS.md §4c): `* :string => :integer` in
+  a `%schema` or `%shape` body types every extra key and value; `- *`
+  refuses every extra, strict decode or not. Both are inherited from
+  bases.
+- **Deprecation warnings** (DXNS.md §1b): `deprecated:` on a schema, one
+  version of it, a named type, a field's type, a variant or an enum
+  value now warns -- when a schema that uses it compiles
+  (`Dextrin.Registry.warnings/1`) and when data goes through it. Decode
+  and encode take `deprecations: :once | :every | :off | :error` and
+  `on_deprecated:`; without one, the warning is logged.
+  `Dextrin.Schema.annotations/3` reads one version's annotations.
+- **Pinned references and versions of named types** (DXNS.md §5c):
+  `Pet(1)` -- DXN text for `{:at Pet 1}` -- pins a field to one version
+  of a schema, taken as read without a materializer, and written at that
+  version; `Color: %type(2)[T]` is version 2 of a named type, `Color`
+  its latest and `Color(1)` an older one. `mix dextrin.compat` checks
+  named types' versions too.
+
+### Changed
+
+- **A struct carrying a loaded older version is written at it**
+  (DXNS.md §8); it used to be written as the latest whatever it said.
+  Values a reader builds carry the latest, so only one that says an
+  older version itself is affected.
+- **`Name(N)` is a value** (DXN.md §1.2): it used to be a syntax error.
+- **Annotations are no change to version discipline**: documenting or
+  deprecating a field of a version that shipped no longer needs a new
+  version.
 
 ### Fixed
 

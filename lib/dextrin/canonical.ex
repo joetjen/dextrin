@@ -74,7 +74,14 @@ defmodule Dextrin.Canonical do
 
   defp text(%Dextrin.Keyword{name: name}), do: keyword(name)
   defp text(list) when is_list(list), do: "[" <> items(list) <> "]"
-  defp text(%Dextrin.Tuple{items: items}), do: "{" <> items(items) <> "}"
+
+  defp text(%Dextrin.Tuple{items: items} = tuple) do
+    case Dextrin.Tuple.pinned(tuple) do
+      {:ok, name, version} -> Dextrin.Tuple.pinned_text(name, version)
+      :error -> "{" <> items(items) <> "}"
+    end
+  end
+
   defp text(%Array{items: items}), do: "@array[" <> items(Tuple.to_list(items)) <> "]"
   defp text(%MapSet{} = set), do: "@{" <> sorted_items(MapSet.to_list(set)) <> "}"
   defp text(%SortedSet{items: items}), do: "@sorted-set @{" <> sorted_items(items) <> "}"
@@ -84,7 +91,10 @@ defmodule Dextrin.Canonical do
   # in the order they were written (DXN.md §1.5).
   defp text(%Struct{version: version, fields: {:keyed, pairs}, extra: extra} = struct) do
     body =
-      Enum.reject(Struct.drop_entries(struct) ++ [field_entries(pairs ++ extra)], &(&1 == ""))
+      Enum.reject(
+        Struct.drop_entries(struct) ++ [rest_entry(struct), field_entries(pairs ++ extra)],
+        &(&1 == "")
+      )
       |> Enum.join(" ")
 
     Struct.opening(struct, version) <> "{" <> body <> "}"
@@ -160,6 +170,10 @@ defmodule Dextrin.Canonical do
 
   defp shorthand_name(%Dextrin.Keyword{name: name}), do: identifier(name)
   defp shorthand_name(_), do: :error
+
+  # `* K => V` (DXNS.md §4b), always with the arrow.
+  defp rest_entry(%Struct{rest: nil}), do: ""
+  defp rest_entry(%Struct{rest: {key, value}}), do: "* " <> text(key) <> " => " <> text(value)
 
   # A keyed struct's entries: a field name is written as shorthand when
   # it is an identifier, and every entry keeps its place.

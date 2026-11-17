@@ -78,7 +78,8 @@ defmodule Dextrin.Binary.Decoder do
 
     try do
       with {:ok, value, leftover} <- decode_item(rest, opts),
-           do: {:ok, Dextrin.Schema.Validated.strip(value), leftover}
+           {:ok, value} <- Dextrin.Schema.Validated.unwrap(value),
+           do: {:ok, value, leftover}
     after
       restore(:dextrin_shared_items, elem(outer, 0))
       restore(:dextrin_stringref_stack, elem(outer, 1))

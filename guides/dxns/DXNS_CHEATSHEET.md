@@ -116,7 +116,7 @@ A constraint refuses a value it does not apply to.
 | `title`, `description` | string | a name; what it is for |
 | `examples` | list | values the type takes |
 | `read-only`, `write-only` | boolean | written by its owner only; never read back |
-| `deprecated` | boolean or string | on its way out, with the reason |
+| `deprecated` | boolean or string | on its way out, with the reason; warns when used (§1b) |
 | `meta` | map | anything else, kept as written |
 | `values` | map | on an enum: each value's own annotations |
 | `secret` | boolean | not to be logged or shown |
@@ -144,6 +144,10 @@ A constraint refuses a value it does not apply to.
 | `%schema includes Audit {...}` | `Audit`'s fields, then these; no passing as an `Audit` |
 | `extends User(3) Staff` | several bases, `User` at version 3, `Staff` at its latest |
 | `- password` | an inherited field left out (only optional ones of an `extends` base) |
+| `* :string => :integer` | every extra key and value must match these (§4c) |
+| `Pet(1)` | pinned: version 1 of `Pet` only, taken as read (§5c); `{:at Pet 1}` |
+| `Color: %type(2)[{:enum ...}]` | version 2 of a named type; `Color` alone is the latest (§5c) |
+| `- *` | no extra at all, strict decode or not (§4c) |
 | `id: :uuid` | an inherited field `id` replaced, in its place |
 
 ## Versions

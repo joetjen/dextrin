@@ -21,11 +21,56 @@ defmodule Dextrin.Schema.Validated do
 
   alias Dextrin.{Array, CustomTag, OrderedMap, SortedSet, Struct}
 
-  @type t :: %__MODULE__{name: String.t(), value: term(), also: [String.t()]}
+  @type t :: %__MODULE__{
+          name: String.t(),
+          value: term(),
+          also: [String.t()],
+          version: pos_integer() | nil,
+          as_read: Dextrin.Struct.t() | nil,
+          refused: Dextrin.Error.t() | nil
+        }
 
   # `also` names the schemas the value passes as besides its own: those
   # its schema extends, and that it is a valid one of (DXNS.md §4b).
-  defstruct [:name, :value, also: []]
+  # `version` is the version it was read or checked with, and `as_read`
+  # the struct as that version reads it, before any materializer: what a
+  # field pinned to that version takes instead (DXNS.md §5c). `refused`
+  # is why it has no value -- an older version with no materializer to
+  # upgrade it -- which stands unless a pinned field takes `as_read`.
+  defstruct [:name, :value, :version, :as_read, :refused, also: []]
+
+  @doc """
+  `value` with every wrapper removed, as `strip/1` does -- or the first
+  refusal one still holds: a struct no field took as read, and that
+  could not be upgraded.
+  """
+  @spec unwrap(term()) :: {:ok, term()} | {:error, Dextrin.Error.t()}
+  def unwrap(value) do
+    case refusal(value) do
+      nil -> {:ok, strip(value)}
+      error -> {:error, error}
+    end
+  end
+
+  defp refusal(%__MODULE__{refused: %Dextrin.Error{} = error}), do: error
+  defp refusal(%__MODULE__{value: value}), do: refusal(value)
+  defp refusal(list) when is_list(list), do: Enum.find_value(list, &refusal/1)
+  defp refusal(%Dextrin.Tuple{items: items}), do: refusal(items)
+  defp refusal(%Array{items: items}), do: refusal(Tuple.to_list(items))
+
+  defp refusal(%OrderedMap{pairs: pairs}),
+    do: Enum.find_value(pairs, fn {k, v} -> refusal(k) || refusal(v) end)
+
+  defp refusal(%MapSet{} = set), do: Enum.find_value(set, &refusal/1)
+  defp refusal(%SortedSet{items: items}), do: refusal(items)
+  defp refusal(%Struct{fields: {:keyed, pairs}}), do: refusal(Enum.map(pairs, &elem(&1, 1)))
+  defp refusal(%Struct{fields: {:positional, items}}), do: refusal(items)
+  defp refusal(%CustomTag{value: value}), do: refusal(value)
+
+  defp refusal(%{} = map) when not is_struct(map),
+    do: Enum.find_value(map, fn {k, v} -> refusal(k) || refusal(v) end)
+
+  defp refusal(_other), do: nil
 
   @doc "Recursively removes every Validated wrapper from a decoded value tree."
   @spec strip(term()) :: term()

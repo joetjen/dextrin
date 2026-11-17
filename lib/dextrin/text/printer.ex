@@ -98,9 +98,16 @@ defmodule Dextrin.Text.Printer do
     with {:ok, printed} <- print_all(list, opts), do: {:ok, "[" <> Enum.join(printed, " ") <> "]"}
   end
 
-  def print(%Dextrin.Tuple{items: items}, opts) do
-    with {:ok, printed} <- print_all(items, opts),
-         do: {:ok, "{" <> Enum.join(printed, " ") <> "}"}
+  # `{:at Pet 1}` is written `Pet(1)` (DXNS.md §5c).
+  def print(%Dextrin.Tuple{items: items} = tuple, opts) do
+    case Dextrin.Tuple.pinned(tuple) do
+      {:ok, name, version} ->
+        {:ok, Dextrin.Tuple.pinned_text(name, version)}
+
+      :error ->
+        with {:ok, printed} <- print_all(items, opts),
+             do: {:ok, "{" <> Enum.join(printed, " ") <> "}"}
+    end
   end
 
   def print(%Array{items: items}, opts) do
@@ -138,8 +145,12 @@ defmodule Dextrin.Text.Printer do
   def print(%Struct{fields: {:keyed, pairs}} = struct, opts) do
     keyed = Enum.map(pairs, fn {k, v} -> {Dextrin.Keyword.new(k), v} end)
 
-    with {:ok, entries} <- print_entries(keyed ++ extra_entries(struct), opts) do
-      body = Enum.reject(Struct.drop_entries(struct) ++ [entries], &(&1 == "")) |> Enum.join(",")
+    with {:ok, entries} <- print_entries(keyed ++ extra_entries(struct), opts),
+         {:ok, rest} <- print_rest(struct, opts) do
+      body =
+        Enum.reject(Struct.drop_entries(struct) ++ [rest, entries], &(&1 == ""))
+        |> Enum.join(",")
+
       {:ok, Struct.opening(struct, written_version(struct, opts)) <> "{" <> body <> "}"}
     end
   end
@@ -280,6 +291,16 @@ defmodule Dextrin.Text.Printer do
   # ":"` looks superficially plausible but is simply not valid
   # `map_entry` syntax (a genuine bug this once produced: `%{"":0}`
   # for an empty-name keyword, which fails to parse back at all).
+  # `* K => V`, the type of a `%schema`'s or `%shape`'s extras
+  # (DXNS.md §4b): always the arrow, whatever K is.
+  defp print_rest(%Struct{rest: nil}, _opts), do: {:ok, ""}
+
+  defp print_rest(%Struct{rest: {key, value}}, opts) do
+    with {:ok, key} <- print(key, opts),
+         {:ok, value} <- print(value, opts),
+         do: {:ok, "* " <> key <> " => " <> value}
+  end
+
   defp print_entries(pairs, opts) do
     Result.reduce_ok(pairs, [], fn
       {%Dextrin.Keyword{name: name}, value}, acc ->

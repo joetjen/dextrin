@@ -89,8 +89,10 @@ defmodule Dextrin.Schema do
     # Read exactly as a decode would read it, version and materializer
     # included (Dextrin.Schema.Reader).
     case Dextrin.Schema.Reader.read(registry, schema_name, version, fields) do
-      {:ok, _value, _registry} ->
-        :ok
+      # An older version that could not be upgraded carries its refusal
+      # (a pinned field may take it as read); on its own it stands.
+      {:ok, value, _registry} ->
+        with {:ok, _value} <- Dextrin.Schema.Validated.unwrap(value), do: :ok
 
       {:unknown, _registry} ->
         {:error,
@@ -156,6 +158,26 @@ defmodule Dextrin.Schema do
           {:ok, compiled, _registry} -> {:ok, compiled.annotations}
           _ -> :error
         end
+    end
+  end
+
+  @doc """
+  What the `{:doc ... %{...}}` around one version of the schema `name`
+  says about that version (DXNS.md §1b): `deprecated:` on version 1
+  deprecates version 1 only (G10). `:error` when that version is not
+  loaded.
+
+      iex> {:ok, doc} = Dextrin.decode(~s|%{Pet: {:doc %schema(1){name: :string} %{deprecated: "use Pet(2)"}}}|)
+      iex> {:ok, registry} = Dextrin.Schema.compile(doc)
+      iex> Dextrin.Schema.annotations(registry, "Pet", 1)
+      {:ok, %{"deprecated" => "use Pet(2)"}}
+  """
+  @spec annotations(Registry.t(), String.t(), pos_integer()) ::
+          {:ok, %{optional(String.t()) => term()}} | :error
+  def annotations(%Registry{} = registry, name, version) do
+    case Registry.fetch_struct_schema(registry, name, version) do
+      {:ok, compiled, _registry} -> {:ok, compiled.annotations}
+      _ -> :error
     end
   end
 

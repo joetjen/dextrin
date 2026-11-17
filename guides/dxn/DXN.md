@@ -77,7 +77,8 @@ exponent     = ( "e" | "E" ) , [ "+" | "-" ] , digit , { digit } ;
 decimal      = [ "-" ] , digit , { digit } , [ "." , digit , { digit } ] , "M" ;
 rational     = [ "-" ] , digit , { digit } , "/" , digit , { digit } ;
 
-symbol       = identifier - reserved ;              (* bare, unevaluated reference *)
+symbol       = identifier - reserved ,              (* bare, unevaluated reference *)
+               [ "(" , integer , ")" ] ;             (* Name(N): the tuple {:at Name N}, DXNS.md §5c *)
 keyword      = ":" , ( identifier | string ) ;       (* value position; see map_entry for key position *)
 
 list         = "[" , { value } , "]" ;
@@ -253,6 +254,7 @@ Per type:
 | `string` | see the string rules below |
 | `char` | ? then the character; ?s for space; \\ escape forms for \\, whitespace and control characters |
 | `symbol` | the identifier |
+| `{:at Name N}` | Name(N), N a positive integer: a pinned name (DXNS.md §5c) |
 | `keyword` | :name when name is an identifier and not reserved, else :"..." with string escaping |
 | `list` | [ items ] |
 | `tuple` | { items } |
@@ -572,7 +574,8 @@ normative.
 | `schema/field-count` | a positional struct's item count differs from its own version's field count |
 | `schema/missing-field` | a required field is absent, or a positional form has no value for an optional field without a default (DXNS.md §3) |
 | `schema/type-mismatch` | a field's value does not match its declared type |
-| `schema/undeclared-field` | a strict decode meets a field the schema does not declare |
+| `schema/undeclared-field` | a strict decode meets a field the schema does not declare, or a closed one (`- *`) any extra |
+| `schema/deprecated` | data uses something deprecated while the reader refuses it (`deprecations: :error`, DXNS.md §1b) |
 | `schema/shadowed-field` | an extra field has the name of a declared field |
 | `schema/materializer` | a materializer answers an error, or a value the latest schema rejects |
 | `schema/version-discipline` | the compatibility check: changed content under the same version, or a version going down |

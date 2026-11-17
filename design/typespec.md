@@ -1,7 +1,7 @@
 # TypeSpec in DXNS
 
-Status: comparison and proposal, 2026-11-17 (T673). Nothing here is
-implemented yet. The construct table is also the mapping the
+Status: comparison and proposal, 2026-11-17 (T673); the gaps are
+built (see Decisions). The construct table is also the mapping the
 TypeSpec-to-DXNS converter (T682) follows.
 
 ## Decisions (Jan, 2026-11-17)
@@ -18,8 +18,15 @@ TypeSpec-to-DXNS converter (T682) follows.
   name followed by its arguments (`PageDog`). Inline anonymous models
   stay inline `%shape`, the one exception, so no names are invented.
 - **Q7:** the converter is a TypeSpec emitter, an npm package.
-- **Q4:** open. Jan asked how `%schema(N)` alone, with no namespace per
-  version, would look.
+- **Q4:** Way B, versioned named types (`%type(N)`); see "Way B" below.
+- **G1:** body entries `* K => V` (typed extras) and `- *` (closed).
+- **G10:** go as proposed, including deprecating one version of a schema.
+- **G11:** a field may pin a version, written `Pet(1)`: DXN text for
+  the tuple `{:at Pet 1}`, everywhere (see "G11" below).
+- **Status:** G1, G10, G11 and Way B are built in Elixir (DXNS.md §4c,
+  §1b, §5c), with two earlier rules replaced and recorded there: a
+  struct reference may name a version, and a struct carrying a loaded
+  older version is written at it (§8).
 
 ## The goal
 
@@ -185,17 +192,16 @@ the table assumes the recommended answers:
 
 | TypeSpec | DXNS | Verdict |
 |---|---|---|
-| `@versioned(Versions)` on a namespace | Q4: a namespace per version, or a schema version per model | approx. either way: the version names (`"2024-01-01"`) go to `meta` |
-| `@added`, `@removed` on a model, property, enum member or variant | each version's projection | exact under Q4 A |
+| `@versioned(Versions)` on a namespace | `%schema(N)` per model, `%type(N)` per named type (Q4: Way B) | exact; the version names (`"2024-01-01"`) go to `meta` |
+| `@added`, `@removed` on a model, property, enum member or variant | a new version of whatever holds it | exact |
 | `@madeOptional`, `@madeRequired` | the projection's `?` | exact |
 | `@typeChangedFrom` | the projection's type | exact |
-| `@renamedFrom` | the projection's name | exact under Q4 A; under Q4 B a renamed *model* is a new name, and only a materializer links the two |
+| `@renamedFrom` | a new name, the old one in `meta` | approx.: only a materializer links the two |
 | `@returnTypeChangedFrom` | the API layer | n/a |
 | `@useDependency` | the converter picks the dependency's version | exact |
 
-DXNS's own versions (§8) are per schema. Named types have no version at
-all, so an enum that gains a member in v3 is not expressible with
-`%schema(N)` alone. That is why Q4 recommends a namespace per version.
+DXNS's own versions (§8) are per schema; Way B adds them to named types,
+so an enum that gains a member in v3 is `%type(3)`.
 
 ## 8. The API layer
 
@@ -217,14 +223,21 @@ with the same tests, DXNS.md, the tutorial and the cheatsheet. A
 grammar change also needs the VS Code grammar.
 
 **G1. Typed extra properties** (`...Record<T>`, `model P is Record<T>`
-with properties).
-- Adopt schema-superset.md group 2's `:rest => T` in a shape or schema
-  body: every key no field declares must match T.
+with properties). Syntax decided by Jan, 2026-11-17.
+- `* K => V` in a shape or schema body: every key no field declares
+  must match K, its value V (`* :string => :integer`).
+- `- *` in a body: the body is closed, every extra is refused (a
+  schema's even without a strict decode).
+- `:rest =>` was the first proposal; it reads as a field named `rest`,
+  the same key, so it was dropped.
+- Both are inherited from bases; the body's own replace them; two bases
+  that disagree are a compile error unless the body settles it;
+  extending a closed base with a field of its own is a compile error.
 - `P is Record<T> { a: T2 }` adds that TypeSpec checks `T2` is
   assignable to T. The converter checks this; DXNS need not.
-- Effect on `.dxn` and `.dxnb`: none. `:rest` is a keyword key in the
-  body, and a struct's extras already travel in `T_EXTRA`.
-- Group 2's `:closed => true` comes along with it.
+- Effect on `.dxn`: two new body entries, in `%schema` and `%shape`
+  bodies only (like `- field`). `.dxnb`: none; a struct's extras
+  already travel in `T_EXTRA`.
 
 **G2. Template defaults and constraints.**
 - A parameter becomes `t`, `{t bound}` or `{t bound default}`, as in
@@ -332,6 +345,80 @@ What is proposed:
 - **TypeSpec:** `#deprecated "why"` maps to `deprecated: "why"` on
   whatever it stands on. This is exact.
 - **Effect on `.dxn` and `.dxnb`:** none.
+
+**G11. A field pinned to a version** (Jan, 2026-11-17: "pin a field
+to a specific version, but the default should be that the field is just
+using the latest version").
+- Unpinned (`pet: Pet`), as today: a struct of any loaded version is
+  read and upgraded to the latest; an encoder writes the latest.
+- Pinned (`pet: Pet(1)`): only version 1 is accepted, it is not
+  upgraded, and an encoder writes version 1. A pinned base
+  (`includes Pet(1)`) already exists; this brings the same to type
+  positions.
+- Way B needs the same pin for named types (`color: Color(1)`), so one
+  spelling serves both.
+
+How `Pet(1)` could be written in a type position:
+- A `.dxns` file has no grammar of its own: it is a DXN document, read by
+  the DXN parser, and the schema compiler reads the values. The parser
+  cannot tell a type position from data, so "only in type positions" is
+  not possible in the grammar. `extends User(3)` works only because it
+  sits in a struct head, which has its own rule.
+- `(` begins nothing in DXN values today, so `Name(N)` is free: it is a
+  syntax error now and would mean nothing else.
+- **Recommended: text sugar.** `Name(N)` in DXN text reads as the tuple
+  `{:at Name N}`, wherever it stands; the printer writes that tuple back
+  as `Name(N)`.
+  - `.dxn` data: `Pet(1)` becomes legal and is that tuple. Nobody writes
+    it in data; it does nothing there.
+  - `.dxnb`: no change, the tuple is encoded as any tuple.
+  - The compiler sees `{:at Pet 1}` either way; both spellings work.
+  - Cost per implementation: one grammar or parser rule, one printer
+    rule, tests, DXN.md §1 and DXNS.md. Elixir and the Praxis port
+    regenerate their parsers from `dxn.aether`; node and PHP parse by
+    hand. The VS Code grammar highlights it. Conformance cases are added.
+- Not recommended:
+  - a versioned symbol as a new kind of value: it changes the value
+    model in four implementations and needs a new `.dxnb` encoding, for
+    no gain;
+  - a separate parse mode for `.dxns`: a second grammar in every
+    implementation.
+
+## Way B: versioned named types (Q4)
+
+Jan chose Way B: TypeSpec's `@versioned` maps onto `%schema(N)` per
+model and `%type(N)` per named type, with no namespace per version.
+
+- **Writing one:** `Color: %type(2)[{:enum :red :green :blue}]`. A
+  positional struct with one item, the type. `Color: T` stays as it is
+  and means version 1, as `%schema{...}` does. Each version lives in its
+  own document, as schema versions do.
+- **Referring to one:** `Color` means the latest loaded version;
+  `Color(1)` (or `{:at Color 1}`) pins one (G11).
+- **Values carry no version.** A struct says which version wrote it; a
+  named type's value does not. So an unpinned reference checks against
+  the latest version only, and there is no materializer for named
+  types. Old data stays valid through its schema version: the converter
+  writes `%schema(1){color: Color(1)}`, so `%Pet(1)` still reads with
+  `Color(1)`, and Pet's materializer maps the value when it upgrades.
+- **Version discipline (DXNS.md §8, `mix dextrin.compat`):** the same
+  rules as for schemas. A version present in both releases must not
+  change, and the latest never goes down.
+- **Deprecation (G10):** `{:doc %type(1)[...] %{deprecated: "why"}}`
+  deprecates that version, like a schema version.
+- **The TypeSpec mapping:**
+  - `@added` / `@removed` on a model, property, enum member or variant
+    give a new version of whatever holds it;
+  - `@typeChangedFrom`, `@madeOptional` and `@madeRequired` become the
+    field in each version;
+  - `@renamedFrom` on a model or named type makes a new name, with the
+    old name in `meta` (`renamed-from`); only a materializer links the
+    two;
+  - version names (`"2024-01-01"`) are kept in `meta` on each version.
+- **What it costs:** in the compiler (versions of named types, pinned
+  references, resolving to the latest), in compat, and in each
+  implementation's docs; the converter T682 numbers versions only where
+  something changed. `.dxn` and `.dxnb`: no change beyond G11's sugar.
 
 Left out on purpose, with nothing lost in values:
 - scalar constructors and abstract scalars;

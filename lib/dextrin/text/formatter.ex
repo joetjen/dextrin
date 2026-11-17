@@ -69,8 +69,11 @@ defmodule Dextrin.Text.Formatter do
     bracketed("[", list, "]", depth, opts, &render/3)
   end
 
-  defp layout(%Dextrin.Tuple{items: items}, depth, opts) when items != [] do
-    bracketed("{", items, "}", depth, opts, &render/3)
+  defp layout(%Dextrin.Tuple{items: items} = tuple, depth, opts) when items != [] do
+    case Dextrin.Tuple.pinned(tuple) do
+      {:ok, name, version} -> {:ok, Dextrin.Tuple.pinned_text(name, version)}
+      :error -> bracketed("{", items, "}", depth, opts, &render/3)
+    end
   end
 
   defp layout(%MapSet{} = set, depth, opts) do
@@ -110,8 +113,8 @@ defmodule Dextrin.Text.Formatter do
          do: render_entries("%{", Map.to_list(map), "}", depth, opts)
   end
 
-  defp layout(%Struct{fields: {:keyed, pairs}, drops: drops} = struct, depth, opts)
-       when pairs != [] or drops != [] do
+  defp layout(%Struct{fields: {:keyed, pairs}, drops: drops, rest: rest} = struct, depth, opts)
+       when pairs != [] or drops != [] or rest != nil do
     # Wrapped as Dextrin.Keyword before reaching render_entries/5, same
     # as Dextrin.Text.Printer.print/2's own struct clause — struct
     # field names are always keyword-shaped per DXN.md §1.2's map_entry
@@ -121,7 +124,8 @@ defmodule Dextrin.Text.Formatter do
     # (see render_entry/4's own doc for why that guess used to be wrong).
     keyed = Enum.map(pairs, fn {k, v} -> {Dextrin.Keyword.new(k), v} end)
     dropped = Enum.map(drops, &{{:"$dextrin_drop", &1}, nil})
-    entries = dropped ++ keyed ++ Printer.extra_entries(struct)
+    rest = if rest, do: [{{:"$dextrin_rest", elem(rest, 0)}, elem(rest, 1)}], else: []
+    entries = dropped ++ rest ++ keyed ++ Printer.extra_entries(struct)
 
     with {:ok, body} <- render_entries("{", entries, "}", depth, opts) do
       {:ok, Struct.opening(struct, Dextrin.Text.Printer.written_version(struct, opts)) <> body}
@@ -254,6 +258,15 @@ defmodule Dextrin.Text.Formatter do
   # `- field`: an inherited field a schema or shape leaves out (DXNS.md
   # §4b).
   defp render_entry({:"$dextrin_drop", field}, nil, _depth, _opts), do: {:ok, "- " <> field}
+
+  # `* K => V`: the type of the extras, always with the arrow.
+  defp render_entry({:"$dextrin_rest", key}, value, depth, opts) do
+    with {:ok, rendered_key} <- Printer.print(key, opts),
+         prefix = "* " <> rendered_key <> " => ",
+         {:ok, rendered_value} <- render(value, depth, keyed_room(opts, depth, prefix)) do
+      {:ok, prefix <> rendered_value}
+    end
+  end
 
   defp render_entry(%Dextrin.Keyword{name: name}, value, depth, opts) do
     render_keyword_entry(name, value, depth, opts)

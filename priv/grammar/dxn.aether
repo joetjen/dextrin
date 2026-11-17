@@ -93,7 +93,9 @@ boolean := TRUE | FALSE
 number  := DECIMAL | RATIONAL | FLOAT | INTEGER
 string  := STRING
 char    := CHAR
-symbol  := IDENTIFIER
+; `Pet(1)`: a name pinned to a version (DXNS.md §5c), read as the tuple
+; `{:at Pet 1}`. "(" begins nothing else in a value, as in `%Name(3)`.
+symbol  := IDENTIFIER ("(" version:INTEGER ")")?
 keyword := KEYWORD
 
 list    := "[" value* "]"
@@ -128,8 +130,12 @@ struct_lit        := "%" name:IDENTIFIER ("(" version:INTEGER ")")? head_word* (
 head_word         := word:IDENTIFIER ("(" version:INTEGER ")")?
 ; `- password`: an inherited field left out (DXNS.md §4b), a schema's or
 ; a shape's only; "-" before a digit is a number's sign, one token with it.
-struct_keyed      := "{" (map_entry | drop_entry)* "}"
-drop_entry        := "-" field:IDENTIFIER
+; `- *` closes the body: no extra field at all. `* K => V` types the
+; extras instead: every key no field declares matches K, its value V.
+; "*" begins nothing else in DXN, so neither needs lookahead.
+struct_keyed      := "{" (map_entry | drop_entry | rest_entry)* "}"
+drop_entry        := "-" (field:IDENTIFIER | closed:"*")
+rest_entry        := "*" rest_key:value "=>" rest_val:value
 ; A positional struct's items come first, then any extra fields as
 ; entries (DXN.md §1.2): an item is a value not followed by `=>`, so
 ; `3 => :x` is an entry, and an item after an entry is a syntax error.

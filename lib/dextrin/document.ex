@@ -98,7 +98,8 @@ defmodule Dextrin.Document do
   def parse(source, opts \\ []) when is_binary(source) do
     case Dextrin.Text.Grammar.run_lossless(source, Registry.from_options(opts)) do
       {:ok, value, tree} ->
-        {:ok, %__MODULE__{tree: tree, value: Validated.strip(value), opts: opts}}
+        with {:ok, value} <- Validated.unwrap(value),
+             do: {:ok, %__MODULE__{tree: tree, value: value, opts: opts}}
 
       {:error, errors} ->
         {:error, Dextrin.Error.from_parse(errors)}

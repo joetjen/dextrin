@@ -41,6 +41,7 @@ defmodule Dextrin.Schema.TypeExpr do
           | :never
           | {:primitive, String.t()}
           | {:reference, String.t()}
+          | {:reference, String.t(), pos_integer()}
           | {:list_of, t()}
           | {:set_of, t()}
           | {:list_items, [particle()]}
@@ -58,7 +59,7 @@ defmodule Dextrin.Schema.TypeExpr do
           | {:any_of, [t()]}
           | {:all_of, [t()]}
           | {:not, t()}
-          | {:shape, String.t(), [Dextrin.Schema.Field.t()]}
+          | {:shape, String.t(), [Dextrin.Schema.Field.t()], extras()}
           | {:case, String.t(), [{term(), t()}], t() | :none}
           | {:named, String.t()}
           | {:generic, [String.t()], t()}
@@ -135,6 +136,28 @@ defmodule Dextrin.Schema.TypeExpr do
   def conform(:any, value, _context), do: {:ok, value}
   def conform(:never, _value, _context), do: :error
 
+  # A reference pinned to one version (G11, DXNS.md §5c): a struct read
+  # or checked with that version, and nothing else. What it takes is the
+  # struct as that version reads it -- no materializer upgrades it.
+  def conform(
+        {:reference, name, version},
+        %Validated{name: name, version: version, as_read: as_read} = value,
+        _context
+      ),
+      do: {:ok, if(as_read, do: %{value | value: as_read, refused: nil}, else: value)}
+
+  def conform(
+        {:reference, name, version},
+        %Dextrin.Struct{name: name, version: version} = value,
+        _context
+      ),
+      do: {:ok, value}
+
+  def conform({:reference, _name, _version}, _value, _context), do: :error
+
+  # A struct that could not be upgraded is no value of any other type.
+  def conform(_type, %Validated{refused: %Dextrin.Error{}}, _context), do: :error
+
   def conform({:reference, name}, %Dextrin.Struct{name: struct_name} = value, _context),
     do: when_true(struct_name == name, value)
 
@@ -208,11 +231,11 @@ defmodule Dextrin.Schema.TypeExpr do
   def conform({:primitive, name}, value, _context),
     do: when_true(primitive_matches?(name, value), value)
 
-  def conform({:shape, _name, fields}, value, context)
+  def conform({:shape, _name, fields, extras}, value, context)
       when is_map(value) and not is_struct(value),
-      do: shape(fields, value, context)
+      do: shape(fields, extras, value, context)
 
-  def conform({:shape, _name, _fields}, _value, _context), do: :error
+  def conform({:shape, _name, _fields, _extras}, _value, _context), do: :error
 
   def conform({:list_of, elem_type}, value, context) when is_list(value),
     do: all(value, &conform(elem_type, &1, context))
@@ -259,7 +282,16 @@ defmodule Dextrin.Schema.TypeExpr do
   def conform({:generic, _params, _body}, _value, _context), do: :error
 
   # Annotations change nothing a type takes.
-  def conform({:doc, type, _notes}, value, context), do: conform(type, value, context)
+  # Passing through something deprecated is reported (G10), once the
+  # value is accepted: a variant tried and refused never warns.
+  def conform({:doc, type, notes} = node, value, context) do
+    with {:ok, conformed} <- conform(type, value, context) do
+      case Dextrin.Schema.Deprecations.node_used(Map.get(context, :registry), node, value, notes) do
+        :ok -> {:ok, conformed}
+        {:error, _deprecated} -> :error
+      end
+    end
+  end
 
   # A custom tag of that name, its value a `type`; or an application's
   # value that the registry's tag encoder writes as one.
@@ -451,8 +483,15 @@ defmodule Dextrin.Schema.TypeExpr do
   defp substitute({:apply, name, args}, bound),
     do: {:apply, name, Enum.map(args, &substitute(&1, bound))}
 
-  defp substitute({:shape, name, fields}, bound),
-    do: {:shape, name, Enum.map(fields, &%{&1 | type: substitute(&1.type, bound)})}
+  defp substitute({:shape, name, fields, extras}, bound) do
+    extras =
+      case extras do
+        {key, value} -> {substitute(key, bound), substitute(value, bound)}
+        open_or_closed -> open_or_closed
+      end
+
+    {:shape, name, Enum.map(fields, &%{&1 | type: substitute(&1.type, bound)}), extras}
+  end
 
   defp substitute({:case, field, branches, otherwise}, bound) do
     {:case, field, Enum.map(branches, fn {literal, t} -> {literal, substitute(t, bound)} end),
@@ -522,14 +561,19 @@ defmodule Dextrin.Schema.TypeExpr do
   # default, the key a keyword (an atom when the decode is trusted); an
   # extra key is kept, and refused by a strict decode -- as a struct's
   # fields are (design/shapes-and-case.md).
-  defp shape(fields, map, context) do
+  defp shape(fields, extras, map, context) do
     with {:ok, named} <- by_name(map),
          siblings = Map.new(named, fn {name, {_key, value}} -> {name, value} end),
          inner = %{context | siblings: siblings},
-         {:ok, filled} <- shape_fields(fields, named, map, inner),
-         :ok <- extras(fields, map, context) do
-      {:ok, filled}
+         {:ok, filled} <- shape_fields(fields, named, map, inner) do
+      shape_extras(extras, undeclared(fields, map), filled, context)
     end
+  end
+
+  # The map's entries no field of `fields` declares.
+  defp undeclared(fields, map) do
+    declared = MapSet.new(fields, & &1.name)
+    Enum.reject(map, fn {key, _} -> MapSet.member?(declared, key_name(key)) end)
   end
 
   # The map's keys that name a field, by that name: `:error` when two
@@ -575,12 +619,66 @@ defmodule Dextrin.Schema.TypeExpr do
   defp default_key(name, %{registry: %Dextrin.Registry{trusted: true}}), do: Keyword.trusted(name)
   defp default_key(name, _context), do: Keyword.new(name)
 
-  defp extras(fields, map, %{registry: %Dextrin.Registry{strict: true}}) do
-    declared = MapSet.new(fields, & &1.name)
-    if Enum.all?(Map.keys(map), &(key_name(&1) in declared)), do: :ok, else: :error
+  # A shape's extras (G1, DXNS.md §4b): open ones kept, and refused by a
+  # strict decode; closed ones (`- *`) refused; typed ones (`* K => V`)
+  # each conformed, key and value.
+  defp shape_extras(:open, [_ | _], _filled, %{registry: %Dextrin.Registry{strict: true}}),
+    do: :error
+
+  defp shape_extras(:open, _pairs, filled, _context), do: {:ok, filled}
+  defp shape_extras(:closed, [], filled, _context), do: {:ok, filled}
+  defp shape_extras(:closed, _pairs, _filled, _context), do: :error
+
+  defp shape_extras({key_type, value_type}, pairs, filled, context) do
+    Enum.reduce_while(pairs, {:ok, filled}, fn {key, value}, {:ok, acc} ->
+      with {:ok, _key} <- conform(key_type, key, context),
+           {:ok, value} <- conform(value_type, value, context) do
+        {:cont, {:ok, Map.put(acc, key, value)}}
+      else
+        :error -> {:halt, :error}
+      end
+    end)
   end
 
-  defp extras(_fields, _map, _context), do: :ok
+  @typedoc """
+  What a schema or shape takes beyond its fields (G1, DXNS.md §4b): any
+  extra, none (`- *`), or those whose key and value match a type each
+  (`* K => V`).
+  """
+  @type extras :: :open | :closed | {t(), t()}
+
+  @doc """
+  Why `extras` refuse `pairs`, the `{key, value}`s a struct or map
+  carries that no field declares: `nil` when they pass, otherwise
+  `{message, category}`. Open extras take any (a strict decode refuses
+  them elsewhere); closed ones none; typed ones each key matching K and
+  its value V.
+  """
+  @spec extras_refusal(extras(), [{term(), term()}], map()) :: nil | {String.t(), String.t()}
+  def extras_refusal(:open, _pairs, _context), do: nil
+  def extras_refusal(_extras, [], _context), do: nil
+
+  def extras_refusal(:closed, [{key, _} | _], _context),
+    do:
+      {"#{shown(key)} is no declared field, and the body is closed (- *)",
+       "schema/undeclared-field"}
+
+  def extras_refusal({key_type, value_type}, pairs, context) do
+    Enum.find_value(pairs, fn {key, value} ->
+      cond do
+        conform(key_type, key, context) == :error ->
+          {"extra key #{shown(key)} does not match the key type of * K => V",
+           "schema/type-mismatch"}
+
+        conform(value_type, value, context) == :error ->
+          why = explain(value_type, value, context) || "does not match the value type of * K => V"
+          {"extra #{shown(key)}: #{why}", "schema/type-mismatch"}
+
+        true ->
+          nil
+      end
+    end)
+  end
 
   # ---- primitives (DXN.md §1.3's 24 non-header types) ------------------------
 
@@ -730,13 +828,35 @@ defmodule Dextrin.Schema.TypeExpr do
     end
   end
 
-  def explain({:shape, _name, fields}, value, context)
+  def explain({:shape, _name, fields, extras}, value, context)
       when is_map(value) and not is_struct(value) do
     siblings =
       Map.new(value, fn {key, v} -> {key_name(key), v} end)
 
     inner = %{context | siblings: siblings}
 
+    field_reason(fields, value, inner) ||
+      case extras_refusal(extras, undeclared(fields, value), context) do
+        {why, _category} -> why
+        nil -> nil
+      end
+  end
+
+  def explain({:reference, name, version}, value, _context) do
+    got =
+      case value do
+        %Validated{name: got, version: at} -> Dextrin.Tuple.pinned_text(got, at)
+        %Dextrin.Struct{name: got, version: nil} -> got
+        %Dextrin.Struct{name: got, version: at} -> Dextrin.Tuple.pinned_text(got, at)
+        _other -> "no struct"
+      end
+
+    "expected #{Dextrin.Tuple.pinned_text(name, version)}, got #{got}"
+  end
+
+  def explain(_type, _value, _context), do: nil
+
+  defp field_reason(fields, value, inner) do
     Enum.find_value(fields, fn field ->
       case field_of(value, field.name) do
         {:ok, v} ->
@@ -752,8 +872,6 @@ defmodule Dextrin.Schema.TypeExpr do
       end
     end)
   end
-
-  def explain(_type, _value, _context), do: nil
 
   defp shown(value) do
     case Dextrin.encode(value) do
@@ -812,18 +930,42 @@ defmodule Dextrin.Schema.TypeExpr do
     end
   end
 
-  defp variant_field({:shape, _, fields}, name, _context) do
+  defp variant_field({:shape, _, fields, _extras}, name, _context) do
     case Enum.find(fields, &(&1.name == name)) do
       nil -> nil
       field -> field.type
     end
   end
 
+  # A schema variant's field: its latest version's, or the pinned one's.
+  defp variant_field({:reference, schema}, name, %{registry: %Dextrin.Registry{} = registry}),
+    do: schema_field(Dextrin.Registry.fetch_struct_schema(registry, schema), name)
+
+  defp variant_field(
+         {:reference, schema, version},
+         name,
+         %{registry: %Dextrin.Registry{} = registry}
+       ),
+       do: schema_field(Dextrin.Registry.fetch_struct_schema(registry, schema, version), name)
+
   defp variant_field(_type, _name, _context), do: nil
+
+  defp schema_field({:ok, %Dextrin.Schema.Compiled{fields: fields}, _registry}, name) do
+    case Enum.find(fields, &(&1.name == name)) do
+      nil -> nil
+      field -> field.type
+    end
+  end
+
+  defp schema_field(_not_loaded, _name), do: nil
 
   defp variant_name({:doc, type, _}), do: variant_name(type)
   defp variant_name({kind, name}) when kind in [:named, :reference], do: name
-  defp variant_name({:shape, name, _}) when is_binary(name), do: name
+
+  defp variant_name({:reference, name, version}),
+    do: Dextrin.Tuple.pinned_text(name, version)
+
+  defp variant_name({:shape, name, _, _}) when is_binary(name), do: name
   defp variant_name(_type), do: "a variant"
 
   # The first constraint, in a fixed order, that `value` fails.

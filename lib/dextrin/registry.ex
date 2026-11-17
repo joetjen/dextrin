@@ -49,9 +49,15 @@ defmodule Dextrin.Registry do
           materializers: %{optional(String.t()) => struct_materializer()},
           resolver: struct_resolver() | nil,
           type_aliases: %{optional(String.t()) => TypeExpr.t()},
+          type_versions: %{optional(String.t()) => %{optional(pos_integer()) => TypeExpr.t()}},
           struct_modules: %{optional(String.t()) => module()},
           trusted: boolean(),
-          strict: boolean()
+          strict: boolean(),
+          deprecations: :once | :every | :off | :error,
+          on_deprecated: (Dextrin.Schema.Deprecations.warning() -> term()) | nil,
+          deprecation_slots: %{optional(Dextrin.Schema.Deprecations.key()) => pos_integer()},
+          deprecation_seen: :atomics.atomics_ref() | nil,
+          warnings: [Dextrin.Schema.Deprecations.warning()]
         }
 
   defstruct tags: %{},
@@ -60,9 +66,20 @@ defmodule Dextrin.Registry do
             materializers: %{},
             resolver: nil,
             type_aliases: %{},
+            # Every version of a named type (Way B, design/typespec.md);
+            # `type_aliases` holds the latest of each.
+            type_versions: %{},
             struct_modules: %{},
             trusted: false,
-            strict: false
+            strict: false,
+            # G10 of design/typespec.md, Dextrin.Schema.Deprecations: how
+            # often data going through something deprecated warns, who
+            # hears it, which have warned, and what compiling found.
+            deprecations: :once,
+            on_deprecated: nil,
+            deprecation_slots: %{},
+            deprecation_seen: nil,
+            warnings: []
 
   @spec new() :: t()
   def new, do: %__MODULE__{}
@@ -104,11 +121,52 @@ defmodule Dextrin.Registry do
         :error -> registry
       end
 
-    case Keyword.fetch(opts, :strict) do
-      {:ok, strict?} -> put_strict(registry, strict?)
+    registry =
+      case Keyword.fetch(opts, :strict) do
+        {:ok, strict?} -> put_strict(registry, strict?)
+        :error -> registry
+      end
+
+    registry =
+      case Keyword.fetch(opts, :deprecations) do
+        {:ok, how} -> put_deprecations(registry, how)
+        :error -> registry
+      end
+
+    case Keyword.fetch(opts, :on_deprecated) do
+      {:ok, fun} -> put_on_deprecated(registry, fun)
       :error -> registry
     end
   end
+
+  @doc """
+  How often data going through something deprecated warns (G10,
+  `Dextrin.Schema.Deprecations`): `:once` per registry and deprecated
+  thing, the default; `:every` time; `:off`; or `:error`, which refuses
+  the data (`schema/deprecated`). `Dextrin.decode/2` and `encode/2` take
+  it as `deprecations:`.
+  """
+  @spec put_deprecations(t(), :once | :every | :off | :error) :: t()
+  def put_deprecations(%__MODULE__{} = registry, how) when how in [:once, :every, :off, :error],
+    do: %{registry | deprecations: how}
+
+  @doc """
+  Who hears a deprecation warning, in place of `Logger.warning`: a
+  function of one `t:Dextrin.Schema.Deprecations.warning/0`, or `nil`
+  for the log. `Dextrin.decode/2` and `encode/2` take it as
+  `on_deprecated:`.
+  """
+  @spec put_on_deprecated(t(), (Dextrin.Schema.Deprecations.warning() -> term()) | nil) :: t()
+  def put_on_deprecated(%__MODULE__{} = registry, fun) when is_function(fun, 1) or is_nil(fun),
+    do: %{registry | on_deprecated: fun}
+
+  @doc """
+  What compiling into this registry found deprecated (G10): each schema
+  that uses something deprecated, as a warning naming what and where
+  (`at:`), in the order they were compiled.
+  """
+  @spec warnings(t()) :: [Dextrin.Schema.Deprecations.warning()]
+  def warnings(%__MODULE__{warnings: warnings}), do: warnings
 
   @doc """
   Marks this registry as decoding *strictly*: a schema-backed struct
@@ -164,7 +222,9 @@ defmodule Dextrin.Registry do
   def put_struct_schema(%__MODULE__{} = registry, name, %Compiled{version: version} = compiled)
       when is_binary(name) do
     versions = registry.structs |> Map.get(name, %{}) |> Map.put(version, compiled)
+
     %{registry | structs: Map.put(registry.structs, name, versions)}
+    |> Dextrin.Schema.Deprecations.slotted(%{compiled | name: name})
   end
 
   @doc """
@@ -251,15 +311,26 @@ defmodule Dextrin.Registry do
   end
 
   @doc """
-  `struct` as it is written here: carrying the latest loaded version of
-  its schema (DXNS.md §8), whatever version it says itself. A struct
-  whose name has no schema keeps its own version, or none.
+  `struct` as it is written here: carrying the version it says itself
+  when that version is loaded -- what a field pinned to it needs
+  (DXNS.md §5c) -- and otherwise the latest loaded version of its schema
+  (DXNS.md §8). A struct whose name has no schema keeps its own
+  version, or none.
 
   Every writer goes through this -- text, the formatter and binary -- so
-  encoding never writes a version other than the latest, and never
-  writes one no schema stands behind.
+  encoding writes the latest unless the struct carries a loaded version
+  of its own, and never writes one no schema stands behind.
   """
   @spec as_written(t() | nil, Dextrin.Struct.t()) :: Dextrin.Struct.t()
+  def as_written(%__MODULE__{} = registry, %Dextrin.Struct{name: name, version: own} = struct)
+      when is_integer(own) do
+    case {fetch_struct_schema(registry, name, own), fetch_struct_schema(registry, name)} do
+      {{:ok, _own, _}, _} -> struct
+      {_not_loaded, {:ok, %Compiled{version: latest}, _}} -> %{struct | version: latest}
+      _no_schema -> struct
+    end
+  end
+
   def as_written(%__MODULE__{} = registry, %Dextrin.Struct{name: name} = struct) do
     case fetch_struct_schema(registry, name) do
       {:ok, %Compiled{version: version}, _registry} -> %{struct | version: version}
@@ -343,6 +414,50 @@ defmodule Dextrin.Registry do
   @spec put_type_alias(t(), String.t(), TypeExpr.t()) :: t()
   def put_type_alias(%__MODULE__{} = registry, name, type_expr) when is_binary(name) do
     %{registry | type_aliases: Map.put(registry.type_aliases, name, type_expr)}
+    |> Dextrin.Schema.Deprecations.slotted(type_expr)
+  end
+
+  @doc """
+  Loads `type_expr` as version `version` of the named type `name`
+  (DXNS.md §5c, Way B of design/typespec.md): `name` then means the
+  latest version loaded, and `fetch_type_version/3` finds each. Loading
+  a version already loaded with another definition is a
+  `schema/duplicate-version` error; the same definition again changes
+  nothing.
+  """
+  @spec put_type_version(t(), String.t(), pos_integer(), TypeExpr.t()) ::
+          {:ok, t()} | {:error, Dextrin.Error.t()}
+  def put_type_version(%__MODULE__{} = registry, name, version, type_expr)
+      when is_binary(name) and is_integer(version) and version > 0 do
+    versions = Map.get(registry.type_versions, name, %{})
+
+    case Map.fetch(versions, version) do
+      {:ok, ^type_expr} ->
+        {:ok, registry}
+
+      {:ok, _other} ->
+        {:error,
+         Dextrin.Error.action(
+           "named type #{inspect(name)} version #{version} is already loaded, defined otherwise",
+           "schema/duplicate-version"
+         )}
+
+      :error ->
+        versions = Map.put(versions, version, type_expr)
+        latest = versions |> Map.keys() |> Enum.max()
+
+        registry =
+          %{registry | type_versions: Map.put(registry.type_versions, name, versions)}
+          |> Dextrin.Schema.Deprecations.slotted(type_expr)
+
+        {:ok, put_type_alias(registry, name, Map.fetch!(versions, latest))}
+    end
+  end
+
+  @doc "Version `version` of the named type `name`, when it is loaded."
+  @spec fetch_type_version(t(), String.t(), pos_integer()) :: {:ok, TypeExpr.t()} | :error
+  def fetch_type_version(%__MODULE__{type_versions: versions}, name, version) do
+    with {:ok, of_name} <- Map.fetch(versions, name), do: Map.fetch(of_name, version)
   end
 
   @spec fetch_type_alias(t(), String.t()) :: {:ok, TypeExpr.t()} | :error

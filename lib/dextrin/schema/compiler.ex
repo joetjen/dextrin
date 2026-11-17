@@ -34,7 +34,7 @@ defmodule Dextrin.Schema.Compiler do
   """
 
   alias Dextrin.{Keyword, OrderedMap, Registry, Struct, Symbol, Tuple}
-  alias Dextrin.Schema.{Bases, Compiled, Field, TypeExpr}
+  alias Dextrin.Schema.{Bases, Compiled, Deprecations, Field, TypeExpr}
   alias Ichor.Toolkit.Result
 
   # The scope key the document's names travel under (see compile/3).
@@ -48,6 +48,9 @@ defmodule Dextrin.Schema.Compiler do
   # The scope key a generic parameter's bound travels under, inside its
   # generic's body: `{@bound, name}`.
   @bound :"$bound"
+  # The version each named type of the document being compiled has
+  # (Way B, DXNS.md §5c), so a pin to a sibling (`Color(2)`) is seen.
+  @versions :"$versions"
 
   # A refine's keys whose argument is a type, compiled and resolved as
   # its base is.
@@ -114,51 +117,104 @@ defmodule Dextrin.Schema.Compiler do
         match?(%Struct{name: "schema"}, undoc(v))
       end)
 
-    document = Map.new(alias_entries ++ schema_entries)
-
-    with {:ok, registry, built} <-
-           compile_aliases(alias_entries, base_registry, names, schema_entries) do
-      Result.reduce_ok(schema_entries, registry, fn {name, entry}, registry ->
-        aliases =
-          registry.type_aliases
-          |> Map.put(@names, names)
-          |> Map.put(@lookup, %{registry: registry, document: document})
-
-        lookup = %{
-          document: document,
-          compiled: registry.type_aliases,
-          scope: aliases,
-          registry: registry
-        }
-
-        case schema_entry(name, entry, built, aliases) do
-          {:ok, %Compiled{} = compiled} ->
-            with :ok <- discriminators(%{name => {:shape, name, compiled.fields}}, lookup, built),
-                 do: Registry.add_struct_schema(registry, name, %{compiled | name: name})
-
-          {:error, reason} ->
-            {:error, compile_error("schema #{inspect(name)}: #{reason}")}
-        end
-      end)
+    with {:ok, alias_entries, versions} <- unversioned(alias_entries),
+         document = Map.new(alias_entries ++ schema_entries),
+         {:ok, registry, built} <-
+           compile_aliases(alias_entries, base_registry, names, schema_entries, versions),
+         {:ok, registry} <- compile_schemas(schema_entries, registry, names, document, built) do
+      warnings = Deprecations.compile_warnings(named_entries, names, registry)
+      {:ok, %{registry | warnings: registry.warnings ++ warnings}}
     end
   end
 
   def compile(other, _base_registry, _names),
     do: {:error, compile_error("a .dxns document is a map, got #{inspect(other)}")}
 
+  # `Color: %type(2)[T]` (Way B, DXNS.md §5c): the named type's
+  # definition `T`, at version 2; a plain definition is version 1. A
+  # `{:doc}` around the `%type` stays around `T`.
+  defp unversioned(alias_entries) do
+    alias_entries
+    |> Result.reduce_ok({[], %{}}, fn {name, raw}, {entries, versions} ->
+      case type_version(raw) do
+        {:ok, type, version} ->
+          {:ok, {[{name, type} | entries], Map.put(versions, name, version)}}
+
+        {:error, reason} ->
+          {:error, compile_error("named type #{inspect(name)}: #{reason}")}
+      end
+    end)
+    |> case do
+      {:ok, {entries, versions}} -> {:ok, Enum.reverse(entries), versions}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp type_version(%Tuple{items: [%Keyword{name: "doc"} = doc, inner, notes]}) do
+    with {:ok, type, version} <- type_version(inner),
+         do: {:ok, %Tuple{items: [doc, type, notes]}, version}
+  end
+
+  defp type_version(%Struct{
+         name: "type",
+         version: version,
+         fields: {:positional, [type]},
+         extra: [],
+         bases: []
+       })
+       when is_integer(version),
+       do: {:ok, type, version}
+
+  defp type_version(%Struct{name: "type"}),
+    do: {:error, "a version of a named type is %type(N)[type]: one type, at version N"}
+
+  defp type_version(raw), do: {:ok, raw, 1}
+
+  defp compile_schemas(schema_entries, registry, names, document, built) do
+    Result.reduce_ok(schema_entries, registry, fn {name, entry}, registry ->
+      aliases =
+        registry.type_aliases
+        |> Map.put(@names, names)
+        |> Map.put(@lookup, %{registry: registry, document: document})
+
+      lookup = %{
+        document: document,
+        compiled: registry.type_aliases,
+        scope: aliases,
+        registry: registry
+      }
+
+      case schema_entry(name, entry, built, aliases) do
+        {:ok, %Compiled{} = compiled} ->
+          with :ok <-
+                 discriminators(
+                   %{name => {:shape, name, compiled.fields, compiled.extras}},
+                   lookup,
+                   built
+                 ),
+               do: Registry.add_struct_schema(registry, name, %{compiled | name: name})
+
+        {:error, reason} ->
+          {:error, compile_error("schema #{inspect(name)}: #{reason}")}
+      end
+    end)
+  end
+
   # A schema built from others (DXNS.md §4b) takes the fields `built`
   # holds for it, each now resolved; any other is compiled from its body.
   defp schema_entry(name, entry, built, aliases) do
     case Map.fetch(built, name) do
-      {:ok, %{fields: fields, bases: bases}} ->
+      {:ok, %{fields: fields, bases: bases, extras: extras}} ->
         with {:ok, notes} <- entry_annotations(entry),
-             {:ok, fields} <- resolved_fields(fields, aliases) do
+             {:ok, fields} <- resolved_fields(fields, aliases),
+             {:ok, extras} <- resolved_extras(extras, aliases) do
           {:ok,
            %Compiled{
              version: undoc(entry).version || 1,
              fields: fields,
              bases: bases,
-             annotations: notes
+             annotations: notes,
+             extras: extras
            }}
         end
 
@@ -183,6 +239,14 @@ defmodule Dextrin.Schema.Compiler do
     end
   end
 
+  defp resolved_extras({key, value}, aliases) do
+    with {:ok, key} <- resolved(key, aliases, []),
+         {:ok, value} <- resolved(value, aliases, []),
+         do: {:ok, {key, value}}
+  end
+
+  defp resolved_extras(extras, _aliases), do: {:ok, extras}
+
   defp compile_error(message), do: Dextrin.Error.action(message, "schema/compile")
 
   # Every named type in a document sees every other (design/
@@ -198,7 +262,7 @@ defmodule Dextrin.Schema.Compiler do
   # its bases may be any schema or shape of the document, or one already
   # loaded. A built shape joins the named types; what was built for a
   # schema comes back in `built`, by name.
-  defp compile_aliases(alias_entries, registry, names, schema_entries) do
+  defp compile_aliases(alias_entries, registry, names, schema_entries, versions) do
     siblings = Map.new(alias_entries, fn {name, _} -> {name, {:named, name}} end)
     document = Map.new(alias_entries ++ schema_entries)
 
@@ -207,6 +271,7 @@ defmodule Dextrin.Schema.Compiler do
       |> Map.merge(siblings)
       |> Map.put(@names, names)
       |> Map.put(@lookup, %{registry: registry, document: document})
+      |> Map.put(@versions, versions)
 
     {extending, plain} = Enum.split_with(alias_entries, fn {_, v} -> built_from?(v) end)
 
@@ -239,8 +304,11 @@ defmodule Dextrin.Schema.Compiler do
 
       Result.reduce_ok(alias_entries, registry, fn {name, _}, registry ->
         case entry_resolved(Map.fetch!(compiled, name), known, [name]) do
-          {:ok, type_expr} -> {:ok, Registry.put_type_alias(registry, name, type_expr)}
-          {:error, reason} -> {:error, compile_error("named type #{inspect(name)}: #{reason}")}
+          {:ok, type_expr} ->
+            Registry.put_type_version(registry, name, Map.get(versions, name, 1), type_expr)
+
+          {:error, reason} ->
+            {:error, compile_error("named type #{inspect(name)}: #{reason}")}
         end
       end)
       |> case do
@@ -306,7 +374,7 @@ defmodule Dextrin.Schema.Compiler do
   defp variant_fields({:doc, inner, _}, lookup, built, seen),
     do: variant_fields(inner, lookup, built, seen)
 
-  defp variant_fields({:shape, _name, fields}, _lookup, _built, _seen),
+  defp variant_fields({:shape, _name, fields, _extras}, _lookup, _built, _seen),
     do: {:ok, Enum.map(fields, & &1.name)}
 
   defp variant_fields({:named, name}, lookup, built, seen) do
@@ -315,6 +383,15 @@ defmodule Dextrin.Schema.Compiler do
     case {Map.fetch(known, name), name in seen} do
       {{:ok, type}, false} -> variant_fields(type, lookup, built, [name | seen])
       _ -> :error
+    end
+  end
+
+  # A variant pinned to a version (G11): that version's fields when it is
+  # loaded, otherwise judged by its name as an unpinned one is.
+  defp variant_fields({:reference, name, version}, lookup, built, seen) do
+    case Registry.fetch_struct_schema(lookup.registry, name, version) do
+      {:ok, %Compiled{fields: fields}, _} -> {:ok, Enum.map(fields, & &1.name)}
+      _ -> variant_fields({:reference, name}, lookup, built, seen)
     end
   end
 
@@ -343,6 +420,7 @@ defmodule Dextrin.Schema.Compiler do
 
   defp variant_label({:doc, inner, _}), do: variant_label(inner)
   defp variant_label({kind, name}) when kind in [:named, :reference], do: name
+  defp variant_label({:reference, name, version}), do: Dextrin.Tuple.pinned_text(name, version)
   defp variant_label(_type), do: "an inline variant"
 
   # ---- built from others (DXNS.md §4b) ---------------------------------------
@@ -350,10 +428,34 @@ defmodule Dextrin.Schema.Compiler do
   defp built_from?(entry) do
     case undoc(entry) do
       %Struct{name: kind, bases: bases, drops: drops} when kind in ["schema", "shape"] ->
-        bases != [] or drops != []
+        bases != [] or field_drops(drops) != []
 
       _ ->
         false
+    end
+  end
+
+  # `- *` closes a body and `* K => V` types its extras (G1 of
+  # design/typespec.md); neither makes a schema or shape built from
+  # others. A body's extras are `:open`, `:closed` or `{key_type,
+  # value_type}`; `nil` here when the body says nothing.
+  defp field_drops(drops), do: Enum.reject(drops, &(&1 == "*"))
+
+  defp own_extras(%Struct{drops: drops, rest: rest}, scope) do
+    case {"*" in drops, rest} do
+      {true, nil} ->
+        {:ok, :closed}
+
+      {true, _rest} ->
+        {:error, "a body is closed (- *) or types its extras (* K => V), not both"}
+
+      {false, nil} ->
+        {:ok, nil}
+
+      {false, {key, value}} ->
+        with {:ok, key} <- compile_type_expr(key, scope),
+             {:ok, value} <- compile_type_expr(value, scope),
+             do: {:ok, {key, value}}
     end
   end
 
@@ -374,11 +476,13 @@ defmodule Dextrin.Schema.Compiler do
         with :ok <- has_bases(name, raw),
              :ok <- distinct_bases(name, bases),
              {:ok, own} <- own_fields(name, raw, lookup.scope),
+             {:ok, own_extras} <- built_own_extras(name, raw, lookup.scope),
              {:ok, found, built} <- found_bases(name, bases, [name | path], lookup, built),
-             {:ok, fields} <- merged(name, found, own, drops, lookup),
+             {:ok, fields} <- merged(name, found, own, field_drops(drops), lookup),
+             {:ok, extras} <- merged_extras(name, found, own, own_extras, lookup),
              :ok <- built_cases(name, fields) do
           recorded = Enum.map(found, &{&1.kind, &1.name, &1.version})
-          {:ok, Map.put(built, name, %{fields: fields, bases: recorded})}
+          {:ok, Map.put(built, name, %{fields: fields, bases: recorded, extras: extras})}
         end
     end
   end
@@ -413,6 +517,56 @@ defmodule Dextrin.Schema.Compiler do
     else
       {:error, reason} -> {:error, compile_error("#{inspect(name)}: #{reason}")}
     end
+  end
+
+  defp built_own_extras(name, raw, scope) do
+    case own_extras(raw, scope) do
+      {:ok, extras} -> {:ok, extras}
+      {:error, reason} -> {:error, compile_error("#{inspect(name)}: #{reason}")}
+    end
+  end
+
+  # A built body's extras (G1): its own when it says; otherwise what its
+  # bases say, which must agree -- a base that says nothing is open and
+  # agrees with any. What `extends` a closed base can pass as it only
+  # when it stays closed and adds no field.
+  defp merged_extras(name, found, own, own_extras, lookup) do
+    known = Map.merge(lookup.registry.type_aliases, lookup.compiled)
+
+    said =
+      found
+      |> Enum.map(& &1.extras)
+      |> Enum.reject(&(&1 == :open))
+      |> Enum.uniq_by(&in_place(&1, known, []))
+
+    closed_base = Enum.find(found, &(&1.kind == :extends and &1.extras == :closed))
+
+    cond do
+      closed_base && (added_fields(own, closed_base) != [] or own_extras not in [nil, :closed]) ->
+        {:error,
+         compile_error(
+           "#{inspect(name)} extends #{closed_base.name}, which is closed (- *): " <>
+             "it adds no field and no extras, or includes #{closed_base.name} instead"
+         )}
+
+      own_extras != nil ->
+        {:ok, own_extras}
+
+      length(said) > 1 ->
+        {:error,
+         compile_error(
+           "#{inspect(name)}: its bases differ in their extras (- * or * K => V); " <>
+             "say which in its body"
+         )}
+
+      true ->
+        {:ok, List.first(said, :open)}
+    end
+  end
+
+  defp added_fields(own, %{fields: fields}) do
+    names = MapSet.new(fields, & &1.name)
+    Enum.reject(own, &MapSet.member?(names, &1.name))
   end
 
   defp merged(name, found, own, drops, lookup) do
@@ -468,7 +622,7 @@ defmodule Dextrin.Schema.Compiler do
   defp case_names({:case, field, branches, otherwise}),
     do: [field | Enum.flat_map([otherwise | Enum.map(branches, &elem(&1, 1))], &case_names/1)]
 
-  defp case_names({:shape, _, _}), do: []
+  defp case_names({:shape, _, _, _}), do: []
 
   defp case_names(type) when is_tuple(type),
     do: type |> Elixir.Tuple.to_list() |> Enum.flat_map(&case_names/1)
@@ -483,8 +637,9 @@ defmodule Dextrin.Schema.Compiler do
       full = base_target(Map.get(lookup.scope[@names], base, base), lookup, [])
 
       case found_base(full, version, path, lookup, built) do
-        {:ok, fields, at, built} ->
-          {:cont, {:ok, [%{kind: kind, name: full, fields: fields, version: at} | acc], built}}
+        {:ok, {fields, extras}, at, built} ->
+          base = %{kind: kind, name: full, fields: fields, extras: extras, version: at}
+          {:cont, {:ok, [base | acc], built}}
 
         {:error, %Dextrin.Error{}} = error ->
           {:halt, error}
@@ -501,8 +656,8 @@ defmodule Dextrin.Schema.Compiler do
 
   defp found_base(base, version, path, lookup, built) do
     case {Map.fetch(lookup.document, base), generic_use(base, lookup)} do
-      {_, {:ok, fields}} when version == nil ->
-        {:ok, fields, nil, built}
+      {_, {:ok, body}} when version == nil ->
+        {:ok, body, nil, built}
 
       {_, {:ok, _fields}} ->
         {:error, "a shape has no versions, so #{base}(#{version}) names none"}
@@ -552,8 +707,8 @@ defmodule Dextrin.Schema.Compiler do
          {:ok, definition} <- Map.fetch(known, generic),
          {:generic, params, body} <- undoc_type(definition),
          {:ok, args} <- filled_args(generic, args, known),
-         fields when is_list(fields) <- shape_fields(TypeExpr.instantiate(params, body, args)) do
-      {:ok, fields}
+         {_fields, _extras} = shape <- shape_body(TypeExpr.instantiate(params, body, args)) do
+      {:ok, shape}
     else
       _ -> :none
     end
@@ -571,14 +726,22 @@ defmodule Dextrin.Schema.Compiler do
     cond do
       built_from?(raw) ->
         with {:ok, built} <- build(base, path, lookup, built),
-             do: at_version(base, raw, version, built[base].fields, lookup, built)
+             do:
+               at_version(
+                 base,
+                 raw,
+                 version,
+                 {built[base].fields, built[base].extras},
+                 lookup,
+                 built
+               )
 
       kind == "shape" ->
-        {:ok, shape_fields(Map.fetch!(lookup.compiled, base)), nil, built}
+        {:ok, shape_body(Map.fetch!(lookup.compiled, base)), nil, built}
 
       true ->
-        with {:ok, %Compiled{fields: fields}} <- compile_entry(raw, lookup.scope),
-             do: at_version(base, raw, version, fields, lookup, built)
+        with {:ok, %Compiled{fields: fields, extras: extras}} <- compile_entry(raw, lookup.scope),
+             do: at_version(base, raw, version, {fields, extras}, lookup, built)
     end
   end
 
@@ -613,15 +776,15 @@ defmodule Dextrin.Schema.Compiler do
         else: Registry.fetch_struct_schema(registry, base)
 
     case found do
-      {:ok, %Compiled{fields: fields, version: at}, _registry} ->
-        {:ok, fields, at, built}
+      {:ok, %Compiled{fields: fields, extras: extras, version: at}, _registry} ->
+        {:ok, {fields, extras}, at, built}
 
       _not_a_schema ->
         case Map.fetch(registry.type_aliases, base) do
           {:ok, type} ->
             cond do
               version != nil -> {:error, "#{base}(#{version}) is not loaded"}
-              shape = shape_fields(type) -> {:ok, shape, nil, built}
+              shape = shape_body(type) -> {:ok, shape, nil, built}
               true -> {:error, "a base is a %schema or a %shape"}
             end
 
@@ -634,15 +797,16 @@ defmodule Dextrin.Schema.Compiler do
     end
   end
 
-  defp shape_fields({:shape, _, fields}), do: fields
-  defp shape_fields({:doc, type, _}), do: shape_fields(type)
-  defp shape_fields(_other), do: nil
+  # A shape's fields and extras, as a base gives them.
+  defp shape_body({:shape, _, fields, extras}), do: {fields, extras}
+  defp shape_body({:doc, type, _}), do: shape_body(type)
+  defp shape_body(_other), do: nil
 
   # A built shape joins the named types under its name, as a plain one
   # does, with its annotations.
   defp with_built_shapes(compiled, extending, built) do
     Result.reduce_ok(extending, compiled, fn {name, entry}, compiled ->
-      shape = {:shape, name, built[name].fields}
+      shape = {:shape, name, built[name].fields, built[name].extras}
 
       case entry do
         %Tuple{items: [%Keyword{name: "doc"}, _inner, raw]} ->
@@ -808,6 +972,10 @@ defmodule Dextrin.Schema.Compiler do
     end
   end
 
+  # A pinned reference is within what its schema is within (G11).
+  defp within?({:reference, name, _version}, bound, known),
+    do: within_bound?({:reference, name}, bound, known)
+
   defp within?({:reference, name}, {:reference, base}, known),
     do: extends?(name, base, known, [])
 
@@ -909,7 +1077,7 @@ defmodule Dextrin.Schema.Compiler do
 
   defp compile_named(name, raw_value, scope) do
     case compile_type_expr(raw_value, scope) do
-      {:ok, {:shape, nil, fields}} -> {:ok, {:shape, name, fields}}
+      {:ok, {:shape, nil, fields, extras}} -> {:ok, {:shape, name, fields, extras}}
       other -> other
     end
   end
@@ -1012,13 +1180,14 @@ defmodule Dextrin.Schema.Compiler do
   defp resolved({:generic, _, _}, _compiled, _path),
     do: {:error, "a generic is a named type's whole definition, {:generic [t ...] body}"}
 
-  defp resolved({:shape, name, fields}, compiled, path) do
+  defp resolved({:shape, name, fields, extras}, compiled, path) do
     with {:ok, fields} <-
            Result.reduce_ok(fields, [], fn field, acc ->
              with {:ok, type} <- resolved(field.type, compiled, path),
                   do: {:ok, [%{field | type: type} | acc]}
            end),
-         do: {:ok, {:shape, name, Enum.reverse(fields)}}
+         {:ok, extras} <- resolved_shape_extras(extras, compiled, path),
+         do: {:ok, {:shape, name, Enum.reverse(fields), extras}}
   end
 
   defp resolved({:case, field, branches, otherwise}, compiled, path) do
@@ -1079,6 +1248,14 @@ defmodule Dextrin.Schema.Compiler do
   end
 
   defp resolved(type_expr, _compiled, _path), do: {:ok, type_expr}
+
+  defp resolved_shape_extras({key, value}, compiled, path) do
+    with {:ok, key} <- resolved(key, compiled, path),
+         {:ok, value} <- resolved(value, compiled, path),
+         do: {:ok, {key, value}}
+  end
+
+  defp resolved_shape_extras(extras, _compiled, _path), do: {:ok, extras}
 
   # A refine's types -- `contains`, `content`, `encodes`, `encodes-seq` --
   # resolved as its base is.
@@ -1171,12 +1348,16 @@ defmodule Dextrin.Schema.Compiler do
 
   # `%schema(N){field: type, ...}`: the body is the fields, in the order
   # they are written; the header is the version, 1 when there is none.
-  defp compile_entry(%Struct{name: "schema", version: version, fields: {:keyed, pairs}}, aliases) do
+  defp compile_entry(
+         %Struct{name: "schema", version: version, fields: {:keyed, pairs}} = raw,
+         aliases
+       ) do
     with :ok <- not_format_1_0(pairs),
          {:ok, fields} <- compile_fields(pairs, aliases),
          :ok <- distinct_names(fields),
-         :ok <- cases_name_fields(pairs, fields) do
-      {:ok, %Compiled{version: version || 1, fields: fields}}
+         :ok <- cases_name_fields(pairs, fields),
+         {:ok, extras} <- own_extras(raw, aliases) do
+      {:ok, %Compiled{version: version || 1, fields: fields, extras: extras || :open}}
     end
   end
 
@@ -1350,17 +1531,21 @@ defmodule Dextrin.Schema.Compiler do
   # A shape built from others is a named entry of its document (DXNS.md
   # §4b), so that its bases are found before it is used.
   defp compile_type_expr(%Struct{name: "shape", bases: bases, drops: drops}, _aliases)
-       when bases != [] or drops != [],
+       when bases != [] or drops not in [[], ["*"]],
        do:
          {:error,
           "a shape built from others is an entry of its own, Name: %shape extends Base {...}, " <>
             "used by its name"}
 
-  defp compile_type_expr(%Struct{name: "shape", version: nil, fields: {:keyed, pairs}}, aliases) do
+  defp compile_type_expr(
+         %Struct{name: "shape", version: nil, fields: {:keyed, pairs}} = raw,
+         aliases
+       ) do
     with {:ok, fields} <- compile_fields(pairs, aliases),
          :ok <- distinct_names(fields),
-         :ok <- cases_name_fields(pairs, fields) do
-      {:ok, {:shape, nil, fields}}
+         :ok <- cases_name_fields(pairs, fields),
+         {:ok, extras} <- own_extras(raw, aliases) do
+      {:ok, {:shape, nil, fields, extras || :open}}
     end
   end
 
@@ -1438,6 +1623,39 @@ defmodule Dextrin.Schema.Compiler do
       :error -> {:ok, {:reference, name}}
     end
   end
+
+  # `Pet(1)`, which DXN reads as `{:at Pet 1}` (G11, DXNS.md §5c): a
+  # name pinned to one version. A named type's version is put in place --
+  # a sibling at that version stays by name -- and a version of a named
+  # type that is not loaded is a compile error; any other name is a
+  # schema's, checked when a value meets it.
+  defp compile_type_expr(
+         %Tuple{items: [%Keyword{name: "at"}, %Symbol{name: written}, version]},
+         aliases
+       )
+       when is_integer(version) and version > 0 do
+    name = full_name(written, aliases)
+    registry = aliases |> Map.get(@lookup, %{}) |> Map.get(:registry)
+    sibling_version = aliases |> Map.get(@versions, %{}) |> Map.get(name)
+
+    cond do
+      Map.get(aliases, name) == {:named, name} and sibling_version == version ->
+        {:ok, {:named, name}}
+
+      registry && match?({:ok, _}, Registry.fetch_type_version(registry, name, version)) ->
+        {:ok, type} = Registry.fetch_type_version(registry, name, version)
+        {:ok, type}
+
+      named_type?(name, aliases, registry) ->
+        {:error, "#{Dextrin.Tuple.pinned_text(name, version)} is not loaded"}
+
+      true ->
+        {:ok, {:reference, name, version}}
+    end
+  end
+
+  defp compile_type_expr(%Tuple{items: [%Keyword{name: "at"} | _]}, _aliases),
+    do: {:error, "a pinned name is Name(N), {:at Name N}, N a positive integer"}
 
   # `{:of Name type ...}`: one use of the generic `Name`.
   defp compile_type_expr(
@@ -1589,6 +1807,15 @@ defmodule Dextrin.Schema.Compiler do
 
   defp compile_type_expr(other, _aliases),
     do: {:error, "unrecognized type expression: #{shown(other)}"}
+
+  # Whether `name` is a named type -- a sibling of this document, or one
+  # loaded -- rather than a schema: what a pin to a version not loaded is
+  # refused for (Way B). The scope's own keys are atoms, never names.
+  defp named_type?(name, aliases, registry) do
+    sibling? = Map.get(aliases, name) == {:named, name}
+    loaded? = registry != nil and Map.has_key?(registry.type_versions, name)
+    sibling? or loaded? or (Map.has_key?(aliases, name) and not is_atom(name))
+  end
 
   # The name a written symbol stands for: itself where it is in scope
   # already (a generic's parameter, a name known so), otherwise the full

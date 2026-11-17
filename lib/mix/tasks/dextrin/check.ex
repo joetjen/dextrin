@@ -12,6 +12,10 @@ defmodule Mix.Tasks.Dextrin.Check do
   A name that resolves to nothing in the tree is a problem, unless its
   namespace is given with `--extern` (repeatable): names another tree or
   a provider supplies.
+
+  A schema that uses something deprecated (DXNS.md §1b) is a warning,
+  printed as `warning: ...`; the check still passes, unless
+  `--warnings-as-errors` is given.
   """
 
   use Mix.Task
@@ -20,17 +24,33 @@ defmodule Mix.Tasks.Dextrin.Check do
 
   @impl Mix.Task
   def run(argv) do
-    {opts, args, _} = OptionParser.parse(argv, strict: [extern: :keep])
+    {opts, args, _} =
+      OptionParser.parse(argv, strict: [extern: :keep, warnings_as_errors: :boolean])
 
     case args do
-      [] -> Mix.raise("usage: mix dextrin.check SCHEMAS... [--extern NAMESPACE]...")
-      roots -> check(roots, Elixir.Keyword.get_values(opts, :extern))
+      [] ->
+        Mix.raise(
+          "usage: mix dextrin.check SCHEMAS... [--extern NAMESPACE]... [--warnings-as-errors]"
+        )
+
+      roots ->
+        check(roots, Elixir.Keyword.get_values(opts, :extern), opts[:warnings_as_errors] == true)
     end
   end
 
-  defp check(roots, extern) do
+  defp check(roots, extern, strict?) do
     case Dextrin.Schema.Tree.load(roots, extern: extern) do
-      {:ok, _registry, %{files: files, definitions: definitions}} ->
+      {:ok, registry, %{files: files, definitions: definitions}} ->
+        warnings = Dextrin.Registry.warnings(registry)
+
+        Enum.each(
+          warnings,
+          &Mix.shell().info("warning: " <> Dextrin.Schema.Deprecations.text(&1))
+        )
+
+        if strict? and warnings != [],
+          do: Mix.raise("#{length(warnings)} warning(s), and --warnings-as-errors")
+
         Mix.shell().info("OK: #{files} files, #{definitions} definitions")
 
       {:error, problems} ->

@@ -61,6 +61,12 @@ defmodule Mix.Tasks.Dextrin.Compat do
   defp problem_line(%{schema: name, problem: :version_went_down, from: from, to: to}),
     do: "#{name} went down from version #{from} to #{to}"
 
+  defp problem_line(%{type: name, version: version, problem: :changed_without_new_version}),
+    do: "named type #{name} version #{version} changed without a new version"
+
+  defp problem_line(%{type: name, problem: :version_went_down, from: from, to: to}),
+    do: "named type #{name} went down from version #{from} to #{to}"
+
   defp upgrade_line(%{schema: name, from: from, to: to} = upgrade) do
     changes =
       [added: upgrade.added, removed: upgrade.removed, changed: upgrade.changed]

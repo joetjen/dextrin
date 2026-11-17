@@ -15,6 +15,10 @@ defmodule Dextrin.Schema.Compat do
       the fields the latest added, removed and changed since -- a
       checklist for the materializer's branches.
 
+  Named types with versions (`%type(N)`, DXNS.md §5c) follow the same
+  two rules, their annotations aside: documenting or deprecating a
+  version that shipped is no change, for a schema's fields either.
+
   There are no compatibility modes and no append-only rule: changing
   positions is allowed, and documented as what older readers misread
   (DXNS.md §8). A field's description is documentation, not content.
@@ -27,6 +31,13 @@ defmodule Dextrin.Schema.Compat do
 
   @type problem ::
           %{schema: String.t(), version: pos_integer(), problem: :changed_without_new_version}
+          | %{type: String.t(), version: pos_integer(), problem: :changed_without_new_version}
+          | %{
+              type: String.t(),
+              problem: :version_went_down,
+              from: pos_integer(),
+              to: pos_integer()
+            }
           | %{
               schema: String.t(),
               problem: :version_went_down,
@@ -48,8 +59,29 @@ defmodule Dextrin.Schema.Compat do
   checklist for `new`, each sorted by schema name and version.
   """
   @spec check(Registry.t(), Registry.t()) :: %{problems: [problem()], upgrades: [upgrade()]}
-  def check(%Registry{structs: old}, %Registry{structs: new}) do
-    %{problems: problems(old, new), upgrades: upgrades(new)}
+  def check(%Registry{structs: old} = before, %Registry{structs: new} = now) do
+    %{
+      problems: problems(old, new) ++ type_problems(before.type_versions, now.type_versions),
+      upgrades: upgrades(new)
+    }
+  end
+
+  # Named types with versions (Way B, DXNS.md §5c) follow the same two
+  # rules; a named type has no materializer, so no upgrade checklist.
+  defp type_problems(old, new) do
+    for {name, new_versions} <- Enum.sort(new),
+        {:ok, old_versions} <- [Map.fetch(old, name)],
+        problem <-
+          changed_types(name, old_versions, new_versions) ++
+            went_down(name, old_versions, new_versions),
+        do: problem |> Map.delete(:schema) |> Map.put(:type, name)
+  end
+
+  defp changed_types(name, old_versions, new_versions) do
+    for {version, type} <- Enum.sort(new_versions),
+        {:ok, before} <- [Map.fetch(old_versions, version)],
+        meaning(before) != meaning(type),
+        do: %{schema: name, version: version, problem: :changed_without_new_version}
   end
 
   defp problems(old, new) do
@@ -105,9 +137,26 @@ defmodule Dextrin.Schema.Compat do
 
   defp latest(versions), do: versions |> Map.keys() |> Enum.max()
 
-  # What a schema's content is, for this check: its fields in order.
-  defp shape(%Compiled{fields: fields}), do: Enum.map(fields, &{&1.name, field_shape(&1)})
+  # What a schema's content is, for this check: its fields in order, and
+  # what it takes beyond them (DXNS.md §4c).
+  defp shape(%Compiled{fields: fields, extras: extras}),
+    do: {Enum.map(fields, &{&1.name, field_shape(&1)}), meaning(extras)}
 
   defp field_shape(%Field{required: required, type: type, default: default}),
-    do: {required, type, default}
+    do: {required, meaning(type), default}
+
+  # What a type takes, without its annotations: they check nothing, so
+  # documenting or deprecating a version that shipped (G10) is no change.
+  defp meaning({:doc, type, _notes}), do: meaning(type)
+
+  defp meaning(type) when is_tuple(type),
+    do: type |> Tuple.to_list() |> Enum.map(&meaning/1) |> List.to_tuple()
+
+  defp meaning(types) when is_list(types), do: Enum.map(types, &meaning/1)
+  defp meaning(%Field{} = field), do: %{field | type: meaning(field.type), description: nil}
+
+  defp meaning(%{} = map) when not is_struct(map),
+    do: Map.new(map, fn {key, value} -> {key, meaning(value)} end)
+
+  defp meaning(leaf), do: leaf
 end

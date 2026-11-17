@@ -32,7 +32,7 @@ defmodule Dextrin.Schema.Reader do
   """
 
   alias Dextrin.{Registry, Struct}
-  alias Dextrin.Schema.{Compiled, Validated, Validator}
+  alias Dextrin.Schema.{Compiled, Deprecations, Validated, Validator}
 
   @doc """
   `fields` of the struct `name`, written at `version` (nil when it says
@@ -50,7 +50,9 @@ defmodule Dextrin.Schema.Reader do
   def read(%Registry{} = registry, name, version, fields, extra \\ []) do
     case Registry.fetch_struct_schema(registry, name) do
       {:ok, %Compiled{} = latest, registry} ->
-        by_version(registry, latest, version, fields, extra)
+        with {:ok, value, registry} <- by_version(registry, latest, version, fields, extra),
+             :ok <- Deprecations.struct_used(registry, name, version),
+             do: {:ok, value, registry}
 
       {:unknown, registry} ->
         {:unknown, registry}
@@ -80,13 +82,29 @@ defmodule Dextrin.Schema.Reader do
            "schema/unknown-version"
          )}
 
-      {{:ok, _older, _registry}, nil} ->
-        {:error,
-         Dextrin.Error.action(
-           "struct #{inspect(name)} was written with the older version #{version}, " <>
-             "and no materializer is registered to upgrade it",
-           "schema/no-materializer"
-         )}
+      # Refused, unless a field pinned to this version takes it as read
+      # (DXNS.md §5c): the refusal travels with it and stands otherwise.
+      {{:ok, older, _registry}, nil} ->
+        refused =
+          Dextrin.Error.action(
+            "struct #{inspect(name)} was written with the older version #{version}, " <>
+              "and no materializer is registered to upgrade it",
+            "schema/no-materializer"
+          )
+
+        with {:ok, fields, extra} <- separated(older, fields, extra),
+             :ok <- strictly(registry, older, extra),
+             :ok <- Validator.extras(older, extra, registry),
+             {:ok, pairs} <- Validator.resolve(older, fields, registry) do
+          as_read = Struct.keyed(name, pairs, version, extra)
+
+          {:ok, %Validated{name: name, version: version, as_read: as_read, refused: refused},
+           registry}
+        else
+          # Not even readable as written: the refusal it would have met
+          # first is the one reported.
+          _unreadable -> {:error, refused}
+        end
 
       {{:ok, older, _registry}, _materializer} ->
         materialized(registry, older, latest, fields, extra)
@@ -116,12 +134,22 @@ defmodule Dextrin.Schema.Reader do
          extra
        ) do
     with {:ok, fields, extra} <- separated(reading, fields, extra),
-         :ok <- strictly(registry, name, extra),
+         :ok <- strictly(registry, reading, extra),
+         :ok <- Validator.extras(reading, extra, registry),
          {:ok, pairs} <- Validator.resolve(reading, fields, registry),
          {:ok, value} <-
            built(registry, materializer(registry, name), reading, latest, pairs, extra) do
       also = Validator.also_valid_as(reading, fields, registry)
-      {:ok, %Validated{name: name, value: value, also: also}, registry}
+      as_read = Struct.keyed(name, pairs, reading.version, extra)
+
+      {:ok,
+       %Validated{
+         name: name,
+         value: value,
+         also: also,
+         version: reading.version,
+         as_read: as_read
+       }, registry}
     end
   end
 
@@ -168,8 +196,10 @@ defmodule Dextrin.Schema.Reader do
 
   defp given_names({:positional, _items}, reading), do: Compiled.field_names(reading)
 
-  # A strict decode refuses any extra field on a schema-backed struct.
-  defp strictly(%Registry{strict: true}, name, [{key, _} | _]) do
+  # A strict decode refuses any extra field on a schema-backed struct
+  # whose extras are open; closed or typed ones say themselves which
+  # they take (G1).
+  defp strictly(%Registry{strict: true}, %Compiled{name: name, extras: :open}, [{key, _} | _]) do
     {:error,
      Dextrin.Error.action(
        "struct #{inspect(name)} carries #{inspect(key)}, which its schema does not declare",
@@ -177,7 +207,7 @@ defmodule Dextrin.Schema.Reader do
      )}
   end
 
-  defp strictly(_registry, _name, _extra), do: :ok
+  defp strictly(_registry, _reading, _extra), do: :ok
 
   defp built(_registry, nil, _reading, %Compiled{name: name, version: version}, pairs, extra),
     do: {:ok, Struct.keyed(name, pairs, version, extra)}

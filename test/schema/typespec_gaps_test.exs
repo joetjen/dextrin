@@ -390,4 +390,23 @@ defmodule Dextrin.Schema.TypeSpecGapsTest do
       end
     end
   end
+
+  test "a discriminator over schemas explains by the schema its field chooses" do
+    {:ok, doc} =
+      Dextrin.decode("""
+      %{
+        Cat: %schema{kind: {:const "cat"}, meows: :boolean}
+        Dog: %schema{kind: {:const "dog"}, barks: :boolean}
+        Cow: %schema{kind: :string}
+        Home: %schema{pet: {:doc {:one-of Cat Dog} %{discriminator: :kind}}}
+      }
+      """)
+
+    {:ok, r} = Dextrin.Schema.compile(doc)
+
+    assert {:error, %Dextrin.Error{message: message}} =
+             Dextrin.decode(~s|%Home{pet: %Cow{kind: "cat"}}|, registry: r)
+
+    assert message =~ ~s|kind "cat" chooses Cat|
+  end
 end

@@ -332,9 +332,23 @@ defmodule Dextrin.Document.Formatter do
 
   defp item(%Node{rule: :value} = node, indent, ctx), do: value(node, indent, ctx)
 
-  # `- password`: an inherited field left out (DXNS.md §4b).
+  # `- password`: an inherited field left out (DXNS.md §4b); `- *`, a
+  # closed body.
   defp item(%Node{rule: :drop_entry} = node, _indent, _ctx),
-    do: "- " <> String.trim_leading(tokens_text(node), "-")
+    do: "- " <> String.trim(String.trim_leading(tokens_text(node), "-"))
+
+  # `* K => V`: the type of a body's extras (DXNS.md §4b).
+  defp item(%Node{rule: :rest_entry, children: children}, indent, ctx) do
+    [_star, key, _arrow, value] = Enum.reject(children, &match?(%Token{trivia: true}, &1))
+
+    between(
+      "* " <> value(key, indent, ctx) <> " =>",
+      comments_in(children),
+      fn deeper, at -> value(value, deeper, at) end,
+      indent,
+      ctx
+    )
+  end
 
   # `prefix` and the value after it: on one line, or, with a comment
   # between them, the comment beside the prefix and the value on the

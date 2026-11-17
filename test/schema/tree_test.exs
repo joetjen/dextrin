@@ -85,7 +85,9 @@ defmodule Dextrin.Schema.TreeTest do
 
     test "loads after its base, the base found by its name" do
       assert {:ok, registry, _} = Tree.load([tree(@built)])
-      assert {:shape, _, [%{name: "id"}, %{name: "x"}]} = registry.type_aliases["a/Amateur"]
+
+      assert {:shape, _, [%{name: "id"}, %{name: "x"}], :open} =
+               registry.type_aliases["a/Amateur"]
     end
   end
 
@@ -135,6 +137,24 @@ defmodule Dextrin.Schema.TreeTest do
       assert {:error, problems} = Tree.load([root])
       assert Enum.any?(messages({:error, problems}), &(&1 =~ "acme.comon/Money"))
       assert Enum.any?(messages({:error, problems}), &(&1 =~ "Nowhere"))
+    end
+
+    test "a name that resolves to nothing, in a schema's * K => V too" do
+      root = tree(%{"a.dxns" => "%{A: %schema{n: :integer, * :string => Nowhere}}"})
+      assert {:error, problems} = Tree.load([root])
+      assert Enum.any?(messages({:error, problems}), &(&1 =~ "Nowhere"))
+    end
+
+    test "a file whose * K => V names another's type loads after it" do
+      root =
+        tree(%{
+          "s/zz.dxns" => "%{Count: {:refine :integer %{min: 0}}}",
+          "s/aa.dxns" => "%{T: %shape{a: :integer, * :string => s.zz/Count}}"
+        })
+
+      assert {:ok, registry, _} = Tree.load([root])
+      {:ok, value} = Dextrin.decode(~s|%{a: 1, "x" => 2}|)
+      assert Dextrin.Schema.check(value, registry, "s.aa/T") == :ok
     end
 
     test "unless its namespace is declared extern" do

@@ -48,7 +48,10 @@ defmodule Dextrin do
           pretty: boolean(),
           indent: non_neg_integer(),
           width: pos_integer(),
-          trusted: boolean()
+          trusted: boolean(),
+          strict: boolean(),
+          deprecations: :once | :every | :off | :error,
+          on_deprecated: (Dextrin.Schema.Deprecations.warning() -> term())
         ]
 
   @doc """
@@ -68,7 +71,7 @@ defmodule Dextrin do
           {:ok, term()} | {:error, Dextrin.Error.t() | [Dextrin.Error.t()]}
   def decode(text, opts \\ []) when is_binary(text) do
     case Dextrin.Text.Grammar.run(text, Registry.from_options(opts)) do
-      {:ok, value} -> {:ok, Dextrin.Schema.Validated.strip(value)}
+      {:ok, value} -> Dextrin.Schema.Validated.unwrap(value)
       {:error, errors} -> {:error, Dextrin.Error.from_parse(errors)}
     end
   end
@@ -151,7 +154,7 @@ defmodule Dextrin do
   # the only way to validate a nameless top-level map or unregistered
   # struct, which the whole-tree walk has nothing to key off of.
   defp maybe_validate_encode(value, opts) do
-    registry = Keyword.get(opts, :registry, Registry.new())
+    registry = Registry.from_options(opts)
 
     with :ok <- maybe_validate_named_schema(value, opts, registry) do
       maybe_validate_tree(value, opts, registry)

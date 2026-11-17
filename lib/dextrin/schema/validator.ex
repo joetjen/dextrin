@@ -82,6 +82,20 @@ defmodule Dextrin.Schema.Validator do
     |> Enum.uniq()
   end
 
+  @doc """
+  `extra`, the fields a struct of `compiled` carries beyond its declared
+  ones, checked against its extras (G1, DXNS.md §4b): any when open,
+  none when closed (`- *`), each key and value matching `* K => V`.
+  """
+  @spec extras(Compiled.t(), [{term(), term()}], Registry.t()) ::
+          :ok | {:error, Dextrin.Error.t()}
+  def extras(%Compiled{extras: extras}, extra, registry) do
+    case TypeExpr.extras_refusal(extras, extra, TypeExpr.context(registry, %{})) do
+      nil -> :ok
+      {why, category} -> violation(why, category)
+    end
+  end
+
   defp to_name_map(_compiled, {:keyed, pairs}), do: {:ok, Map.new(pairs)}
 
   defp to_name_map(%Compiled{fields: schema_fields}, {:positional, items}) do
@@ -141,7 +155,10 @@ defmodule Dextrin.Schema.Validator do
       # as a checked field value (encode) — neither should ever see an
       # internal `Validated` wrapper once it's done its one job.
       {:ok, conformed} ->
-        {:ok, Validated.strip(conformed)}
+        Validated.unwrap(conformed)
+
+      :error when is_struct(value, Validated) and value.refused != nil ->
+        {:error, value.refused}
 
       :error ->
         violation(
@@ -206,6 +223,7 @@ defmodule Dextrin.Schema.Validator do
 
   defp check_compiled(compiled, value, registry) do
     with :ok <- unshadowed(compiled, value),
+         :ok <- extras(compiled, struct_extra(value), registry),
          {:ok, given} <- to_name_map_for_encode(compiled, value),
          {:ok, given} <- wrap_given(given, registry),
          {:ok, _resolved} <- resolve_fields(compiled, given, registry) do
@@ -228,6 +246,9 @@ defmodule Dextrin.Schema.Validator do
   end
 
   defp unshadowed(_compiled, _value), do: :ok
+
+  defp struct_extra(%Struct{extra: extra}), do: extra
+  defp struct_extra(_value), do: []
 
   defp to_name_map_for_encode(_compiled, %Struct{fields: {:keyed, pairs}}),
     do: {:ok, Map.new(pairs)}
@@ -315,11 +336,18 @@ defmodule Dextrin.Schema.Validator do
   defp wrap_and_check(value, registry) do
     case schema_name_for(value, registry) do
       {:ok, name, compiled} ->
-        case check_compiled(compiled, value, registry) do
-          :ok ->
-            {:ok,
-             %Validated{name: name, value: value, also: encodes_as(compiled, value, registry)}}
-
+        # Deprecation is the struct's own version's, as a decode reports
+        # it (G10): the bases it passes as are checked, not used.
+        with :ok <- check_compiled(compiled, value, registry),
+             :ok <- Dextrin.Schema.Deprecations.struct_used(registry, name, compiled.version) do
+          {:ok,
+           %Validated{
+             name: name,
+             value: value,
+             also: encodes_as(compiled, value, registry),
+             version: compiled.version
+           }}
+        else
           {:error, %Dextrin.Error{} = error} ->
             {:error,
              %{error | message: "struct #{inspect(name)} violates its schema: #{error.message}"}}
@@ -330,8 +358,17 @@ defmodule Dextrin.Schema.Validator do
     end
   end
 
-  defp schema_name_for(%Struct{name: name}, registry) do
-    case Registry.fetch_struct_schema(registry, name) do
+  # The version a struct is written at (`Registry.as_written/2`): its
+  # own when loaded, otherwise the latest.
+  defp schema_name_for(%Struct{name: name} = struct, registry) do
+    written = Registry.as_written(registry, struct)
+
+    found =
+      if written.version,
+        do: Registry.fetch_struct_schema(registry, name, written.version),
+        else: Registry.fetch_struct_schema(registry, name)
+
+    case found do
       {:ok, compiled, _registry} -> {:ok, name, compiled}
       _no_schema -> :unknown
     end

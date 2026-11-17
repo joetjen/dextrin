@@ -29,7 +29,9 @@ defmodule Dextrin.Struct do
   `bases` and `drops` are what a `%schema` or `%shape` is built from
   (DXNS.md §4b): `bases` the head's `extends` and `includes` names, as
   `{:extends | :includes, name, version | nil}` in the order written,
-  and `drops` the body's `- field` names. Every other struct has none.
+  and `drops` the body's `- field` names, `"*"` for `- *` (closed).
+  `rest` is the body's `* K => V`, `{K, V}`, the type of its extras.
+  Every other struct has none.
   """
 
   @type fields :: {:keyed, [{String.t(), term()}]} | {:positional, [term()]}
@@ -40,10 +42,11 @@ defmodule Dextrin.Struct do
           fields: fields(),
           extra: [{term(), term()}],
           bases: [{:extends | :includes, String.t(), pos_integer() | nil}],
-          drops: [String.t()]
+          drops: [String.t()],
+          rest: {term(), term()} | nil
         }
 
-  defstruct [:name, :fields, version: nil, extra: [], bases: [], drops: []]
+  defstruct [:name, :fields, version: nil, extra: [], bases: [], drops: [], rest: nil]
 
   @doc "A struct written with names, at `version` when one is given, carrying `extra`."
   @spec keyed(String.t(), [{String.t(), term()}], pos_integer() | nil, [{term(), term()}]) :: t()

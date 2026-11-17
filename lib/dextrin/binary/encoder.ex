@@ -296,11 +296,13 @@ defmodule Dextrin.Binary.Encoder do
 
   # A `%schema` or `%shape` built from others (DXNS.md §4b) is text only:
   # `.dxnb` has no place for its head's clauses or its `- field`s.
-  defp encode_item_dispatch(%Struct{name: name, bases: bases, drops: drops}, _opts)
-       when bases != [] or drops != [] do
+  # So is one that is closed (`- *`) or types its extras (`* K => V`).
+  defp encode_item_dispatch(%Struct{name: name, bases: bases, drops: drops, rest: rest}, _opts)
+       when bases != [] or drops != [] or rest != nil do
     {:error,
      Dextrin.Error.action(
-       "a %#{name} built from others (extends, includes, - field) has no .dxnb form",
+       "a %#{name} built from others (extends, includes, - field), closed (- *) " <>
+         "or with typed extras (* K => V) has no .dxnb form",
        "encode/unsupported"
      )}
   end
@@ -309,8 +311,8 @@ defmodule Dextrin.Binary.Encoder do
     encode_struct(type_name(struct, opts), items, struct.extra, opts)
   end
 
-  defp encode_item_dispatch(%Struct{name: name, fields: {:keyed, pairs}} = struct, opts) do
-    with {:ok, values} <- positional_values(name, pairs, opts) do
+  defp encode_item_dispatch(%Struct{fields: {:keyed, pairs}} = struct, opts) do
+    with {:ok, values} <- positional_values(struct, pairs, opts) do
       encode_struct(type_name(struct, opts), values, struct.extra, opts)
     end
   end
@@ -470,9 +472,14 @@ defmodule Dextrin.Binary.Encoder do
   # field (DXNS.md §7): a reader refuses nil unless the type is nilable.
   # So an absent field is written as its default where it has one, and is
   # otherwise refused (`schema/missing-field`).
-  defp positional_values(name, pairs, opts) do
+  # In the field order of the version the struct is written at
+  # (`Registry.as_written/2`): its own when loaded, otherwise the latest.
+  defp positional_values(%Struct{name: name} = struct, pairs, opts) do
     with %Dextrin.Registry{} = registry <- Keyword.get(opts, :registry),
-         {:ok, compiled, _registry} <- Dextrin.Registry.fetch_struct_schema(registry, name) do
+         %Struct{version: version} when version != nil <-
+           Dextrin.Registry.as_written(registry, struct),
+         {:ok, compiled, _registry} <-
+           Dextrin.Registry.fetch_struct_schema(registry, name, version) do
       named = Map.new(pairs)
 
       Result.reduce_ok(compiled.fields, [], fn field, acc ->

@@ -352,6 +352,13 @@ value:
 Each library can read the annotations back, and its documentation
 generator shows them.
 
+`deprecated` does more than document: when a schema that uses a
+deprecated type compiles, and when data goes through one, the reader
+warns -- once per thing by default, or every time, never, or as an
+error, as the decode asks (`deprecations:`). One version of a schema can
+be deprecated on its own: `{:doc %schema(1){...} %{deprecated: "use
+version 2"}}`.
+
 ## 13. Documents inside documents
 
 A string can hold a whole DXN document, encoded, and a byte string a
@@ -411,12 +418,36 @@ accepted wherever a `User` is, as long as it is a valid `User` too: a
 that. So a schema may leave out only an optional field of a schema it
 extends; to leave out a required one, include that schema instead.
 
+A body may also say what it takes beyond its fields. By default anything
+extra is kept. `* K => V` types every extra key and value, and `- *`
+refuses any extra at all, whatever the decode:
+
+```dxns
+%{
+  Labels: %shape{name: :string * :string => :string}
+  Point: %shape{x: :integer y: :integer - *}
+  Pin: %schema{label: Labels at: Point}
+}
+```
+
+```dxn
+# good: Pin
+%Pin{label: %{name: "home" "colour" => "red"} at: %{x: 1 y: 2}}
+```
+
+```dxn
+# bad: Pin
+%Pin{label: %{name: "home"} at: %{x: 1 y: 2 z: 3}}
+```
+
+Close a type only where no newer writer will ever add to it: a closed
+type refuses every field a later version brings.
+
 ## 15. Versions
 
 A struct schema has a version, `%schema(2){...}`, 1 when it has none.
 Load several versions of `User` side by side, and data says which one it
-was written with: `%User(2){...}`. A writer always writes the latest it
-has.
+was written with: `%User(2){...}`. A writer writes the latest it has.
 
 ```dxns
 %{
@@ -436,6 +467,17 @@ To change a schema that several services share:
    materializer that upgrades the older version, then the writers.
 3. Run the compatibility check in CI: a released version that changed is
    an error.
+
+A field can hold on to one version instead: `owner: Person(1)` takes a
+`%Person(1){...}` only, as it was written, with no materializer, and
+writes it as version 1. A named type can have versions too, each in its
+own file, and the same pin picks one:
+
+```text
+%{Color: {:enum :red :green}}                      # Color, version 1
+%{Color: %type(2)[{:enum :red :green :blue}]}      # Color, version 2
+%{Car: %schema{paint: Color, old_paint: Color(1)}} # the latest, and version 1
+```
 
 The README's "Changing a schema across services" tells the whole story,
 and [DXNS.md §8](DXNS.md) the rules.

@@ -53,10 +53,17 @@ defmodule Dextrin.Schema.VersionsInDocumentsTest do
                {:ok, %Struct{name: "Point", version: 2, fields: {:positional, [1, 2]}}}
     end
 
-    test "is written with the latest version even when it says an older one" do
+    # Until G11 (Jan, 2026-11-17) every struct was written as the latest,
+    # whatever version it said: there was no way to write an older one.
+    # A field pinned to a version (`Pet(1)`) needs that way, so a struct
+    # saying a loaded version keeps it; one saying none, or one not
+    # loaded, is written as the latest as before.
+    test "is written with the version it says when that one is loaded, else the latest" do
       registry = registry([v1(), v2()])
       older = Struct.keyed("Point", [{"x", 1}], 1)
-      assert Dextrin.encode(older, registry: registry) == {:ok, "%Point(2){x:1}"}
+      assert Dextrin.encode(older, registry: registry) == {:ok, "%Point(1){x:1}"}
+      unknown = Struct.keyed("Point", [{"x", 1}], 7)
+      assert Dextrin.encode(unknown, registry: registry) == {:ok, "%Point(2){x:1}"}
     end
 
     test "is written in binary in the schema's field order, whatever order its keys came in" do
@@ -94,8 +101,12 @@ defmodule Dextrin.Schema.VersionsInDocumentsTest do
              {:ok, Struct.keyed("Point", [{"x", 1}, {"y", 2}], 2)}
   end
 
-  test "a struct reference names no version: User(2) in a type expression is a syntax error" do
-    assert {:error, %Dextrin.Error{category: "syntax"}} =
-             Dextrin.decode("%{P: %schema{u: User(2)}}")
+  # Until G11 (Jan, 2026-11-17) a struct reference named no version and
+  # `User(2)` was a syntax error. Now `User(2)` reads as `{:at User 2}`, a
+  # reference pinned to version 2 (DXNS.md §5c, test/schema/pin_test.exs).
+  test "a struct reference may name a version: User(2) pins version 2" do
+    assert {:ok, %{} = doc} = Dextrin.decode("%{P: %schema{u: User(2)}}")
+    assert [{_, %Struct{fields: {:keyed, [{"u", at}]}}}] = Map.to_list(doc)
+    assert Dextrin.Tuple.pinned(at) == {:ok, "User", 2}
   end
 end

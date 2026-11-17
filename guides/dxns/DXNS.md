@@ -175,6 +175,36 @@ latest version's); a field's stay on its type. A `doc` checks the value
 `T` checks, so it is no guard (§5): `A: {:doc A %{}}` is a compile
 error.
 
+**`deprecated` warns** (G10 of design/typespec.md, Jan, 2026-11-17).
+It stands on one version of a schema -- `{:doc %schema(1){...} %{deprecated:
+"use Pet(2)"}}` deprecates version 1 only, read with
+`Dextrin.Schema.annotations/3` -- on a named type, a field's type, a
+variant, or an enum value (`values:`).
+
+- **When a schema compiles**, an entry that names something deprecated
+  warns: a type reference in its body, or a base in its head. A
+  reference never pins a version, so it warns when the latest is
+  deprecated; a base pinned to one (`includes Pet(1)`) warns when that
+  one is. An entry that is deprecated itself stays silent. The registry
+  keeps these warnings; `mix dextrin.check` prints them.
+- **When data goes through it**, decoding or encoding: a struct written
+  with a deprecated version, a struct of a schema whose latest version
+  is deprecated (the whole schema), and a value accepted by a deprecated
+  type, variant or enum value. A variant tried and refused never warns.
+- **How often** is the reader's choice, `deprecations:` -- `:once` per
+  registry and deprecated thing (the default), `:every` use, `:off`, or
+  `:error`. With `:error` a deprecated struct is refused as
+  `schema/deprecated` (DXN.md §5); a deprecated type, variant or value
+  inside one refuses the field holding it.
+- **Who hears it**: a warning names what is deprecated, its version
+  where it has one, the reason (`nil` for `true`), the category
+  `schema/deprecated`, and at compile time the entry that uses it. It
+  goes to the platform's log for warnings unless the reader passes a
+  function, `on_deprecated:`, that receives each one.
+
+TypeSpec's `#deprecated "why"` is `deprecated: "why"` on whatever it
+stands on.
+
 ## 2. `refine` constraints
 
 | Key | Applies to | Meaning |
@@ -439,7 +469,8 @@ map** only, never a struct. `%shape(N){...}` and a positional
 compatibly is its author's business. A declared field is matched by
 name whatever spelling its key has (`name:`, `"name" =>`, `:"name" =>`),
 and a map giving one twice does not match. Every other key is an
-extra, kept; a strict decode (§7) refuses extras. **A missing field
+extra, kept; a strict decode (§7) refuses extras, unless the body says
+which it takes (§4c). **A missing field
 takes its default**: a map checked against a shape while decoding comes
 out with each missing field's default filled in, under a keyword key,
 as a struct's field does; encoding writes the map as it is given. A
@@ -566,6 +597,45 @@ check reports it like any other changed version. Before such a schema
 ships, its author either bumps its version or names the base's. The
 result has its own materializer; no base's is inherited.
 
+## 4c. Extras (`* K => V`, `- *`)
+
+```ebnf
+extras_entry = "*" , type_expr , "=>" , type_expr ;   (* typed extras *)
+closed       = "-" , "*" ;                            (* no extras *)
+```
+
+```text
+Labels: %shape{name: :string, * :string => :string}
+Point:  %shape{x: :float, y: :float, - *}
+Counts: %schema{total: :integer, * :string => :integer}
+```
+
+**A body may say what it takes beyond its fields** (G1 of
+design/typespec.md, Jan, 2026-11-17). By default the extras are
+**open**: any is kept, and only a strict decode (§7) refuses them.
+
+- **`* K => V` types the extras**: every key no field declares must
+  match K, and its value V. A struct's named extras are strings, so
+  `* :string => V` takes them. A strict decode keeps typed extras: the
+  body declares them. An extra that does not match is
+  `schema/type-mismatch`; in a shape, extras are conformed like fields.
+- **`- *` closes the body**: no extra at all, strict decode or not. One
+  given is `schema/undeclared-field`.
+- **K and V are type expressions** of the document, as a field's type
+  is. A body has one `* K => V` or one `- *` at most, not both.
+- **Built from others** (§4b): the result has its body's own entry if
+  it gives one, otherwise what its bases say. Bases that say different
+  things are a compile error unless the body says; a base that says
+  nothing agrees with any. What `extends` a closed base must stay closed
+  and add no field of its own, or it could not pass as that base;
+  `includes` it instead.
+- **Only a `%schema` or a `%shape` body** takes either entry, anywhere
+  in the body; on any other struct either is `syntax`. `*` begins
+  nothing else in DXN. Like `- field`, they have no `.dxnb` form.
+
+TypeSpec's `...Record<T>` and `model P is Record<T> {...}` are
+`* :string => T`.
+
 ## 5. Named types
 
 Any top-level entry whose value is not a `%schema{}` defines a **named
@@ -645,6 +715,55 @@ against. The argument only shows a reader must not resolve *in* map
 order; two-phase compilation needs no order at all. Shapes (§4a)
 name their siblings as a matter of course (`OrderCancelled` naming
 `CancelReason` beside it), so resolution is now required.
+
+## 5c. Versions of named types, and pinned references
+
+```text
+Color: %type(2)[{:enum :red :green :blue}]    # this document: version 2
+Car:    %schema{paint: Color}                 # the latest Color
+OldCar: %schema(1){paint: Color(1), owner: Person(3)}
+```
+
+**A named type may have versions**, as a schema does (§8; Way B of
+design/typespec.md, Jan, 2026-11-17). `%type(N)[T]` is version `N` of
+the named type it is the entry of, `T` its definition: a positional
+struct with that one item, and a version. A plain definition, `Color:
+T`, is version 1. Each version is an entry of its own document, as a
+schema's is. Loading a version already loaded with another definition
+is `schema/duplicate-version`; the same definition again changes
+nothing. `{:doc %type(1)[T] %{deprecated: "why"}}` deprecates version 1
+only (§1b).
+
+**A name means the latest version loaded; `Name(N)` pins one** (G11).
+`Name(N)` is DXN text for the tuple `{:at Name N}` (DXN.md §1.2), so
+either spelling works and both compile the same.
+
+- **A pinned named type** is that version's definition. A version not
+  loaded is a compile error. A named type's value carries no version,
+  so an unpinned one is checked against the latest only, and there is
+  no materializer for named types: old data stays valid through the
+  schema version that pinned what it used.
+- **A pinned schema** takes a struct of that version only, and takes it
+  **as that version reads it**: no materializer upgrades it, and an
+  older version needs none. Any other version is
+  `schema/type-mismatch`. Encoding writes it at that version (§8).
+  Unpinned, a reference takes any loaded version, as before, and the
+  struct is upgraded to the latest.
+- **Version discipline** (§8) holds for named types too: a version that
+  shipped keeps its definition, and the latest never goes down.
+  Annotations are no part of a definition there, so documenting or
+  deprecating a version that shipped passes.
+
+TypeSpec's `@versioned` maps here: `@added` and `@removed` on a model,
+property, enum member or variant make a new version of what holds them,
+each schema version pinning the named types as they were then;
+`@renamedFrom` makes a new name, the old one in `meta`; version names
+(`"2024-01-01"`) are kept in `meta` on each version.
+
+*Replaced (2026-11-17):* §8 used to say "a struct reference names no
+version; `User(2)` is not a type expression", with every field taking
+any version. A field that must keep reading data of one version -- what
+TypeSpec's versioned projections need -- had no way to say so.
 
 ## 6. Cross-file references
 
@@ -734,7 +853,8 @@ its **extra fields**, which a reader keeps rather than drops:
 - **An extra field's key follows the map-key rule** (DXN.md §1.6).
 - **A strict decode** — an option a reader MUST offer — refuses any
   extra field on a struct whose schema is known
-  (`schema/undeclared-field`). A config loader reads strictly, to catch
+  (`schema/undeclared-field`), unless its schema types its extras
+  (§4c). A schema closed with `- *` refuses them in every decode. A config loader reads strictly, to catch
   a typo in a hand-written file; a message consumer does not, so a
   newer producer's fields pass through it.
 
@@ -769,21 +889,29 @@ three documents.
   occurrence like any type name (DXN.md §2.4). A version that is not a
   positive integer is an error (`syntax`, or `binary` in `.dxnb`).
 
-**Every struct an encoder writes against a schema carries the latest
-loaded version of that schema** — `%User(3){...}`, and `%User(1){...}`
-when version 1 is the only one, so a reader never has to guess. There
-is no way to write an older version: whatever version a value says
-itself, it is checked against the latest and written as the latest. A
+**Every struct an encoder writes against a schema carries a loaded
+version of that schema** — `%User(3){...}`, and `%User(1){...}` when
+version 1 is the only one, so a reader never has to guess. It is the
+latest, unless the value says a loaded version of its own, as a struct
+for a pinned field does (§5c): the value is checked against that
+version and written as it. A value that says no version, or one not
+loaded, is checked against the latest and written as the latest. A
 struct whose name has no schema keeps the version it has, or none.
+
+*Replaced (2026-11-17):* there was no way to write an older version;
+whatever version a value said, it was written as the latest. A field
+pinned to a version (§5c) needs one. Values a reader builds carry the
+latest, so only a value that says an older version itself is written
+as one.
 
 **A struct without a version** — `%User{...}`, which mostly means text
 written by hand — **is read as the latest loaded version.** There is no
 way to read it as another; a document written for an older version
 says so with its tag, `%Config(2){...}`.
 
-**A struct reference names no version.** A field typed `User` accepts
-any version of `User`; the nested struct's own tag decides how it is
-read. `User(2)` is not a type expression.
+**A struct reference names no version, unless it pins one.** A field
+typed `User` accepts any version of `User`; the nested struct's own
+tag decides how it is read. `User(2)` pins version 2 (§5c).
 
 **Reading a struct by its version.** A reader compares the version a
 struct was written with against the versions it has loaded:
@@ -800,7 +928,8 @@ struct was written with against the versions it has loaded:
   own version's schema and handed to the schema's materializer, which
   upgrades it. Without a materializer it is an error
   (`schema/no-materializer`): reading old data as though it were the
-  latest would be a guess.
+  latest would be a guess. A field pinned to that version (§5c) is the
+  exception: it takes the struct as read, and needs no materializer.
 - **Older, and not loaded:** an error (`schema/unknown-version`), even
   with a materializer — without the writer's schema there are no field
   names to hand it.

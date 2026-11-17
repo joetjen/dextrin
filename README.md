@@ -246,7 +246,7 @@ have no schema language of their own; people use JSON Schema for them.
 | Decimals, ratios, dates, times, durations as types | ✓ | – | ~⁹ | ~¹⁰ | – | ~¹¹ |
 | Bytes holding an encoded document | ✓ | ✓ | – | ✓ | – | – |
 | Annotations and free metadata | ✓ | ✓ | ~¹² | – | ✓ | ✓ |
-| Closing a type to unknown fields | –¹³ | ✓ | ✓ | ✓ | – | ✓ |
+| Closing a type to unknown fields | ✓¹³ | ✓ | ✓ | ✓ | – | ✓ |
 | One test suite every implementation passes | ✓ | ~⁶ | – | – | – | – |
 
 ¹ Field numbers keep old readers working; checking a change takes a
@@ -264,25 +264,28 @@ validator opts in, and each implements the formats its own way.
 ¹⁰ Through tags and the prelude (`tdate`, `decfrac`); no durations.
 ¹¹ `decimal` and `timestamp`, with precision and offsets; no durations.
 ¹² `title` and `description` only.
-¹³ On purpose: see the next section.
+¹³ Open by default, closed with `- *`: see the next section.
 
-### Why a DXNS type is never closed
+### Why a DXNS type is open by default
 
 JSON Schema's `additionalProperties: false`, Ion Schema's `closed` and
-CDDL's maps refuse a field the schema does not list. DXNS has no such
-switch, for two reasons:
+CDDL's maps refuse a field the schema does not list. DXNS can too --
+`- *` in a body closes it, and `* K => V` types every extra instead
+(DXNS.md §4c) -- but a type is open unless it says so, for two reasons:
 
-- **Closing is the reader's choice, not the type's.** A config loader
-  wants a typo in a hand-written file caught; a message consumer wants a
-  newer producer's fields to pass through untouched. The same `Order`
-  schema serves both, so whether unknown fields are refused belongs to
-  the decode: `Dextrin.decode(text, registry: r, strict: true)` refuses
-  them (`schema/undeclared-field`), and without `strict:` they are kept
-  -- in `.dxnb` as one trailing item (DXNS.md §7) -- and written back out.
+- **Closing is mostly the reader's choice, not the type's.** A config
+  loader wants a typo in a hand-written file caught; a message consumer
+  wants a newer producer's fields to pass through untouched. The same
+  `Order` schema serves both, so whether unknown fields are refused
+  belongs to the decode: `Dextrin.decode(text, registry: r, strict:
+  true)` refuses them (`schema/undeclared-field`), and without `strict:`
+  they are kept -- in `.dxnb` as one trailing item (DXNS.md §7) -- and
+  written back out.
 - **A closed type breaks the next version.** Adding a field to a closed
   type makes every older reader refuse every newer message, which turns
   each compatible change into a breaking one. DXN's versions (below)
-  rest on readers that let what they do not know pass.
+  rest on readers that let what they do not know pass. Close a type
+  only where no newer writer will ever add to it.
 
 A check that needs more -- say, refusing exactly the fields another
 schema allows -- runs after the decode, on the value it returns, where
@@ -295,8 +298,9 @@ at once. DXNS makes that safe with versions, not with compatibility
 modes (DXNS.md §8):
 
 - **Every schema has a version**, `%schema(3){...}`, and every version
-  stays loadable beside the others. A writer always writes the latest it
-  has loaded, and says which: `%Order(3){...}`.
+  stays loadable beside the others. A writer writes the latest it has
+  loaded, and says which: `%Order(3){...}` -- unless a field is pinned
+  to an older one (DXNS.md §5c), whose struct is written at that.
 - **A newer message reaches an older reader**: it reads the fields it
   knows, by name in text and by position in `.dxnb`, and keeps the rest
   as extra fields. This is why a field is only ever *appended*: in
@@ -304,7 +308,8 @@ modes (DXNS.md §8):
 - **An older message reaches a newer reader** through the schema's
   *materializer*, one function per schema that upgrades the old fields
   to the latest version (`Dextrin.Registry.put_struct_materializer/3`).
-  Without one, reading the old version is an error, not a guess.
+  Without one, reading the old version is an error, not a guess -- unless
+  a field is pinned to it (DXNS.md §5c), which takes it as written.
 - **CI checks the discipline**: `mix dextrin.compat` compares the last
   release's schemas with the current ones. A version whose content
   changed is an error -- two documents claiming to be `Order` v3 must

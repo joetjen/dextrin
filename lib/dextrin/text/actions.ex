@@ -125,6 +125,13 @@ defmodule Dextrin.Text.Actions do
   # ---- rules --------------------------------------------------------------
 
   @impl true
+  def handle_rule(:symbol, %{IDENTIFIER: cap, version: _} = captures, ctx) do
+    with {:ok, name, ctx} <- cap.eval.(ctx),
+         {:ok, version, ctx} <- struct_version(captures, ctx) do
+      {:ok, Dextrin.Tuple.new([keyword_value("at", ctx), Symbol.new(name), version]), ctx}
+    end
+  end
+
   def handle_rule(:symbol, %{IDENTIFIER: cap}, ctx) do
     with {:ok, name, ctx} <- cap.eval.(ctx), do: {:ok, Symbol.new(name), ctx}
   end
@@ -195,11 +202,12 @@ defmodule Dextrin.Text.Actions do
          {:ok, bases} <- struct_bases(name, words) do
       cond do
         Map.has_key?(captures, :keyed) ->
-          with {:ok, {:keyed, pairs, extra, drops}, ctx} <- captures.keyed.eval.(ctx),
-               :ok <- drops_allowed(name, drops) do
-            if bases == [] and drops == [],
+          with {:ok, {:keyed, pairs, extra, drops, rest}, ctx} <- captures.keyed.eval.(ctx),
+               :ok <- drops_allowed(name, drops),
+               :ok <- rest_allowed(name, rest) do
+            if bases == [] and drops == [] and rest == nil,
               do: materialize_struct(name, {:keyed, pairs}, version, extra, ctx),
-              else: {:ok, built_from(name, pairs, version, extra, bases, drops), ctx}
+              else: {:ok, built_from(name, pairs, version, extra, {bases, drops, rest}), ctx}
           end
 
         Map.has_key?(captures, :positional) ->
@@ -221,21 +229,37 @@ defmodule Dextrin.Text.Actions do
     end
   end
 
-  # `- password`: an inherited field the schema or shape leaves out.
+  # `- password`: an inherited field the schema or shape leaves out;
+  # `- *` closes the body, kept as the drop of `"*"`, which no field
+  # name can be.
   def handle_rule(:drop_entry, %{field: field_cap}, ctx) do
     with {:ok, field, ctx} <- field_cap.eval.(ctx), do: {:ok, {:drop, symbol_name(field)}, ctx}
+  end
+
+  def handle_rule(:drop_entry, %{closed: _}, ctx), do: {:ok, {:drop, "*"}, ctx}
+
+  # `* :string => :integer`: the type every extra key and its value
+  # match (DXNS.md §4b).
+  def handle_rule(:rest_entry, %{rest_key: key_cap, rest_val: val_cap}, ctx) do
+    with {:ok, key, ctx} <- key_cap.eval.(ctx),
+         {:ok, val, ctx} <- val_cap.eval.(ctx) do
+      {:ok, {:rest, key, val}, ctx}
+    end
   end
 
   # A keyed struct's entries: those keyed by a name are its fields, any
   # other map key (DXN.md §1.6) an extra field.
   def handle_rule(:struct_keyed, captures, ctx) do
     with {:ok, pairs, ctx} <- eval_list(Map.get(captures, :map_entry, []), ctx),
-         {:ok, drops, ctx} <- eval_list(Map.get(captures, :drop_entry, []), ctx) do
+         {:ok, drops, ctx} <- eval_list(Map.get(captures, :drop_entry, []), ctx),
+         {:ok, rests, ctx} <- eval_list(Map.get(captures, :rest_entry, []), ctx),
+         {:ok, rest} <- one_rest(rests),
+         :ok <- closed_once(drops) do
       {named, extra} = Enum.split_with(pairs, fn {key, _value} -> field_name(key) != :error end)
 
       {:ok,
        {:keyed, Enum.map(named, fn {key, value} -> {Struct.extra_key(key), value} end), extra,
-        Enum.map(drops, fn {:drop, field} -> field end)}, ctx}
+        Enum.map(drops, fn {:drop, field} -> field end), rest}, ctx}
     end
   end
 
@@ -368,10 +392,31 @@ defmodule Dextrin.Text.Actions do
       {:error,
        action_error("only a %schema or a %shape drops a field (- name); %#{name} does not")}
 
-  # A `%schema` or `%shape` built from others stays as it is written: the
-  # schema compiler reads it (DXNS.md §4b).
-  defp built_from(name, pairs, version, extra, bases, drops),
-    do: %{Struct.keyed(name, pairs, version, extra) | bases: bases, drops: drops}
+  defp closed_once(drops) do
+    if Enum.count(drops, &(&1 == {:drop, "*"})) > 1,
+      do: {:error, action_error("a body is closed (- *) once at most")},
+      else: :ok
+  end
+
+  defp one_rest([]), do: {:ok, nil}
+  defp one_rest([{:rest, key, val}]), do: {:ok, {key, val}}
+
+  defp one_rest(_rests),
+    do: {:error, action_error("a body types its extras (* K => V) once at most")}
+
+  defp rest_allowed(_name, nil), do: :ok
+  defp rest_allowed(name, _rest) when name in ["schema", "shape"], do: :ok
+
+  defp rest_allowed(name, _rest),
+    do:
+      {:error,
+       action_error("only a %schema or a %shape types its extras (* K => V); %#{name} does not")}
+
+  # A `%schema` or `%shape` built from others, closed or with typed
+  # extras, stays as it is written: the schema compiler reads it
+  # (DXNS.md §4b).
+  defp built_from(name, pairs, version, extra, {bases, drops, rest}),
+    do: %{Struct.keyed(name, pairs, version, extra) | bases: bases, drops: drops, rest: rest}
 
   defp materialize_struct(name, fields, version, extra, ctx) do
     case ctx do
