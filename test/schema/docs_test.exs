@@ -31,6 +31,11 @@ defmodule Dextrin.Schema.DocsTest do
     Map.new(pages, fn {path, html} -> {path, IO.iodata_to_binary(html)} end)
   end
 
+  test "a page names no tool in its markup" do
+    pages = site(%{"a.dxns" => "%{T: :string}"})
+    for {_path, html} <- pages, do: refute(html =~ ~r/claude/i)
+  end
+
   test "a namespace is a directory, and its page that directory's index" do
     pages = site(%{"acme/shop/Order/v1.dxns" => "%{Order: %schema{id: :uuid}}"})
     assert Map.has_key?(pages, "acme/index.html")

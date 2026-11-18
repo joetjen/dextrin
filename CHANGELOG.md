@@ -103,6 +103,8 @@ What DXNS lacked to say every TypeSpec type exactly
 
 ### Fixed
 
+- `mix dextrin.docs` no longer writes a viewer-specific `viewport-fit-sides` meta tag into
+  every page: a hint a documentation site does not need.
 - **A schema tree loads a file after the base it is built from**: `mix dextrin.check` and `Dextrin.Schema.Tree.load/2`
   ordered the files by the names their fields use, not by the bases a
   `%schema` or `%shape` head names (DXNS.md §4b), so a file whose only
