@@ -227,6 +227,26 @@ defmodule Dextrin.Codegen.ElixirTest do
       assert message =~ "name"
     end
 
+    test "a required field that may be nil keeps its nil, and false stays false, through validate and to_dxn" do
+      root =
+        schemas_dir(%{
+          "a/Memo.dxns" =>
+            "%{Memo: %schema{note: {:nilable :string} done: :boolean tag?: :string}}"
+        })
+
+      p = prefix()
+      generate(root, p)
+      compile(root)
+      memo = mod(p, "A.Memo")
+
+      assert {:ok, %{note: nil, done: false} = read} =
+               memo.read(dxn("%a/Memo{note: nil done: false}"))
+
+      assert :ok = memo.validate(read)
+      assert %Dextrin.Struct{fields: {:keyed, pairs}} = memo.to_dxn(read)
+      assert pairs == [{"note", nil}, {"done", false}]
+    end
+
     test "to_dxn writes the struct back at the latest version", %{p: p} do
       customer = mod(p, "Acme.Shop.Customer")
       {:ok, read} = customer.read(dxn(~S|%acme.shop/Customer{name: "Ada"}|))

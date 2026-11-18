@@ -376,7 +376,8 @@ defmodule Dextrin.Codegen.Elixir do
 
       @doc "Whether `value`, this struct, is a valid #{name} at the latest version; `opts` as `read/2` takes them."
       def validate(%{__struct__: @owner} = value, opts \\\\ []) do
-        fields = value |> Map.from_struct() |> Enum.reject(fn {_k, v} -> is_nil(v) end) |> Map.new(fn {k, v} -> {Atom.to_string(k), v} end)
+        # A nil optional field is absent; a required one holds nil.
+        fields = value |> Map.from_struct() |> Enum.reject(fn {k, v} -> is_nil(v) and k not in #{inspect(required_atoms(latest))} end) |> Map.new(fn {k, v} -> {Atom.to_string(k), v} end)
         Runtime.reading(opts, fn -> with {:ok, _} <- conform_v#{latest.version}(fields), do: :ok end)
       end
 
@@ -384,8 +385,8 @@ defmodule Dextrin.Codegen.Elixir do
       def to_dxn(%{__struct__: @owner} = value) do
         pairs =
           for name <- #{inspect(Compiled.field_names(latest))},
-              v = Map.fetch!(value, String.to_atom(name)),
-              not is_nil(v),
+              v <- [Map.fetch!(value, String.to_atom(name))],
+              not is_nil(v) or name in #{inspect(for f <- latest.fields, f.required, do: f.name)},
               do: {name, Runtime.to_dxn(v)}
 
         Dextrin.Struct.keyed(#{inspect(name)}, pairs, @latest)
@@ -449,6 +450,10 @@ defmodule Dextrin.Codegen.Elixir do
       def __dextrin_slots__, do: Runtime.slots(__MODULE__, #{slots})
     """
   end
+
+  # The latest version's required fields, as struct keys.
+  defp required_atoms(%Compiled{fields: fields}),
+    do: for(f <- fields, f.required, do: String.to_atom(f.name))
 
   # The TypeExpr alias only where a check calls it.
   defp drop_unused_alias(source) do
