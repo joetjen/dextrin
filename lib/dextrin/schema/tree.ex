@@ -127,22 +127,22 @@ defmodule Dextrin.Schema.Tree do
 
   defp version_problem(%{layout: %{holder: holder, version: version}} = file)
        when is_binary(holder) and is_integer(version) do
-    case held(file, holder) do
-      %Struct{name: "schema"} = schema ->
-        if version_of(schema) == version,
+    case undoc(held(file, holder)) do
+      %Struct{name: kind} = schema when kind in ["schema", "type"] ->
+        if numbered(schema) == version,
           do: nil,
           else:
             problem(
               file.file,
               entry_line(file, holder),
-              "holds #{holder} as version #{version_of(schema)}, but its name says version #{version} (DXNS.md §6)"
+              "holds #{holder} as version #{numbered(schema)}, but its name says version #{version} (DXNS.md §6)"
             )
 
       _other ->
         problem(
           file.file,
           entry_line(file, holder),
-          "a versioned file holds a %schema(N), not #{holder}'s kind"
+          "a versioned file holds a %schema(N) or a %type(N), not #{holder}'s kind"
         )
     end
   end
@@ -175,7 +175,13 @@ defmodule Dextrin.Schema.Tree do
         {version, files} <- Enum.group_by(holders, &elem(&1, 1), &elem(&1, 0)),
         length(files) > 1 do
       [first | _] = files = Enum.sort(files)
-      what = if version == :type, do: name, else: "#{name} version #{version}"
+
+      what =
+        case version do
+          {:type, 1} -> name
+          {:type, n} -> "#{name} version #{n}"
+          n -> "#{name} version #{n}"
+        end
 
       problem(
         first,
@@ -185,8 +191,20 @@ defmodule Dextrin.Schema.Tree do
     end
   end
 
-  defp version_of(%Struct{name: "schema", version: version}), do: version || 1
-  defp version_of(_named_type), do: :type
+  # A schema's version, and a named type's (Way B): a plain definition is
+  # its version 1, `%type(N)[T]` version N.
+  defp version_of(entry) do
+    case undoc(entry) do
+      %Struct{name: "schema"} = schema -> numbered(schema)
+      %Struct{name: "type"} = type -> {:type, numbered(type)}
+      _plain -> {:type, 1}
+    end
+  end
+
+  defp numbered(%Struct{version: version}), do: version || 1
+
+  defp undoc(%Tuple{items: [%Keyword{name: "doc"}, inner, _notes]}), do: inner
+  defp undoc(other), do: other
 
   # The files in an order that compiles each after every file it refers
   # to; files that need each other are a problem, and are left out.

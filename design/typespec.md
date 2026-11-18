@@ -1,7 +1,8 @@
 # TypeSpec in DXNS
 
 Status: comparison and proposal, 2026-11-17 (T673); the gaps are
-built (see Decisions). The construct table is also the mapping the
+built (see Decisions), and the table below is what the T682 emitter writes
+(refreshed 2026-11-18). The construct table is also the mapping the
 TypeSpec-to-DXNS converter (T682) follows.
 
 ## Decisions (Jan, 2026-11-17)
@@ -79,7 +80,8 @@ the table assumes the recommended answers:
 | `numeric` | `:number` | exact (DXN also has rationals; no TypeSpec value is one) |
 | `integer`, `float`, `decimal` | `:integer`, `:float`, `:decimal` | exact |
 | `int32`, `int64`, `uint32`, `uint64`, `float32` | the sized sugar of the same name | exact |
-| `int8`, `int16`, `uint8`, `uint16`, `safeint` | `{:refine :integer %{min: .., max: ..}}` | exact; no sugar (G9) |
+| `int8`, `int16`, `uint8`, `uint16` | the sized sugar of the same name (G9) | exact |
+| `safeint` | `{:refine :integer %{min: .., max: ..}}` | exact |
 | `float64` | `:float` | exact |
 | `decimal128` | `{:refine :decimal %{max-precision: 34, min-exponent: -6176, max-exponent: 6111}}` | exact |
 | `string`, `boolean`, `bytes` | `:string`, `:boolean`, `:bytes` | exact |
@@ -105,13 +107,13 @@ the table assumes the recommended answers:
 | `model M { a: T; }` | `M: %shape{a: T}` | exact |
 | `b?: T` | `b?: T` | exact; neither treats optional as nullable |
 | `b?: T = v`, where `v` is a literal, `#{}` or `#[]` | `b?: %field{type: T, default: v}` | exact; DXNS also fills the default on decode, which TypeSpec leaves to emitters |
-| a default that is a constructor call (`utcDateTime.now()`) | none | **missing** (G8) |
+| a default that is a constructor call (`utcDateTime.now()`) | `%field{type: T, computed: :now}` (G8) | exact |
 | `...M` (spread) | `includes M`, or M's fields copied in place | exact: a shape's field order means nothing, and a `%schema` gets the fields copied in place |
 | `model D extends B` | `D: %shape extends B {...}` | exact, substitution included; TypeSpec's override must be assignable, and DXNS's substitution check refuses a wider one |
 | `model A is B` | `includes B`; if B extends C, `includes B extends C` | exact: `is` copies B and keeps B's own base link |
-| `model A is B<X>` (a template instance) | a base made by `{:of B X}` | **missing**: a base must be a named `%schema` or `%shape` (G6) |
+| `model A is B<X>` (a template instance) | `includes BX`, the instance's own `%schema` (T673 Q3) | exact |
 | `Record<T>` | `{:map-of :string T}` | exact |
-| `model P is Record<T> { a: T2; }` and `...Record<T>` (typed extra properties) | none | **missing** (G1) |
+| `model P is Record<T> { a: T2; }` and `...Record<T>` (typed extra properties) | `* :string => T - *` (G1, DXNS.md §4c) | exact |
 | inline `{ a: string }` | an inline `%shape{a: :string}` | exact |
 | inline `{ ...A; b: T }` | none: an inline built shape is refused | approx.: the converter names it, or flattens it (G6) |
 | property decorators | see §6 | |
@@ -121,11 +123,11 @@ the table assumes the recommended answers:
 
 | TypeSpec | DXNS | Verdict |
 |---|---|---|
-| `model Page<T> {...}` | `Page: {:generic [t] %shape{...}}` | exact |
+| `model Page<T> {...}` | not written itself; each instance used is a named `%schema` (T673 Q3) | exact |
 | `alias Foo<T> = ...` | `{:generic [t] ...}` | exact |
 | a templated union † | `{:generic [t] {:any-of ...}}` | exact |
-| a use, `Page<Dog>` | `{:of Page Dog}` | exact |
-| a parameter default, `T = string` | none | **missing** (G2) |
+| a use, `Page<Dog>` | `PageDog`, its own `%schema`; `@friendlyName` names it otherwise | exact |
+| a parameter default, `T = string` | the instance is written with it, and a defaulted trailing argument is left out of the name | exact |
 | a parameter constraint, `T extends string` | none | approx. for values (every instance is checked as written); lost: the authoring check on arguments (G2) |
 | named arguments, `Test<V = "x">` | none | exact: the converter puts them in order |
 | `valueof` parameters | none | approx.: they only feed decorators, so the converter instantiates them |
@@ -146,7 +148,7 @@ the table assumes the recommended answers:
 | `enum E { A, B }` (no values) | `{:enum "A" "B"}` | exact (the name is the value) |
 | enum spread `...E` | the members copied | exact |
 | `#deprecated` on a member | `values: %{v => %{deprecated: "..."}}` | exact |
-| `@discriminator("kind")` on `Pet`, with `Cat extends Pet { kind: "cat" }` | the shared fields as `PetBase`; `Cat: %shape extends PetBase {kind: {:const "cat"}, ...}`; `Pet: {:one-of Cat Dog}` | approx.: values are checked the same, but the discriminator hint is lost and the base is renamed (G3) |
+| `@discriminator("kind")` on `Pet`, with `Cat extends Pet { kind: "cat" }` | the shared fields as `PetBase`; `Cat: %schema extends PetBase {kind: {:const "cat"}, ...}`; `Pet: {:doc {:one-of Cat Dog} %{discriminator: :kind}}` (G3) | exact, the base renamed |
 | `@discriminated` union, envelope `"object"` | `%shape{kind: :string, value: {:case kind %{"cat" => Cat, ...}}}` | exact (property names from the options) |
 | `@discriminated`, envelope `"none"` | `{:one-of}` over the variants, each with a `{:const}` discriminator field | approx., as for `@discriminator` (G3) |
 
@@ -173,15 +175,15 @@ the table assumes the recommended answers:
 | `@minValue`, `@maxValue`, including dates and durations | `min`, `max` | exact |
 | `@minValueExclusive`, `@maxValueExclusive` | `exclusive-min`, `exclusive-max` | exact |
 | `@pattern(p)` | `pattern: @regex "p"` | exact: TypeSpec's regex subset is inside every DXNS engine |
-| `@pattern(p, message)` | the message is lost | **missing** (G5) |
+| `@pattern(p, message)` | `{:doc ... %{messages: %{pattern: message}}}` (G5) | exact |
 | `@format("uuid")`, a name in DXNS's closed set | `format: :uuid` | exact: DXNS checks it, as every TypeSpec JSON Schema consumer does |
 | `@format("x")` for any other name | `meta: %{"typespec.format" => "x"}` | approx.: TypeSpec checks nothing either; the name is kept, but not as a format (Q5) |
-| `@secret` | none | **missing** (G5) |
+| `@secret` | `secret: true` (G5) | exact |
 | `@doc`, `@summary` | `description`, `title` | exact |
 | `@example` | `examples` | approx.: an example's own title and description are lost |
 | `#deprecated "why"` | `deprecated: "why"` | exact |
-| `@key` | none | **missing** (G5) |
-| `@visibility` / Lifecycle (`Create`, `Read`, `Update`, `Delete`, `Query`) | `read-only: true` covers Read-only alone | **missing** for the rest (G5) |
+| `@key` | `key: true` (G5) | exact |
+| `@visibility` / Lifecycle (`Create`, `Read`, `Update`, `Delete`, `Query`) | `visibility: [:read ...]` (G5) | exact |
 | `Create<T>`, `Read<T>`, `Update<T>`, `@withOptionalProperties`, `@withoutOmittedProperties` and the other visibility transforms | the converter writes each instance as a built shape: `UserCreate: %shape includes User {- id}`, or overrides like `name?: T` for all-optional | exact |
 | `@encode` (`rfc3339`, `rfc7231`, `unixTimestamp`, `seconds`, `base64`, `base64url`, `ISO8601` †, `@encode(string)` on an `int64`) | logical types: the type stays; the encoding goes to `meta` | approx.: lost is how a JSON writer spells the value (Q2, G7) |
 | `@mediaTypeHint` | `media-type` on a string; otherwise `meta` | approx. |

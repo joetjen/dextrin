@@ -157,6 +157,25 @@ defmodule Dextrin.Schema.TreeTest do
       assert Dextrin.Schema.check(value, registry, "s.aa/T") == :ok
     end
 
+    test "versions of a named type, and a documented schema, each in a versioned file (Way B)" do
+      root =
+        tree(%{
+          "a/Color.dxns" => "%{Color: {:enum :red}}",
+          "a/Color-v2.dxns" =>
+            "%{Color: {:doc %type(2)[{:enum :red :blue}] %{description: \"v2\"}}}",
+          "a/Pet-v2.dxns" => "%{Pet: {:doc %schema(2){c: a/Color(1)} %{description: \"v2\"}}}"
+        })
+
+      assert {:ok, registry, _} = Tree.load([root])
+      assert {:ok, _} = Dextrin.Registry.fetch_type_version(registry, "a/Color", 2)
+    end
+
+    test "a versioned file whose %type says another version" do
+      root = tree(%{"a/Color-v2.dxns" => "%{Color: %type(3)[{:enum :red}]}"})
+      assert {:error, [%{message: message}]} = Tree.load([root])
+      assert message =~ "version 3"
+    end
+
     test "unless its namespace is declared extern" do
       root = tree(%{"a.dxns" => "%{A: %schema{m: other/Thing}}"})
       assert {:error, _} = Tree.load([root])

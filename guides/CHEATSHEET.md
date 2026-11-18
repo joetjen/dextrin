@@ -204,6 +204,7 @@ mix dextrin.decode data.dxnb [--out data.dxn]
 mix dextrin.format data.dxn [--mode pretty|condense] [--in-place]
 mix dextrin.compat old-schemas/ schemas/
 mix dextrin.check schemas/ [--extern NAMESPACE]... [--warnings-as-errors]
+mix dextrin.from_typespec main.tsp [--out schemas/]
 mix dextrin.from_json_schema schema.json [--out s.dxns] [--name Name] [--schemas DIR] [--draft D] [--mongo] [--structs] [--assert-formats] [--strict]
 mix dextrin.docs schemas/ [--out DIR] [--title TITLE]
 mix dextrin.gen.schema MyApp.SomeStruct [--out schema.dxns] [--name Name]

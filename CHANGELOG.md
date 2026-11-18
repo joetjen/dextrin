@@ -37,6 +37,14 @@ What DXNS lacked to say every TypeSpec type exactly
   strict decode or not. Both are inherited from bases.
 - **`min-count` and `max-count` on maps, shapes and structs** (DXNS.md
   §2): the entries present.
+- **`mix dextrin.from_typespec MAIN.tsp [--out DIR]`**: TypeSpec to DXNS,
+  by TypeSpec's own compiler with the `@joetjen/dextrin-typespec` emitter
+  (node-dextrin's packages/dextrin-typespec), through npx; one `.dxns` per
+  namespace, and per schema version in a versioned namespace
+  (design/typespec-emitter.md). Needs Node 22.
+- **A versioned file may hold a named type's version** (DXNS.md §6):
+  `Color-v2.dxns` with `%type(2)[T]`, and a `{:doc}` around a versioned
+  schema or type, are no longer refused by `mix dextrin.check`.
 - **`mix dextrin.from_json_schema`** and `Dextrin.Convert.JsonSchema`:
   JSON Schema to DXNS, drafts 04, 06, 07, 2019-09 and 2020-12, and
   MongoDB's `$jsonSchema` with `bsonType` (design/json-schema.md). It

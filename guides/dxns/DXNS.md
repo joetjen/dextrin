@@ -807,9 +807,12 @@ under its whole name: `Foo.Bar.Baz` is the entry `Foo.Bar.Baz` in
 
 - **The first search path that has the name at all decides**; later ones
   are not consulted for it.
-- **A file's version is its schema's.** `Baz-v2.dxns` holds `Baz` as
-  `%schema(2)`; one that holds another version is refused
-  (`schema/compile`).
+- **A file's version is its schema's, or its named type's.**
+  `Baz-v2.dxns` holds `Baz` as `%schema(2)`, or as `%type(2)[T]` for a
+  named type with versions (§5c); a `{:doc}` around either is fine. One
+  that holds another version is refused (`schema/compile`). A plain
+  named type is its version 1, so `Color.dxns` and `Color-v2.dxns` are
+  two versions, not one name twice.
 - **One version is found once.** Two files on one search path that both
   hold the same name and version (`Baz-v2.dxns` and `Baz/v2.dxns`, or
   either and the namespace file) are refused, naming both, rather than
