@@ -55,7 +55,10 @@ What DXNS lacked to say every TypeSpec type exactly
   reads and checks every version with code of its own -- no schema read at
   run time -- upgrades older versions to the latest (moving renamed fields
   itself; a changed type or a newly required field by a hand-written
-  `upgrade_vN/1`), marks a deprecated version `@deprecated`, and keeps the
+  `upgrade_vN/1`), marks a deprecated version `@deprecated` and warns
+  when data goes through anything deprecated, as Dextrin's reader does
+  (`deprecations:` and `on_deprecated:` on `read/2`, `validate/2` and
+  `P.Decoder.decode/2`; T698), and keeps the
   lines of its `# dextrin:keep` regions and the module names the user's
   files spell. `P.Decoder.decode/2` decodes DXN into the generated structs.
   `--check` fails CI on a stale file or an orphaned region.

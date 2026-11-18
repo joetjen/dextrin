@@ -11,6 +11,9 @@ defmodule Dextrin.Codegen.ElixirTest do
 
   alias Dextrin.Codegen.Elixir, as: Gen
 
+  # Reading a deprecated version warns through Logger (T698).
+  @moduletag :capture_log
+
   @schemas %{
     "acme/shop.dxns" => """
     %{
@@ -325,6 +328,148 @@ defmodule Dextrin.Codegen.ElixirTest do
       assert {:error, message} = decoder.decode(~S|[%acme.shop/Customer{}]|)
       assert message =~ "name"
       assert decoder.modules()["acme.shop/Customer"] == customer
+    end
+  end
+
+  # T698 (Jan, 2026-11-18, on T684's deviation b): "code generated to
+  # parse something marked deprecated should also log a warning" -- as
+  # Dextrin's own reader does (DXNS.md §1b), without loading a schema.
+  describe "deprecation warnings when data goes through generated code" do
+    @deprecated_schemas %{
+      "dep/Box.dxns" => ~S|%{Box: {:doc %schema(1){a: :string} %{deprecated: "use Box(2)"}}}|,
+      "dep/Box-v2.dxns" => "%{Box: %schema(2){a: :string b?: :string}}",
+      "dep/Old.dxns" => "%{Old: {:doc %schema{a: :string} %{deprecated: true}}}",
+      "dep.dxns" => """
+      %{
+        Color: {:doc {:enum :red :old} %{values: %{:old => %{deprecated: "use red"}}}}
+        Legacy: {:doc :string %{deprecated: "use text"}}
+        Cat: %shape{meows: :boolean}
+        Dog: {:doc %shape{barks: :boolean} %{deprecated: "no dogs"}}
+      }
+      """,
+      "dep/Item.dxns" => """
+      %{Item: %schema{
+        color?: dep/Color
+        note?: dep/Legacy
+        pet?: {:any-of dep/Dog dep/Cat}
+      }}
+      """
+    }
+
+    setup do
+      root = schemas_dir(@deprecated_schemas)
+      p = prefix()
+      generate(root, p)
+      compile(root)
+      me = self()
+      %{p: p, collect: [on_deprecated: &send(me, {:deprecated, &1})]}
+    end
+
+    test "a struct read at a deprecated version warns, once by default", %{p: p, collect: collect} do
+      box = mod(p, "Dep.Box")
+      v1 = dxn(~S|%dep/Box(1){a: "x"}|)
+
+      assert {:ok, %^box{a: "x"}} = box.read(v1, collect)
+      assert {:ok, _} = box.read(v1, collect)
+
+      assert_received {:deprecated,
+                       %{
+                         name: "dep/Box",
+                         version: 1,
+                         message: "use Box(2)",
+                         category: "schema/deprecated"
+                       }}
+
+      refute_received {:deprecated, _}
+
+      assert {:ok, _} = box.read(dxn(~S|%dep/Box(2){a: "x"}|), collect)
+      refute_received {:deprecated, _}
+    end
+
+    test "a schema whose latest version is deprecated warns whatever version is read", %{
+      p: p,
+      collect: collect
+    } do
+      assert {:ok, _} = mod(p, "Dep.Old").read(dxn(~S|%dep/Old{a: "x"}|), collect)
+      assert_received {:deprecated, %{name: "dep/Old", version: 1, message: nil}}
+    end
+
+    test ":every warns at each use, :off never, :error refuses", %{p: p, collect: collect} do
+      box = mod(p, "Dep.Box")
+      v1 = dxn(~S|%dep/Box(1){a: "x"}|)
+
+      for _ <- 1..2, do: assert({:ok, _} = box.read(v1, [deprecations: :every] ++ collect))
+      assert_received {:deprecated, _}
+      assert_received {:deprecated, _}
+
+      assert {:ok, _} = box.read(v1, [deprecations: :off] ++ collect)
+      refute_received {:deprecated, _}
+
+      assert {:error, message} = box.read(v1, [deprecations: :error] ++ collect)
+      assert message == "dep/Box(1) is deprecated: use Box(2)"
+      refute_received {:deprecated, _}
+    end
+
+    test "a deprecated type, enum value or variant warns when a value goes through it", %{
+      p: p,
+      collect: collect
+    } do
+      item = mod(p, "Dep.Item")
+      every = [deprecations: :every] ++ collect
+
+      assert {:ok, _} = item.read(dxn(~S|%dep/Item{color: :old}|), every)
+      assert_received {:deprecated, %{message: "use red"}}
+
+      assert {:ok, _} = item.read(dxn(~S|%dep/Item{color: :red note: "n"}|), every)
+      assert_received {:deprecated, %{message: "use text"}}
+      refute_received {:deprecated, _}
+
+      assert {:ok, _} = item.read(dxn(~S|%dep/Item{pet: %{barks: true}}|), every)
+      assert_received {:deprecated, %{message: "no dogs"}}
+    end
+
+    test "a deprecated variant tried and refused stays silent", %{p: p, collect: collect} do
+      item = mod(p, "Dep.Item")
+
+      assert {:ok, _} =
+               item.read(
+                 dxn(~S|%dep/Item{pet: %{meows: true}}|),
+                 [deprecations: :every] ++ collect
+               )
+
+      refute_received {:deprecated, _}
+    end
+
+    test "with :error, a deprecated value refuses the struct holding it", %{p: p} do
+      item = mod(p, "Dep.Item")
+      assert {:error, message} = item.read(dxn(~S|%dep/Item{color: :old}|), deprecations: :error)
+      assert message =~ "deprecated: use red"
+    end
+
+    test "without on_deprecated, the warning goes to Logger", %{p: p} do
+      box = mod(p, "Dep.Box")
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, _} = box.read(dxn(~S|%dep/Box(1){a: "x"}|))
+        end)
+
+      assert log =~ "dep/Box(1) is deprecated: use Box(2)"
+    end
+
+    test "Prefix.Decoder.decode/2 takes the same options", %{p: p, collect: collect} do
+      decoder = Module.concat([p, "Decoder"])
+
+      assert {:ok, [_, _]} =
+               decoder.decode(
+                 ~S|[%dep/Box(1){a: "x"} %dep/Box(1){a: "y"}]|,
+                 [deprecations: :every] ++ collect
+               )
+
+      assert_received {:deprecated, %{name: "dep/Box"}}
+      assert_received {:deprecated, %{name: "dep/Box"}}
+
+      assert {:error, _} = decoder.decode(~S|[%dep/Box(1){a: "x"}]|, deprecations: :error)
     end
   end
 

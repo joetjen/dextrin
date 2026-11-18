@@ -204,22 +204,30 @@ defmodule Dextrin.Codegen.Elixir do
       @doc "The module generated for each schema, by schema name."
       def modules, do: @modules
 
-      @doc "`text` decoded, its structs read into the generated modules: `{:ok, value}` or why not."
+      @doc \"""
+      `text` decoded, its structs read into the generated modules: `{:ok,
+      value}` or why not. `opts` are `Dextrin.decode/2`'s, and
+      `deprecations:` and `on_deprecated:` say how what is deprecated warns
+      (`Dextrin.Codegen.Runtime.reading/2`).
+      \"""
       def decode(text, opts \\\\ []) do
-        with {:ok, value} <- Dextrin.decode(text, opts), do: read(value)
+        {own, opts} = Keyword.split(opts, [:deprecations, :on_deprecated])
+        with {:ok, value} <- Dextrin.decode(text, opts), do: read(value, own)
       end
 
-      @doc "A decoded value with its structs read into the generated modules."
-      def read(%Dextrin.Struct{name: name} = struct) do
+      @doc "A decoded value with its structs read into the generated modules; `opts` as `decode/2` takes them."
+      def read(value, opts \\\\ []), do: Dextrin.Codegen.Runtime.reading(opts, fn -> walk(value) end)
+
+      defp walk(%Dextrin.Struct{name: name} = struct) do
         case Map.fetch(@modules, name) do
           {:ok, module} -> module.read(struct)
           :error -> {:ok, struct}
         end
       end
 
-      def read(list) when is_list(list) do
+      defp walk(list) when is_list(list) do
         Enum.reduce_while(list, {:ok, []}, fn item, {:ok, acc} ->
-          case read(item) do
+          case walk(item) do
             {:ok, item} -> {:cont, {:ok, [item | acc]}}
             error -> {:halt, error}
           end
@@ -227,16 +235,16 @@ defmodule Dextrin.Codegen.Elixir do
         |> then(fn {:ok, items} -> {:ok, Enum.reverse(items)}; error -> error end)
       end
 
-      def read(map) when is_map(map) and not is_struct(map) do
+      defp walk(map) when is_map(map) and not is_struct(map) do
         Enum.reduce_while(map, {:ok, %{}}, fn {k, v}, {:ok, acc} ->
-          case read(v) do
+          case walk(v) do
             {:ok, v} -> {:cont, {:ok, Map.put(acc, k, v)}}
             error -> {:halt, error}
           end
         end)
       end
 
-      def read(other), do: {:ok, other}
+      defp walk(other), do: {:ok, other}
     end
     """
     |> format!()
@@ -264,7 +272,18 @@ defmodule Dextrin.Codegen.Elixir do
   defp generated(name, versions, modules, registry) do
     module = modules[name]
     latest = List.last(versions)
-    state = %{fns: [], seen: %{}, next: 1, modules: modules, registry: registry, attrs: []}
+
+    state = %{
+      fns: [],
+      seen: %{},
+      next: 1,
+      modules: modules,
+      registry: registry,
+      attrs: [],
+      slots: 0
+    }
+
+    {deprecated_versions, state} = deprecated_versions(name, versions, state)
 
     {version_code, state} =
       Enum.map_reduce(versions, state, fn compiled, state -> version_code(compiled, state) end)
@@ -298,11 +317,15 @@ defmodule Dextrin.Codegen.Elixir do
           @doc "The DXNS schema this struct is."
           def __dextrin_schema__, do: #{inspect(name)}
 
-          @doc "A decoded `%#{name}{}` of any known version, read into this struct."
-          def read(value), do: #{module}.Gen.read(value)
+          @doc \"""
+          A decoded `%#{name}{}` of any known version, read into this struct.
+          `opts`: `deprecations:` and `on_deprecated:`, as `Dextrin.decode/2`
+          takes them.
+          \"""
+          def read(value, opts \\\\ []), do: #{module}.Gen.read(value, opts)
 
-          @doc "Whether this struct is a valid #{name}."
-          def validate(value), do: #{module}.Gen.validate(value)
+          @doc "Whether this struct is a valid #{name}; `opts` as `read/2` takes them."
+          def validate(value, opts \\\\ []), do: #{module}.Gen.validate(value, opts)
 
           @doc "This struct as DXN, at the latest version."
           def to_dxn(value), do: #{module}.Gen.to_dxn(value)
@@ -310,21 +333,29 @@ defmodule Dextrin.Codegen.Elixir do
       end
 
     #{Enum.map_join(Enum.reverse(state.attrs), "", &"  #{&1}\n")}
-      @doc "A decoded struct of any known version, read and upgraded to the latest."
-      def read(%Dextrin.Struct{name: #{inspect(name)}, version: version, fields: fields}) do
+    #{on_load(state)}
+      @doc \"""
+      A decoded struct of any known version, read and upgraded to the
+      latest, warning of what is deprecated as `opts` say
+      (`Dextrin.Codegen.Runtime.reading/2`).
+      \"""
+      def read(value, opts \\\\ []), do: Runtime.reading(opts, fn -> read_any(value) end)
+
+      defp read_any(%Dextrin.Struct{name: #{inspect(name)}, version: version, fields: fields}) do
+    #{deprecated_versions}
         case version || @latest do
     #{Enum.map_join(versions, "", fn c -> "      #{c.version} -> with {:ok, f} <- Runtime.named(fields, #{inspect(Compiled.field_names(c))}), do: read_v#{c.version}(f)\n" end)}      v when v > @latest -> with {:ok, f} <- Runtime.named(fields, #{inspect(Compiled.field_names(latest))}), do: read_v#{latest.version}(f)
           v -> {:error, "#{name} version \#{v} is not known"}
         end
       end
 
-      def read(%{__struct__: @owner} = value), do: {:ok, value}
-      def read(other), do: {:error, "expected a #{name}, got " <> Runtime.show(other)}
+      defp read_any(%{__struct__: @owner} = value), do: {:ok, value}
+      defp read_any(other), do: {:error, "expected a #{name}, got " <> Runtime.show(other)}
 
-      @doc "Whether `value`, this struct, is a valid #{name} at the latest version."
-      def validate(%{__struct__: @owner} = value) do
+      @doc "Whether `value`, this struct, is a valid #{name} at the latest version; `opts` as `read/2` takes them."
+      def validate(%{__struct__: @owner} = value, opts \\\\ []) do
         fields = value |> Map.from_struct() |> Enum.reject(fn {_k, v} -> is_nil(v) end) |> Map.new(fn {k, v} -> {Atom.to_string(k), v} end)
-        with {:ok, _} <- conform_v#{latest.version}(fields), do: :ok
+        Runtime.reading(opts, fn -> with {:ok, _} <- conform_v#{latest.version}(fields), do: :ok end)
       end
 
       @doc "This struct as a `Dextrin.Struct` at the latest version."
@@ -347,6 +378,54 @@ defmodule Dextrin.Codegen.Elixir do
     """
     |> drop_unused_alias()
     |> format!()
+  end
+
+  # The lines that note a struct read at a deprecated version, or of a
+  # schema whose latest version is deprecated -- the whole schema -- with
+  # each version's slot and warning; none when no version is deprecated.
+  defp deprecated_versions(name, versions, state) do
+    {pairs, state} =
+      Enum.flat_map_reduce(versions, state, fn %Compiled{version: v, annotations: notes}, state ->
+        case Dextrin.Schema.Deprecations.reason(notes) do
+          {:deprecated, why} ->
+            {slot, state} = slot(state)
+
+            {[
+               "#{v} => {#{slot}, Dextrin.Schema.Deprecations.warning(#{inspect(name)}, #{v}, #{inspect(why)})}"
+             ], state}
+
+          :none ->
+            {[], state}
+        end
+      end)
+
+    code =
+      if pairs == [],
+        do: "",
+        else: """
+        deprecated = %{#{Enum.join(pairs, ", ")}}
+
+        for at <- Enum.uniq([version || @latest, @latest]),
+            {slot, warning} <- [deprecated[at]],
+            do: Runtime.deprecated(__MODULE__, slot, warning)
+        """
+
+    {code, state}
+  end
+
+  # The next slot of the module's "once" state.
+  defp slot(state), do: {state.slots + 1, %{state | slots: state.slots + 1}}
+
+  # The module's "once" state, made when it loads -- where it has
+  # something deprecated.
+  defp on_load(%{slots: 0}), do: ""
+
+  defp on_load(%{slots: slots}) do
+    """
+      @on_load :__dextrin_slots__
+      @doc false
+      def __dextrin_slots__, do: Runtime.slots(__MODULE__, #{slots})
+    """
   end
 
   # The TypeExpr alias only where a check calls it.
@@ -593,9 +672,14 @@ defmodule Dextrin.Codegen.Elixir do
     {"if #{guard}, do: #{ok()}, else: #{err(name)}", state}
   end
 
-  defp type_body({:doc, type, _notes}, state) do
+  defp type_body({:doc, type, notes}, state) do
     {fun, state} = type_fun(type, state)
-    {"#{fun}(v)", state}
+    {whole, state} = deprecated_node(notes, state)
+    {values, state} = deprecated_values(notes, state)
+
+    if whole == "" and values == "",
+      do: {"#{fun}(v)", state},
+      else: {"with {:ok, v} <- #{fun}(v) do\n#{whole}#{values}#{ok()}\nend", state}
   end
 
   defp type_body({:nilable, type}, state) do
@@ -692,12 +776,12 @@ defmodule Dextrin.Codegen.Elixir do
     body =
       case kind do
         :any_of ->
-          "Enum.find_value(#{list(funs)}, #{err("one of its variants")}, fn f -> case f.(v) do {:ok, _} = ok -> ok; _ -> nil end end)"
+          "Enum.find_value(#{list(funs)}, #{err("one of its variants")}, fn f -> case Runtime.attempt(f, v) do {:ok, _} = ok -> ok; _ -> nil end end)"
 
         :one_of ->
           """
-          case Enum.filter(#{list(funs)}, &match?({:ok, _}, &1.(v))) do
-            [f] -> f.(v)
+          case Enum.flat_map(#{list(funs)}, fn f -> case Runtime.attempt(f, v) do {:ok, _} = ok -> [ok]; _ -> [] end end) do
+            [ok] -> ok
             [] -> #{err("one of its variants")}
             _ -> {:error, "more than one variant takes " <> Runtime.show(v)}
           end
@@ -713,7 +797,7 @@ defmodule Dextrin.Codegen.Elixir do
   defp type_body({:not, type}, state) do
     {fun, state} = type_fun(type, state)
 
-    {"case #{fun}(v) do {:ok, _} -> {:error, Runtime.show(v) <> \" is what is excluded\"}; _ -> #{ok()} end",
+    {"case Runtime.attempt(&#{fun}/1, v) do {:ok, _} -> {:error, Runtime.show(v) <> \" is what is excluded\"}; _ -> #{ok()} end",
      state}
   end
 
@@ -721,7 +805,7 @@ defmodule Dextrin.Codegen.Elixir do
     {tf, state} = type_fun(test, state)
     {thf, state} = type_fun(then, state)
     {ef, state} = type_fun(otherwise, state)
-    {"case #{tf}(v) do {:ok, _} -> #{thf}(v); _ -> #{ef}(v) end", state}
+    {"case Runtime.attempt(&#{tf}/1, v) do {:ok, _} -> #{thf}(v); _ -> #{ef}(v) end", state}
   end
 
   defp type_body({:reference, name}, state) do
@@ -773,6 +857,61 @@ defmodule Dextrin.Codegen.Elixir do
 
   defp type_body(type, _state),
     do: raise(ArgumentError, "a type the generator does not write yet: #{inspect(type)}")
+
+  # A `{:doc}` that deprecates what it stands on: noted when a value goes
+  # through it. Its name is its title, as Dextrin's reader says it.
+  defp deprecated_node(notes, state) do
+    case Dextrin.Schema.Deprecations.reason(notes) do
+      {:deprecated, why} ->
+        {slot, state} = slot(state)
+        attr = "@w#{state.next}"
+
+        warning =
+          "Dextrin.Schema.Deprecations.warning(#{inspect(notes["title"])}, nil, #{inspect(why)})"
+
+        state = %{state | next: state.next + 1, attrs: ["#{attr} #{warning}" | state.attrs]}
+        {"Runtime.deprecated(__MODULE__, #{slot}, #{attr})\n", state}
+
+      :none ->
+        {"", state}
+    end
+  end
+
+  # An enum's deprecated values (`values:`), each noted when it is the
+  # value.
+  defp deprecated_values(%{"values" => values}, state) when is_map(values) do
+    {entries, state} =
+      values
+      |> Enum.filter(fn {_literal, notes} ->
+        is_map(notes) and Dextrin.Schema.Deprecations.reason(notes) != :none
+      end)
+      |> Enum.sort_by(fn {literal, _} -> dxn_text(literal) end)
+      |> Enum.map_reduce(state, fn {literal, notes}, state ->
+        {:deprecated, why} = Dextrin.Schema.Deprecations.reason(notes)
+        {slot, state} = slot(state)
+
+        {"{Runtime.value!(#{inspect(dxn_text(literal))}), #{slot}, Dextrin.Schema.Deprecations.warning(nil, nil, #{inspect(why)})}",
+         state}
+      end)
+
+    case entries do
+      [] ->
+        {"", state}
+
+      _ ->
+        attr = "@dv#{state.next}"
+
+        state = %{
+          state
+          | next: state.next + 1,
+            attrs: ["#{attr} [#{Enum.join(entries, ", ")}]" | state.attrs]
+        }
+
+        {"Runtime.deprecated_value(__MODULE__, v, #{attr})\n", state}
+    end
+  end
+
+  defp deprecated_values(_notes, state), do: {"", state}
 
   defp list(funs), do: "[" <> Enum.map_join(funs, ", ", &"&#{&1}/1") <> "]"
 

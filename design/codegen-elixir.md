@@ -170,8 +170,8 @@ Built as above, with these differences, found while building:
   than `%X{}`, so neither waits on the other to compile.
 - **One function per version** (`read_v1/1`, `conform_v1/1`,
   `upgrade_v1/1`), so `@deprecated` marks exactly the deprecated version.
-  The runtime deprecation warning (G10) is not emitted by generated code
-  yet: Dextrin's comes from a registry, which it does not use.
+  The runtime deprecation warning (G10) came in a second round (T698,
+  below).
 - **Hand-written upgrades**: a step that needs one calls
   `X.upgrade_vN/1`; `X.Gen` declares it a `@callback` and `X` takes the
   behaviour, so a missing one is a compile warning (an error under
@@ -186,3 +186,42 @@ Built as above, with these differences, found while building:
   named types (recursive ones included), references, enums, unions,
   `{:if}`, `{:not}`, `{:nilable}`, lists, maps and every other refine key
   are generated.
+
+## Jan on the differences (2026-11-18)
+
+- `P.Decoder.decode/2` instead of `P.registry/0`: accepted.
+- The constructs not generated yet: accepted; each comes as a task when
+  T690 needs it.
+- The runtime deprecation warning, Jan: "code generated to parse
+  something marked deprecated should also log a warning" -- built as
+  T698.
+
+## Deprecation warnings (T698)
+
+Generated code warns as Dextrin's reader does (DXNS.md §1b) when data
+goes through something deprecated: a struct read at a deprecated version,
+any struct of a schema whose latest version is deprecated, and a value
+accepted by a deprecated type, field type, variant or enum value. The
+warning is `Dextrin.Schema.Deprecations`' own -- name, version, reason,
+category `schema/deprecated` -- and so is its text.
+
+- **Options**: `read/2` and `validate/2` of every generated module and
+  `P.Decoder.decode/2` take `deprecations:` (`:once`, the default,
+  `:every`, `:off`, `:error`) and `on_deprecated:` (a function, in place
+  of `Logger.warning`).
+- **Noted, then settled**: while a value is read, what it went through is
+  noted; the outermost read settles the notes when it ends
+  (`Dextrin.Codegen.Runtime.reading/2`). So a variant tried and refused
+  stays silent -- its notes are dropped -- and `:error` refuses the whole
+  value, whichever check noted it. A read that fails anyway reports
+  nothing. The read's options and notes live in the process dictionary
+  for as long as it runs, so the type functions keep one argument.
+- **Once** is per generated module and deprecated thing, where the
+  reader's is per registry: there is no registry. Each module with
+  something deprecated numbers it when generated and keeps an `:atomics`
+  array in `:persistent_term`, made by its `@on_load`; loading the module
+  again starts it afresh. A named type used by two schemas can therefore
+  warn once from each.
+- Without options -- a generated function called outside `read/2`, such
+  as `read_v1/1` directly -- a note is settled at once, as `:once`, to
+  the log.
