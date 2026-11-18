@@ -198,7 +198,8 @@ the table assumes the recommended answers:
 | `@added`, `@removed` on a model, property, enum member or variant | a new version of whatever holds it | exact |
 | `@madeOptional`, `@madeRequired` | the projection's `?` | exact |
 | `@typeChangedFrom` | the projection's type | exact |
-| `@renamedFrom` | a new name, the old one in `meta` | approx.: only a materializer links the two |
+| `@renamedFrom` on a property | the field under its new name in the version that renames it, `meta: %{"typespec.renamed-from" => old}` | exact; the generated upgrade moves it (T684) |
+| `@renamedFrom` on a model or named type | a new name, the old one in `meta` | approx.: only a materializer links the two |
 | `@returnTypeChangedFrom` | the API layer | n/a |
 | `@useDependency` | the converter picks the dependency's version | exact |
 

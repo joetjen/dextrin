@@ -374,7 +374,8 @@ So a change deploys like this:
   tree of `.dxns` files), `docs`, `from_json_schema` (JSON Schema,
   drafts 04 to 2020-12, and MongoDB's `$jsonSchema`, to DXNS),
   `from_typespec` (TypeSpec to DXNS, through TypeSpec's compiler and the
-  `@joetjen/dextrin-typespec` emitter),
+  `@joetjen/dextrin-typespec` emitter), `gen.elixir` (Elixir modules that
+  read and check every version of a schema with generated code),
   `gen.schema` (scaffold a `.dxns` file from an existing Elixir
   struct), and `gen.unicode` (regenerate the grammar's Unicode
   identifier ranges from the latest UCD data).

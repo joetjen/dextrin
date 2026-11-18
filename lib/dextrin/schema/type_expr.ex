@@ -1018,6 +1018,32 @@ defmodule Dextrin.Schema.TypeExpr do
   @spec resolutions() :: [String.t()]
   def resolutions, do: Map.keys(@resolutions)
 
+  @doc """
+  Whether `value` is of the primitive type `name` (`"integer"`,
+  `"string"`, ...): the leaf check generated code calls (T684,
+  design/codegen-elixir.md), the same one `conform/3` makes.
+  """
+  @spec primitive?(String.t(), term()) :: boolean()
+  def primitive?(name, value), do: primitive_matches?(name, value)
+
+  @doc """
+  Whether `value`, already of `base`, meets every refine constraint in
+  `constraints` -- those whose argument is a value, not a type
+  (`contains`, `content`, `encodes`, `encodes-seq` are checked by the
+  caller). The leaf check generated code calls (T684).
+  """
+  @spec constraints?(term(), %{optional(String.t()) => term()}, t()) :: boolean()
+  def constraints?(value, constraints, base),
+    do: satisfies_constraints?(value, constraints, base, context(nil))
+
+  @doc """
+  Whether `value` is one of `literals`, as `{:enum ...}` compares them
+  (a keyword equal to an atom of its name). The leaf check generated code
+  calls (T684).
+  """
+  @spec enum_member?([term()], term()) :: boolean()
+  def enum_member?(literals, value), do: Enum.any?(literals, &keyword_aware_eq?(&1, value))
+
   # Every constraint holds. A constraint on a value it does not apply to
   # -- a length on an integer, a range on a string -- refuses it (DXN.md
   # §4.2, Jan, 2026-10-20).

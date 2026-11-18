@@ -37,6 +37,16 @@ What DXNS lacked to say every TypeSpec type exactly
   strict decode or not. Both are inherited from bases.
 - **`min-count` and `max-count` on maps, shapes and structs** (DXNS.md
   §2): the entries present.
+- **`mix dextrin.gen.elixir SCHEMAS --prefix P --out DIR [--check]`** and
+  `Dextrin.Codegen.Elixir`: Elixir modules from DXNS (design/codegen-elixir.md).
+  Per schema, a file of the user's, written once, and a generated one that
+  reads and checks every version with code of its own -- no schema read at
+  run time -- upgrades older versions to the latest (moving renamed fields
+  itself; a changed type or a newly required field by a hand-written
+  `upgrade_vN/1`), marks a deprecated version `@deprecated`, and keeps the
+  lines of its `# dextrin:keep` regions and the module names the user's
+  files spell. `P.Decoder.decode/2` decodes DXN into the generated structs.
+  `--check` fails CI on a stale file or an orphaned region.
 - **`mix dextrin.from_typespec MAIN.tsp [--out DIR]`**: TypeSpec to DXNS,
   by TypeSpec's own compiler with the `@joetjen/dextrin-typespec` emitter
   (node-dextrin's packages/dextrin-typespec), through npx; one `.dxns` per
