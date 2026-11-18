@@ -177,6 +177,9 @@ Built as above, with these differences, found while building:
   behaviour, so a missing one is a compile warning (an error under
   `--warnings-as-errors`). The step's region runs before the callback
   and may prepare the fields for it; it does not replace it.
+- **Upgrades** run through every version there is, also where version
+  numbers skip (1, 3, 5); a field added with a default gets it in the
+  step. A closed schema (`- *`) refuses a field it does not declare.
 - **A region the user invents** where no slot is becomes an orphan at once
   (not placed after the line before it): simpler to reason about, and its
   code is still never lost.

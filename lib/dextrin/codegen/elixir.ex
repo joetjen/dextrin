@@ -463,7 +463,11 @@ defmodule Dextrin.Codegen.Elixir do
   # One version's functions: read (check, fill defaults, upgrade to the
   # latest) and conform (check and fill defaults). A deprecated version's
   # are marked (G10).
-  defp version_code(%Compiled{version: v, fields: fields, annotations: notes}, state) do
+  defp version_code(%Compiled{version: v, fields: fields, annotations: notes} = compiled, state) do
+    if compiled.extras.entries != [],
+      do:
+        raise(Unsupported, message: "typed extras (`* K => V`) are not generated yet", version: v)
+
     {checks, state} =
       Enum.map_reduce(fields, state, fn field, state ->
         {fun, state} =
@@ -496,7 +500,7 @@ defmodule Dextrin.Codegen.Elixir do
 
       @doc "Fields as version #{v} says them: checked, defaults filled."
       #{deprecated}def conform_v#{v}(fields) do
-        Enum.reduce_while(
+        #{closed_open(compiled)}Enum.reduce_while(
           [#{Enum.join(checks, ", ")}],
           {:ok, %{}},
           fn check, {:ok, acc} ->
@@ -507,6 +511,7 @@ defmodule Dextrin.Codegen.Elixir do
             end
           end
         )
+        #{closed_close(compiled)}
       end
     """
 
@@ -544,6 +549,17 @@ defmodule Dextrin.Codegen.Elixir do
     do: "Dextrin.Schema.Field.filled(#{inspect(computed)})"
 
   defp default_code(default), do: "Runtime.value!(#{inspect(dxn_text(default))})"
+
+  # A closed version (`- *`, DXNS.md §4c) refuses a field it does not
+  # declare, before any field is checked: the start of a `with` that
+  # `closed_close/1` ends.
+  defp closed_open(%Compiled{extras: %{closed: true}} = compiled),
+    do: "with :ok <- Runtime.closed(fields, #{inspect(Compiled.field_names(compiled))}) do\n"
+
+  defp closed_open(_compiled), do: ""
+
+  defp closed_close(%Compiled{extras: %{closed: true}}), do: "end\n"
+  defp closed_close(_compiled), do: ""
 
   # A field's check function, or nil for a field that must be absent
   # (`:never`): it needs none, and one that only refuses would leave the
@@ -602,12 +618,23 @@ defmodule Dextrin.Codegen.Elixir do
           # A field whose type changed, or that became required, is
           # carried into the hand-written step, under its new name.
           cond do
-            old == nil and (not field.required or field.default != :none) -> {:added, field.name}
-            old == nil -> {:hand, field.name}
-            meaning(old.type) != meaning(field.type) -> {:hand, old.name, field.name}
-            field.required and not old.required -> {:hand, old.name, field.name}
-            old.name != field.name -> {:move, old.name, field.name}
-            true -> {:keep, field.name}
+            old == nil and (not field.required or field.default != :none) ->
+              {:added, field.name, field.default}
+
+            old == nil ->
+              {:hand, field.name}
+
+            meaning(old.type) != meaning(field.type) ->
+              {:hand, old.name, field.name}
+
+            field.required and not old.required ->
+              {:hand, old.name, field.name}
+
+            old.name != field.name ->
+              {:move, old.name, field.name}
+
+            true ->
+              {:keep, field.name}
           end
         end)
 
@@ -660,6 +687,11 @@ defmodule Dextrin.Codegen.Elixir do
       Enum.map_join(upgrades, "\n", fn %{from: from, to: to} = up ->
         moves =
           for(step <- up.steps, moved = moved(step), moved != nil, do: moved) ++
+            for(
+              {:added, new, default} <- up.steps,
+              default != :none,
+              do: "fields = Map.put_new(fields, #{inspect(new)}, #{default_code(default)})\n"
+            ) ++
             for(old <- up.dropped, do: "fields = Map.delete(fields, #{inspect(old)})\n")
 
         tail = if up.hand, do: "@owner.upgrade_v#{from}(fields)", else: "fields"
@@ -676,9 +708,11 @@ defmodule Dextrin.Codegen.Elixir do
         """
       end)
 
+    # Each step leads to the next version there is: versions may skip
+    # numbers (1, 3, 5).
     clauses =
-      Enum.map_join(upgrades, "", fn %{from: from} ->
-        "  defp upgrade_from(#{from}, fields), do: upgrade_from(#{from + 1}, upgrade_v#{from}(fields))\n"
+      Enum.map_join(upgrades, "", fn %{from: from, to: to} ->
+        "  defp upgrade_from(#{from}, fields), do: upgrade_from(#{to}, upgrade_v#{from}(fields))\n"
       end)
 
     _ = versions
@@ -1060,6 +1094,8 @@ defmodule Dextrin.Codegen.Elixir do
     orphans =
       for {name, body} <- Enum.sort(kept), not MapSet.member?(slots, name) do
         orphan = if String.starts_with?(name, "orphaned_"), do: name, else: "orphaned_" <> name
+        # An orphan orphaned again keeps one note, not one per run.
+        body = String.replace(body, ~r/\A\s*# Was in the region [^\n]*\n/, "")
 
         "  # dextrin:keep #{orphan}\n  # Was in the region #{String.replace_prefix(name, "orphaned_", "")}, whose place is gone: move it, or delete it.\n#{body}  # dextrin:end #{orphan}\n"
       end

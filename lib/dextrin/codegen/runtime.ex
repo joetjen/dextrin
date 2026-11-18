@@ -48,6 +48,21 @@ defmodule Dextrin.Codegen.Runtime do
   defp key_name(key) when is_binary(key), do: key
   defp key_name(_key), do: nil
 
+  @doc """
+  `:ok` when every field of `map` is one of `names`, as a closed schema
+  (`- *`) requires; otherwise why not, naming the first other field.
+  """
+  @spec closed(map(), [String.t()]) :: :ok | {:error, String.t()}
+  def closed(map, names) do
+    case undeclared(map, names) do
+      [] ->
+        :ok
+
+      [{key, _} | _] ->
+        {:error, "field #{show(key)} is not declared, and the schema takes no other"}
+    end
+  end
+
   @doc "A struct's fields by name: keyed as they are, positional by `names`."
   @spec named(Dextrin.Struct.fields(), [String.t()]) :: {:ok, map()} | {:error, String.t()}
   def named({:keyed, pairs}, _names), do: {:ok, Map.new(pairs)}

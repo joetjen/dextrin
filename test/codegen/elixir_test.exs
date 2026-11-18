@@ -263,6 +263,37 @@ defmodule Dextrin.Codegen.ElixirTest do
                pet.read(dxn(~S|%acme.shop/Pet(2){name: "Rex" color: "blue" born: "2019"}|))
     end
 
+    test "a field added with a default is filled when an older version is upgraded" do
+      root =
+        schemas_dir(%{
+          "a/Box.dxns" => "%{Box: %schema(1){a: :string}}",
+          "a/Box-v2.dxns" =>
+            ~S|%{Box: %schema(2){a: :string b: %field{type: :string default: "x"}}}|
+        })
+
+      p = prefix()
+      generate(root, p)
+      compile(root)
+      assert {:ok, %{a: "A", b: "x"}} = mod(p, "A.Box").read(dxn(~S|%a/Box(1){a: "A"}|))
+    end
+
+    test "versions with gaps between them are upgraded through every step" do
+      root =
+        schemas_dir(%{
+          "a/Box.dxns" => "%{Box: %schema(1){a: :string x: :string}}",
+          "a/Box-v3.dxns" => "%{Box: %schema(3){a: :string x: :string z?: :string}}",
+          "a/Box-v5.dxns" =>
+            ~S|%{Box: %schema(5){a: :string y: {:doc :string %{meta: %{"typespec.renamed-from" => "x"}}} z?: :string}}|
+        })
+
+      p = prefix()
+      generate(root, p)
+      compile(root)
+      box = mod(p, "A.Box")
+      assert {:ok, %{a: "A", y: "X"}} = box.read(dxn(~S|%a/Box(1){a: "A" x: "X"}|))
+      assert {:ok, %{y: "X"}} = box.read(dxn(~S|%a/Box(3){a: "A" x: "X"}|))
+    end
+
     test "a deprecated version's functions are marked" do
       root = schemas_dir()
       generate(root, prefix())
@@ -314,6 +345,10 @@ defmodule Dextrin.Codegen.ElixirTest do
       text = File.read!(gen)
       assert text =~ "# dextrin:keep orphaned_upgrade_v1"
       assert text =~ ~S|fields = Map.put(fields, "x", 1)|
+
+      # Regenerating keeps the orphan as it is: one note, not one per run.
+      generate(root, p)
+      assert File.read!(gen) == text
 
       assert {:error, problems} =
                Gen.check([Path.join(root, "schemas")], prefix: p, out: Path.join(root, "lib"))
@@ -543,6 +578,31 @@ defmodule Dextrin.Codegen.ElixirTest do
       assert pair == "a/Pair(1): field pair: {:tuple-of ...} is not generated yet"
       assert tags =~ "a/Tags(1): field tags:"
       refute File.exists?(Path.join(root, "lib"))
+    end
+
+    test "typed extras on a schema itself are refused too" do
+      root = schemas_dir(%{"a/Ext.dxns" => "%{Ext: %schema{a: :string * :string => :integer}}"})
+
+      assert {:error, [problem]} =
+               Gen.write([Path.join(root, "schemas")],
+                 prefix: prefix(),
+                 out: Path.join(root, "lib")
+               )
+
+      assert problem =~ "a/Ext(1): typed extras"
+    end
+  end
+
+  describe "a closed schema (- *)" do
+    test "refuses a field it does not declare" do
+      root = schemas_dir(%{"a/Shut.dxns" => "%{Shut: %schema{a: :string - *}}"})
+      p = prefix()
+      generate(root, p)
+      compile(root)
+      shut = mod(p, "A.Shut")
+      assert {:ok, %{a: "x"}} = shut.read(dxn(~S|%a/Shut{a: "x"}|))
+      assert {:error, why} = shut.read(dxn(~S|%a/Shut{a: "x" b: 1}|))
+      assert why =~ "b"
     end
   end
 
