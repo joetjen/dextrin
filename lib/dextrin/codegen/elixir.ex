@@ -28,6 +28,13 @@ defmodule Dextrin.Codegen.Elixir do
 
   alias Dextrin.Schema.{Compiled, Field, Tree}
 
+  defmodule Unsupported do
+    @moduledoc false
+    # A form the generator does not write yet; `version` and the field
+    # are added on the way out, so the refusal names where it stands.
+    defexception [:message, :version]
+  end
+
   @schema_tag "# dextrin:schema "
 
   @typedoc "What `write/2` and `check/2` take."
@@ -96,19 +103,31 @@ defmodule Dextrin.Codegen.Elixir do
         decoder =
           {Path.join(out, "decoder.gen.ex"), decoder_file(prefix, names, modules), :generated}
 
-        {:ok,
-         [decoder] ++
-           Enum.flat_map(names, fn name ->
-             paths = paths_for(name, out, known)
-             versions = registry.structs[name] |> Map.values() |> Enum.sort_by(& &1.version)
-             generated = generated(name, versions, modules, registry)
-             old = if File.exists?(paths.gen), do: File.read!(paths.gen), else: nil
+        results =
+          Enum.map(names, fn name ->
+            paths = paths_for(name, out, known)
+            versions = registry.structs[name] |> Map.values() |> Enum.sort_by(& &1.version)
 
-             [
-               {paths.gen, merge_regions(generated, old), :generated},
-               {paths.user, user_file(name, modules[name]), :user}
-             ]
-           end)}
+            try do
+              generated = generated(name, versions, modules, registry)
+              old = if File.exists?(paths.gen), do: File.read!(paths.gen), else: nil
+
+              {:ok,
+               [
+                 {paths.gen, merge_regions(generated, old), :generated},
+                 {paths.user, user_file(name, modules[name]), :user}
+               ]}
+            rescue
+              e in Unsupported -> {:error, "#{name}(#{e.version}): #{e.message}"}
+            end
+          end)
+
+        # A schema using a form not generated yet is refused, every one of
+        # them named; nothing is written while any is.
+        case for({:error, problem} <- results, do: problem) do
+          [] -> {:ok, [decoder | Enum.flat_map(results, fn {:ok, files} -> files end)]}
+          problems -> {:error, problems}
+        end
 
       {:error, problems} ->
         {:error, Enum.map(problems, &"#{&1.file}:#{&1.line}: #{&1.message}")}
@@ -172,7 +191,10 @@ defmodule Dextrin.Codegen.Elixir do
 
       _ ->
         {namespace, local} = split(name)
-        base = Path.join([out | namespace] ++ [Macro.underscore(local)])
+
+        base =
+          Path.join([out | Enum.map(namespace, &Macro.underscore/1)] ++ [Macro.underscore(local)])
+
         %{user: base <> ".ex", gen: base <> ".gen.ex"}
     end
   end
@@ -444,7 +466,16 @@ defmodule Dextrin.Codegen.Elixir do
   defp version_code(%Compiled{version: v, fields: fields, annotations: notes}, state) do
     {checks, state} =
       Enum.map_reduce(fields, state, fn field, state ->
-        {fun, state} = type_fun(field.type, state)
+        {fun, state} =
+          try do
+            field_fun(field, state)
+          rescue
+            e in Unsupported ->
+              reraise Unsupported,
+                      [message: "field #{field.name}: #{e.message}", version: v],
+                      __STACKTRACE__
+          end
+
         {String.trim_trailing(field_check(field, fun)), state}
       end)
 
@@ -488,7 +519,7 @@ defmodule Dextrin.Codegen.Elixir do
     absent =
       cond do
         default != :none ->
-          "{:ok, {#{inspect(name)}, Runtime.value!(#{inspect(dxn_text(Field.filled(default)))})}}"
+          "{:ok, {#{inspect(name)}, #{default_code(default)}}}"
 
         required ->
           "{:error, \"missing required field #{name}\"}"
@@ -500,14 +531,51 @@ defmodule Dextrin.Codegen.Elixir do
     """
     fn fields ->
       case Map.fetch(fields, #{inspect(name)}) do
-        {:ok, value} ->
-          case #{fun}(value) do
-            {:ok, value} -> {:ok, {#{inspect(name)}, value}}
-            {:error, why} -> {:error, "field #{name}: " <> why}
-          end
+        #{present_field(name, fun)}
         :error -> #{absent}
       end
     end
+    """
+  end
+
+  # A default as code: a computed one (`computed: :now`) computed when a
+  # value is read, any other the value written.
+  defp default_code({:computed, _how, _kind} = computed),
+    do: "Dextrin.Schema.Field.filled(#{inspect(computed)})"
+
+  defp default_code(default), do: "Runtime.value!(#{inspect(dxn_text(default))})"
+
+  # A field's check function, or nil for a field that must be absent
+  # (`:never`): it needs none, and one that only refuses would leave the
+  # generated code with a clause the compiler proves never matches.
+  defp field_fun(%Field{type: :never}, state), do: {nil, state}
+  defp field_fun(%Field{type: type}, state), do: type_fun(type, state)
+
+  # What a field_check does with a field that is there.
+  defp present_field(name, nil),
+    do: ~s|{:ok, _value} -> {:error, "field #{name}: no value is allowed here"}|
+
+  defp present_field(name, fun) do
+    """
+    {:ok, value} ->
+      case #{fun}(value) do
+        {:ok, value} -> {:ok, {#{inspect(name)}, value}}
+        {:error, why} -> {:error, "field #{name}: " <> why}
+      end
+    """
+  end
+
+  # What a shape_check does with an entry that is there.
+  defp present_entry(name, nil),
+    do: ~s|{:ok, _key, _value} -> {:error, "#{name}: no value is allowed here"}|
+
+  defp present_entry(name, fun) do
+    """
+    {:ok, key, value} ->
+      case #{fun}(value) do
+        {:ok, value} -> {:ok, Map.put(map, key, value)}
+        {:error, why} -> {:error, "#{name}: " <> why}
+      end
     """
   end
 
@@ -598,7 +666,7 @@ defmodule Dextrin.Codegen.Elixir do
         hand = for(step <- up.steps, elem(step, 0) == :hand, do: elem(step, tuple_size(step) - 1))
 
         """
-          @doc "Fields of version #{from} as version #{to} has them.#{if hand != [], do: " #{Enum.join(hand, ", ")}: by hand, upgrade_v#{from}/1 in the user's module, or this region.", else: ""}"
+          @doc "Fields of version #{from} as version #{to} has them.#{if hand != [], do: " #{Enum.join(hand, ", ")}: by hand, in upgrade_v#{from}/1 of the user's module; the region below may prepare the fields first.", else: ""}"
           def upgrade_v#{from}(fields) do
             #{Enum.join(moves, "")}
             # dextrin:keep upgrade_v#{from}
@@ -692,7 +760,7 @@ defmodule Dextrin.Codegen.Elixir do
       Map.keys(constraints) -- (Map.keys(constraints) -- ~w(contains content encodes encodes-seq))
 
     if unsupported != [],
-      do: raise(ArgumentError, "refine keys not generated yet: #{Enum.join(unsupported, ", ")}")
+      do: raise(Unsupported, "refine keys not generated yet: #{Enum.join(unsupported, ", ")}")
 
     {fun, state} = type_fun(base, state)
     attr = "@c#{state.next}"
@@ -818,7 +886,7 @@ defmodule Dextrin.Codegen.Elixir do
   defp type_body({:shape, _name, fields, extras}, state) do
     {checks, state} =
       Enum.map_reduce(fields, state, fn field, state ->
-        {fun, state} = type_fun(field.type, state)
+        {fun, state} = field_fun(field, state)
         {String.trim_trailing(shape_check(field, fun)), state}
       end)
 
@@ -856,7 +924,13 @@ defmodule Dextrin.Codegen.Elixir do
   end
 
   defp type_body(type, _state),
-    do: raise(ArgumentError, "a type the generator does not write yet: #{inspect(type)}")
+    do: raise(Unsupported, "#{form_name(type)} is not generated yet")
+
+  # A type's form as DXNS writes it: `{:tuple_of, ...}` is `{:tuple-of ...}`.
+  defp form_name(type) when is_tuple(type),
+    do: "{:#{type |> elem(0) |> Atom.to_string() |> String.replace("_", "-")} ...}"
+
+  defp form_name(type), do: inspect(type)
 
   # A `{:doc}` that deprecates what it stands on: noted when a value goes
   # through it. Its name is its title, as Dextrin's reader says it.
@@ -920,7 +994,7 @@ defmodule Dextrin.Codegen.Elixir do
     absent =
       cond do
         default != :none ->
-          "{:ok, Map.put(map, %Dextrin.Keyword{name: #{inspect(name)}}, Runtime.value!(#{inspect(dxn_text(Field.filled(default)))}))}"
+          "{:ok, Map.put(map, %Dextrin.Keyword{name: #{inspect(name)}}, #{default_code(default)})}"
 
         required ->
           "{:error, \"missing required field #{name}\"}"
@@ -932,11 +1006,7 @@ defmodule Dextrin.Codegen.Elixir do
     """
     fn map ->
       case Runtime.field(map, #{inspect(name)}) do
-        {:ok, key, value} ->
-          case #{fun}(value) do
-            {:ok, value} -> {:ok, Map.put(map, key, value)}
-            {:error, why} -> {:error, "#{name}: " <> why}
-          end
+        #{present_entry(name, fun)}
         :none -> #{absent}
       end
     end
@@ -951,7 +1021,7 @@ defmodule Dextrin.Codegen.Elixir do
   end
 
   defp extras_check(_extras, _names, _state),
-    do: raise(ArgumentError, "typed extras (* K => V) are not generated yet")
+    do: raise(Unsupported, "typed extras (`* K => V`) are not generated yet")
 
   defp primitive_of({:primitive, _} = p), do: p
   defp primitive_of({:refine, base, _}), do: primitive_of(base)

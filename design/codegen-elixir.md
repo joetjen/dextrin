@@ -175,7 +175,8 @@ Built as above, with these differences, found while building:
 - **Hand-written upgrades**: a step that needs one calls
   `X.upgrade_vN/1`; `X.Gen` declares it a `@callback` and `X` takes the
   behaviour, so a missing one is a compile warning (an error under
-  `--warnings-as-errors`). The step's region may do it instead.
+  `--warnings-as-errors`). The step's region runs before the callback
+  and may prepare the fields for it; it does not replace it.
 - **A region the user invents** where no slot is becomes an orphan at once
   (not placed after the line before it): simpler to reason about, and its
   code is still never lost.

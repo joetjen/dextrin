@@ -110,6 +110,57 @@ defmodule Dextrin.Codegen.ElixirTest do
       assert own =~ "use #{p}.Acme.Shop.Order.Gen"
     end
 
+    test "a namespace written with capitals is a directory in lower case, as the file is" do
+      root =
+        schemas_dir(%{
+          "acme/shop/Order/v1.dxns" =>
+            "%{Order: %schema{line: OrderLine} OrderLine: %schema{sku: :string}}"
+        })
+
+      written =
+        root |> generate(prefix()) |> Enum.map(&Path.relative_to(&1, Path.join(root, "lib")))
+
+      assert "acme/shop/order/order_line.gen.ex" in written
+    end
+
+    test "a computed default is computed when a value is read, not when the code is written" do
+      root =
+        schemas_dir(%{
+          "a/Stamp.dxns" => "%{Stamp: %schema{at: %field{type: :timestamp computed: :now}}}"
+        })
+
+      p = prefix()
+      generate(root, p)
+      first = File.read!(Path.join([root, "lib", "a/stamp.gen.ex"]))
+      generate(root, p)
+      assert File.read!(Path.join([root, "lib", "a/stamp.gen.ex"])) == first
+
+      compile(root)
+      before = DateTime.utc_now()
+      assert {:ok, %{at: %DateTime{} = at}} = mod(p, "A.Stamp").read(dxn("%a/Stamp{}"))
+      assert DateTime.compare(at, before) != :lt
+    end
+
+    test "a field that must be absent compiles without a warning, and refuses a value" do
+      root =
+        schemas_dir(%{
+          "a/Gone.dxns" => "%{Gone: %schema{old?: :never inner: %shape{x?: :never y: :string}}}"
+        })
+
+      p = prefix()
+      generate(root, p)
+      files = Path.wildcard(Path.join([root, "lib", "**", "*.ex"]))
+
+      assert {:ok, _, %{compile_warnings: [], runtime_warnings: []}} =
+               Kernel.ParallelCompiler.compile(files, return_diagnostics: true)
+
+      gone = mod(p, "A.Gone")
+      assert {:ok, _} = gone.read(dxn(~S|%a/Gone{inner: %{y: "a"}}|))
+      assert {:error, why} = gone.read(dxn(~S|%a/Gone{old: 1 inner: %{y: "a"}}|))
+      assert why =~ "old"
+      assert {:error, _} = gone.read(dxn(~S|%a/Gone{inner: %{x: 1 y: "a"}}|))
+    end
+
     test "the same schemas give the same bytes" do
       root = schemas_dir()
       p = prefix()
@@ -470,6 +521,28 @@ defmodule Dextrin.Codegen.ElixirTest do
       assert_received {:deprecated, %{name: "dep/Box"}}
 
       assert {:error, _} = decoder.decode(~S|[%dep/Box(1){a: "x"}]|, deprecations: :error)
+    end
+  end
+
+  describe "what the generator does not write yet" do
+    test "is refused, naming every schema, version and field that uses it, and nothing is written" do
+      root =
+        schemas_dir(%{
+          "a/Pair.dxns" => "%{Pair: %schema{pair: {:tuple-of :string :integer} name: :string}}",
+          "a/Tags.dxns" => "%{Tags: %schema{tags: {:set-of :string}}}",
+          "a/Fine.dxns" => "%{Fine: %schema{name: :string}}"
+        })
+
+      assert {:error, problems} =
+               Gen.write([Path.join(root, "schemas")],
+                 prefix: prefix(),
+                 out: Path.join(root, "lib")
+               )
+
+      assert [pair, tags] = problems
+      assert pair == "a/Pair(1): field pair: {:tuple-of ...} is not generated yet"
+      assert tags =~ "a/Tags(1): field tags:"
+      refute File.exists?(Path.join(root, "lib"))
     end
   end
 
