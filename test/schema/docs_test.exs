@@ -164,8 +164,8 @@ defmodule Dextrin.Schema.DocsTest do
 
   test "the example builds" do
     assert {:ok, pages} = Docs.site("example/schemas", title: "Acme schemas")
-    # index, acme, acme.common, acme.events, acme.shop, style.css
-    assert length(pages) == 6
+    # index, acme, acme.billing, acme.common, acme.events, acme.shop, style.css
+    assert length(pages) == 7
   end
 
   describe "annotations, {:doc T %{...}} (DXNS.md §1b)" do
@@ -222,6 +222,188 @@ defmodule Dextrin.Schema.DocsTest do
       assert html =~ ~s(<dl class="values">)
       assert html =~ "Use red"
       assert html =~ ~s(<code>:old</code><span class="chip chip-deprecated">)
+    end
+  end
+
+  # T696 (Jan, 2026-11-18): everything DXNS gained since the generator
+  # was written is shown.
+  describe "what DXNS gained since 2026-10-20" do
+    defp page_with(pages, id),
+      do: Enum.find_value(pages, fn {_, page} -> page =~ ~s(id="#{id}") && page end)
+
+    test "a named type's versions are shown as a schema's are, latest first" do
+      pages =
+        site(%{
+          "a/Tier.dxns" => "%{Tier: {:enum :bronze :silver}}",
+          "a/Tier-v2.dxns" => "%{Tier: %type(2)[{:enum :bronze :silver :gold}]}"
+        })
+
+      html = page_with(pages, "Tier")
+      assert html =~ ~s(<span class="chip chip-version" id="Tier-v2">v2</span>)
+      assert html =~ ~s(<details class="older" id="Tier-v1">)
+      assert html =~ ":gold"
+      refute html =~ "%type"
+    end
+
+    test "a pinned reference links to the version it pins, in either spelling" do
+      pages =
+        site(%{
+          "a/Tier.dxns" => "%{Tier: {:enum :bronze}}",
+          "a/Tier-v2.dxns" => "%{Tier: %type(2)[{:enum :bronze :gold}]}",
+          "a.dxns" => "%{C: %shape{t: a/Tier(1) u: {:at a/Tier 2}}}"
+        })
+
+      html = pages["a/index.html"]
+      assert html =~ ~s|<a class="ref" href="../a/index.html#Tier-v1">a/Tier(1)</a>|
+      assert html =~ ~s(<a class="ref" href="../a/index.html#Tier-v2">)
+      assert page_with(pages, "Tier") =~ "Used by"
+    end
+
+    test "a head's bases are links, and a dropped field and the extras are rows" do
+      pages =
+        site(%{
+          "a.dxns" => """
+          %{
+            P: %shape{name: :string nick: :string}
+            C: %schema(1) includes P {
+              - nick
+              id: :uuid
+              * :string => :integer
+              - *
+            }
+          }
+          """
+        })
+
+      html = pages["a/index.html"]
+
+      assert html =~
+               ~s(<p class="bases">includes <a class="ref" href="../a/index.html#P">P</a></p>)
+
+      assert html =~ ~s(<tr class="dropped">)
+      assert html =~ "<s>nick</s>"
+      assert html =~ ~s(<code>* <span class="kw">:string</span></code>)
+      assert html =~ ~s(<tr class="closed">)
+    end
+
+    test "a comment on a left-out field, the extras or the closing is its note" do
+      pages =
+        site(%{
+          "a.dxns" => """
+          %{
+            P: %shape{a: :string nick: :string}
+            C: %shape includes P {
+              # why nick goes
+              - nick
+              # about id
+              id: :uuid
+              * :string => :integer # about the rest
+              - * # nothing else
+            }
+          }
+          """
+        })
+
+      html = pages["a/index.html"]
+      assert html =~ ~s(<td class="notes">left out of the bases<p>why nick goes</p></td>)
+      assert html =~ ~s(<td class="notes"><p>about id</p></td>)
+
+      assert html =~
+               ~s(<td class="notes">any other entry with such a key<p>about the rest</p></td>)
+
+      assert html =~ ~s(<td class="notes">no entries beyond these<p>nothing else</p></td>)
+    end
+
+    test "a deprecated version is struck through, with its reason" do
+      pages =
+        site(%{
+          "a/C-v1.dxns" => ~s|%{C: {:doc %schema{a: :string} %{deprecated: "use 2"}}}|,
+          "a/C-v2.dxns" => "%{C: %schema(2){a: :string b?: {:doc :string %{deprecated: true}}}}"
+        })
+
+      html = page_with(pages, "C")
+
+      assert html =~
+               ~s(<summary><s>Version 1</s> <span class="chip chip-deprecated" title="use 2">deprecated: use 2</span>)
+
+      assert html =~ "<code><s>b</s></code>"
+    end
+
+    test "a generic's parameters are listed with their bounds and defaults" do
+      pages =
+        site(%{
+          "a.dxns" => "%{Page: {:generic [T {S :integer :int32}] %shape{items: {:list-of T}}}}"
+        })
+
+      html = pages["a/index.html"]
+      assert html =~ ~s(<span class="chip chip-type">generic type</span>)
+      assert html =~ ~s(<dl class="params">)
+
+      assert html =~
+               ~s(<dt><code>S</code></dt><dd>within <code><span class="kw">:integer</span></code>, default <code><span class="kw">:int32</span></code></dd>)
+
+      refute html =~ ":generic"
+    end
+
+    test "a generic in a versioned file takes the file's version" do
+      pages =
+        site(%{
+          "a/Page.dxns" => "%{Page: {:generic [T] {:list-of T}}}",
+          "a/Page-v2.dxns" => "%{Page: {:generic [T] %shape{items: {:list-of T}}}}"
+        })
+
+      html = page_with(pages, "Page")
+      assert html =~ ~s(<span class="chip chip-version" id="Page-v2">v2</span>)
+      assert html =~ ~s(<details class="older" id="Page-v1">)
+    end
+
+    test "discriminator, secret, key, visibility and messages are shown" do
+      pages =
+        site(%{
+          "a.dxns" => """
+          %{
+            P: {:doc {:one-of A B} %{discriminator: :kind}}
+            A: %shape{kind: {:const "a"}}
+            B: %shape{kind: {:const "b"}}
+            S: %shape{
+              id: {:doc :string %{key: true}}
+              token: {:doc :string %{secret: true visibility: [:create :read]}}
+              code: {:doc {:refine :string %{min-length: 2}} %{messages: %{min-length: "too short"}}}
+            }
+          }
+          """
+        })
+
+      html = pages["a/index.html"]
+      assert html =~ ~s(<span class="chip chip-discriminator">discriminator: kind</span>)
+      assert html =~ ~s(<span class="chip chip-key">key</span>)
+      assert html =~ ~s(<span class="chip chip-secret">secret</span>)
+      assert html =~ ~s(<span class="chip chip-visibility">visible on create, read</span>)
+      assert html =~ ~s(<dl class="messages">)
+      assert html =~ "too short"
+    end
+
+    test "a computed default is shown as one" do
+      pages = site(%{"a.dxns" => "%{S: %schema{at: %field{type: :timestamp computed: :now}}}"})
+
+      assert pages["a/index.html"] =~
+               ~s(<span class="label">computed</span> <code><span class="kw">:now</span></code>)
+    end
+
+    test "a generated file says what generated it, and that is not its prose" do
+      pages =
+        site(%{
+          "a.dxns" =>
+            "# Generated by some-tool from a.tsp; do not edit.\n\n# About a.\n\n%{T: :string}"
+        })
+
+      html = pages["a/index.html"]
+
+      assert html =~
+               ~s(<span class="provenance">generated by <code>some-tool</code> from <code>a.tsp</code></span>)
+
+      assert html =~ "About a."
+      refute html =~ "do not edit"
     end
   end
 end

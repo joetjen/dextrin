@@ -1,0 +1,19 @@
+# Version 3 of a customer: built from `acme.common/Person` rather than
+# repeating its fields, and with a loyalty tier.
+#
+# `includes` copies Person's fields in; `- nickname` leaves one out. A
+# customer is not accepted where a Person is expected -- `extends` would
+# say that, `includes` does not.
+
+%{
+  # Someone who buys from Acme.
+  Customer: %schema(3) includes acme.common/Person {
+    - nickname
+    id: :uuid
+    address: acme.common/Address
+    registered_at: :timestamp
+    # Pinned to the first version of the tiers: the customer service
+    # still only knows bronze, silver and gold.
+    tier: acme.shop/Tier(1)
+  }
+}

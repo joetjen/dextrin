@@ -37,6 +37,18 @@ What DXNS lacked to say every TypeSpec type exactly
   strict decode or not. Both are inherited from bases.
 - **`min-count` and `max-count` on maps, shapes and structs** (DXNS.md
   §2): the entries present.
+- **`mix dextrin.docs` shows everything DXNS gained since it was
+  written** (T696): a head's bases as links and the fields it leaves
+  out; typed extras (`* K => V`) and `- *` as rows of the body; a named
+  type's versions (`%type(N)`) beside a schema's; a pinned reference
+  (`Tier(1)`, `{:at Tier 1}`) linking to the version it pins; a
+  deprecated version, field or definition struck through, with its
+  reason; a generic's parameters with their bounds and defaults; chips
+  for `key`, `secret`, `visibility` and `discriminator`, and a list of
+  `messages`; a computed default; and, for a file a converter or emitter
+  wrote, what generated it from what, instead of its header as prose.
+  The example gains `acme.billing` and versions of `Customer` and
+  `Tier` that use them.
 - **`mix dextrin.gen.elixir SCHEMAS --prefix P --out DIR [--check]`** and
   `Dextrin.Codegen.Elixir`: Elixir modules from DXNS (design/codegen-elixir.md).
   Per schema, a file of the user's, written once, and a generated one that

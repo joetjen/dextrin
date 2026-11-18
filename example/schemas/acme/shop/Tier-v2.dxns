@@ -1,0 +1,8 @@
+# The loyalty tiers since platinum was added: version 2 of a named type.
+# A field that says `acme.shop/Tier` gets this one; `acme.shop/Tier(1)`
+# keeps the first.
+
+%{
+  # How much a customer has bought, in steps.
+  Tier: %type(2)[{:enum :bronze :silver :gold :platinum}]
+}

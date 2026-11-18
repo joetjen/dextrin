@@ -104,6 +104,9 @@ defmodule Dextrin.Schema.Docs.Html do
   defp anchor(%{internal_to: nil, short: short}), do: short
   defp anchor(%{internal_to: owner, short: short}), do: short_of(owner) <> "." <> short
 
+  # Where version `n` of a definition is: its own anchor and the version.
+  defp version_anchor(definition, n), do: anchor(definition) <> "-v#{n}"
+
   defp short_of(name), do: name |> String.split("/") |> List.last()
 
   defp href(%{namespace: namespace} = definition),
@@ -115,9 +118,16 @@ defmodule Dextrin.Schema.Docs.Html do
   defp used_by(definitions) do
     definitions
     |> Enum.flat_map(fn definition ->
+      bases =
+        for v <- definition.versions,
+            group <- v.bases,
+            {name, _pin} <- group.names,
+            do: Docs.resolve(name, definition.scope)
+
       definition
       |> types_of()
       |> Enum.flat_map(&Docs.references(&1, definition.scope))
+      |> Enum.concat(bases)
       |> Enum.uniq()
       |> Enum.reject(&(&1 == definition.name))
       |> Enum.map(&{&1, definition.name})
@@ -126,8 +136,26 @@ defmodule Dextrin.Schema.Docs.Html do
     |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
   end
 
-  defp types_of(%{kind: :type, versions: versions}), do: Enum.map(versions, & &1.value)
-  defp types_of(%{versions: versions}), do: for(v <- versions, f <- v.fields, do: f.type)
+  # Every type a definition's versions write: a named type's definition
+  # and its parameters' bounds and defaults, a body's field types and its
+  # extras' keys and values.
+  defp types_of(%{kind: :type, versions: versions}),
+    do:
+      Enum.flat_map(
+        versions,
+        &[&1.value | Enum.flat_map(&1.params, fn p -> [p.bound, p.default] end)]
+      )
+
+  defp types_of(%{versions: versions}) do
+    for v <- versions,
+        row <- v.fields,
+        row.kind in [:field, :extra],
+        type <- types_in(row),
+        do: type
+  end
+
+  defp types_in(%{kind: :extra, key: key, type: type}), do: [key, type]
+  defp types_in(%{type: type}), do: [type]
 
   # ---- the frame: the sidebar, then the page ----------------------------------
 
@@ -371,7 +399,7 @@ defmodule Dextrin.Schema.Docs.Html do
     """
     <article class="def kind-#{d.kind}" id="#{escape(anchor(d))}">
       <header class="def-head">
-        <h2><a class="self" href="##{escape(anchor(d))}"><code>#{escape(d.short)}</code></a></h2>
+        <h2><a class="self" href="##{escape(anchor(d))}"><code>#{struck(escape(d.short), latest.annotations)}</code></a></h2>
         <div class="chips">#{kind_chip(d)}#{internal_chip(d, ctx)}#{version_chips(d)}#{annotation_chips(latest.annotations)}</div>
         #{title(latest.annotations)}<p class="full-name"><code>#{escape(d.name)}</code></p>
       </header>
@@ -394,33 +422,74 @@ defmodule Dextrin.Schema.Docs.Html do
       prose(d.doc, d, ctx),
       values(notes, d, ctx),
       examples(notes),
+      messages(notes),
       meta(notes)
     ]
     |> Enum.reject(&(&1 == ""))
     |> Enum.join("\n  ")
   end
 
-  # Deprecated (with its reason), read-only and write-only, as chips.
+  # Deprecated (with its reason), read-only, write-only, key, secret,
+  # visibility and discriminator, as chips.
   defp annotation_chips(notes) do
-    deprecated =
-      case notes["deprecated"] do
-        true ->
-          ~s(<span class="chip chip-deprecated">deprecated</span>)
-
-        reason when is_binary(reason) ->
-          ~s(<span class="chip chip-deprecated" title="#{escape(reason)}">deprecated: #{escape(reason)}</span>)
-
-        _ ->
-          ""
-      end
-
     flags =
       for {key, class} <- [{"read-only", "chip-read-only"}, {"write-only", "chip-write-only"}],
           notes[key] == true,
           into: "",
           do: ~s(<span class="chip #{class}">#{key}</span>)
 
-    deprecated <> flags
+    deprecated_chip(notes) <>
+      flags <>
+      key_chip(notes["key"]) <>
+      if(notes["secret"] == true, do: ~s(<span class="chip chip-secret">secret</span>), else: "") <>
+      visibility_chip(notes["visibility"]) <> discriminator_chip(notes["discriminator"])
+  end
+
+  defp key_chip(true), do: ~s(<span class="chip chip-key">key</span>)
+
+  defp key_chip(name) when is_binary(name),
+    do: ~s(<span class="chip chip-key">key: #{escape(name)}</span>)
+
+  defp key_chip(_other), do: ""
+
+  # The stages that see a field (DXNS.md §1b); `[]` is none.
+  defp visibility_chip([]), do: ~s(<span class="chip chip-visibility">visible on no stage</span>)
+
+  defp visibility_chip([_ | _] = stages) do
+    names = Enum.map_join(stages, ", ", &stage_name/1)
+    ~s(<span class="chip chip-visibility">visible on #{escape(names)}</span>)
+  end
+
+  defp visibility_chip(_other), do: ""
+
+  defp stage_name(%Dextrin.Keyword{name: name}), do: name
+  defp stage_name(other), do: written(other)
+
+  defp discriminator_chip(nil), do: ""
+
+  defp discriminator_chip(field),
+    do:
+      ~s(<span class="chip chip-discriminator">discriminator: #{escape(stage_name(field))}</span>)
+
+  # Deprecated, with its reason when it gives one.
+  defp deprecated_chip(notes) do
+    case notes["deprecated"] do
+      true ->
+        ~s(<span class="chip chip-deprecated">deprecated</span>)
+
+      reason when is_binary(reason) ->
+        ~s(<span class="chip chip-deprecated" title="#{escape(reason)}">deprecated: #{escape(reason)}</span>)
+
+      _ ->
+        ""
+    end
+  end
+
+  # `html` struck through when `notes` deprecate what it names.
+  defp struck(html, notes) do
+    if notes["deprecated"] == true or is_binary(notes["deprecated"]),
+      do: "<s>" <> html <> "</s>",
+      else: html
   end
 
   # An enum's values, each with what its own annotations say.
@@ -470,6 +539,21 @@ defmodule Dextrin.Schema.Docs.Html do
 
   defp meta(_notes), do: ""
 
+  # A refusal's own words, by the refine key that refuses.
+  defp messages(%{"messages" => messages}) when is_map(messages) and map_size(messages) > 0 do
+    rows =
+      messages
+      |> Enum.map(fn {key, message} -> {written(key), message} end)
+      |> Enum.sort()
+      |> Enum.map_join("", fn {key, message} ->
+        ~s(<dt><code>#{escape(key)}</code></dt><dd>#{escape(to_string(message))}</dd>)
+      end)
+
+    ~s(<dl class="messages"><p class="label">Messages</p>#{rows}</dl>)
+  end
+
+  defp messages(_notes), do: ""
+
   # A decoded value as DXN writes it.
   defp written(value) do
     case Dextrin.Canonical.print(value) do
@@ -489,6 +573,10 @@ defmodule Dextrin.Schema.Docs.Html do
 
   defp kind_chip(%{kind: :schema}), do: ~s(<span class="chip chip-schema">struct schema</span>)
   defp kind_chip(%{kind: :shape}), do: ~s(<span class="chip chip-shape">shape</span>)
+
+  defp kind_chip(%{kind: :type, versions: [%{params: [_ | _]} | _]}),
+    do: ~s(<span class="chip chip-type">generic type</span>)
+
   defp kind_chip(%{kind: :type}), do: ~s(<span class="chip chip-type">type</span>)
 
   defp internal_chip(%{internal_to: nil}, _ctx), do: ""
@@ -503,8 +591,8 @@ defmodule Dextrin.Schema.Docs.Html do
     end
   end
 
-  defp version_chips(%{kind: :schema, versions: [latest | older]}) do
-    ~s(<span class="chip chip-version">v#{latest.version}</span>) <>
+  defp version_chips(%{versions: [%{version: n} | older]} = d) when is_integer(n) do
+    ~s(<span class="chip chip-version" id="#{escape(version_anchor(d, n))}">v#{n}</span>) <>
       if older == [],
         do: "",
         else: ~s(<span class="chip chip-quiet">#{length(older) + 1} versions</span>)
@@ -514,8 +602,8 @@ defmodule Dextrin.Schema.Docs.Html do
 
   defp older_version(d, version, ctx) do
     """
-    <details class="older">
-      <summary>Version #{version.version} <span class="file">#{escape(version.file)}</span></summary>
+    <details class="older" id="#{escape(version_anchor(d, version.version))}">
+      <summary>#{struck("Version #{version.version}", version.annotations)} #{deprecated_chip(version.annotations)}<span class="file">#{escape(version.file)}</span></summary>
       #{version_body(d, version, ctx, false)}
     </details>
     """
@@ -524,9 +612,9 @@ defmodule Dextrin.Schema.Docs.Html do
   defp version_body(%{kind: :type} = d, version, ctx, _latest?) do
     """
     <div class="type-def">
-      <p class="label">Definition</p>
+      #{params_html(version.params, d, ctx)}<p class="label">Definition</p>
       <pre class="expr"><code>#{type_html(version.value, d, ctx)}</code></pre>
-      <p class="file">#{escape(version.file)}</p>
+      #{file_line(version)}
     </div>
     """
   end
@@ -544,40 +632,136 @@ defmodule Dextrin.Schema.Docs.Html do
         do: ~s(<th scope="col" class="pos" title="Position in the binary form">#</th>),
         else: ""
 
-    rows =
-      Enum.map_join(version.fields, "", fn f ->
-        notes =
-          annotation_chips(f.annotations) <>
-            ([f.annotations["description"], f.description, f.doc]
-             |> Enum.reject(&(&1 in [nil, ""]))
-             |> Enum.map_join("", &Markdown.to_html(&1, linker(d, ctx)))) <>
-            values(f.annotations, d, ctx) <> examples(f.annotations) <> meta(f.annotations)
-
-        default =
-          if f.default,
-            do:
-              ~s(<div class="default"><span class="label">default</span> <code>#{type_html(f.default, d, ctx)}</code></div>),
-            else: ""
-
-        """
-        <tr>
-          #{if d.kind == :schema, do: ~s(<td class="pos">#{f.position}</td>), else: ""}
-          <th scope="row" class="field"><code>#{escape(f.name)}</code>#{if f.optional?, do: ~s(<span class="opt">optional</span>), else: ""}</th>
-          <td class="type"><code>#{type_html(f.type, d, ctx)}</code>#{default}</td>
-          <td class="notes">#{notes}</td>
-        </tr>
-        """
-      end)
+    rows = Enum.map_join(version.fields, "", &field_row(&1, d, ctx))
 
     """
     #{note}
-    <div class="table-wrap">
+    #{bases_html(version.bases, d, ctx)}<div class="table-wrap">
       <table class="fields">
         <thead><tr>#{position_head}<th scope="col">Field</th><th scope="col">Type</th><th scope="col">Notes</th></tr></thead>
         <tbody>#{rows}</tbody>
       </table>
     </div>
-    <p class="file">#{escape(version.file)}</p>
+    #{file_line(version)}
+    """
+  end
+
+  # The comments on a row that is not a field.
+  defp row_doc(%{doc: doc}, d, ctx) when doc not in [nil, ""],
+    do: Markdown.to_html(doc, linker(d, ctx))
+
+  defp row_doc(_row, _d, _ctx), do: ""
+
+  # The file a version is in, and what generated it when a tool did.
+  defp file_line(%{provenance: %{tool: tool, source: source}} = version),
+    do:
+      ~s(<p class="file">#{escape(version.file)} <span class="provenance">generated by <code>#{escape(tool)}</code> from <code>#{escape(source)}</code></span></p>)
+
+  defp file_line(version), do: ~s(<p class="file">#{escape(version.file)}</p>)
+
+  # The bases a head names, each a link (DXNS.md §4b).
+  defp bases_html([], _d, _ctx), do: ""
+
+  defp bases_html(groups, d, ctx) do
+    words =
+      Enum.map_join(groups, " ", fn group ->
+        group.relation <>
+          " " <>
+          Enum.map_join(group.names, ", ", fn {name, pin} -> name_link(name, pin, d, ctx) end)
+      end)
+
+    ~s(<p class="bases">#{words}</p>\n)
+  end
+
+  # A generic's parameters, each with its bound and default (DXNS.md §5).
+  defp params_html([], _d, _ctx), do: ""
+
+  defp params_html(params, d, ctx) do
+    rows =
+      Enum.map_join(params, "", fn p ->
+        about =
+          case p do
+            %{bound: nil} ->
+              "any type"
+
+            %{default: nil} ->
+              "within <code>#{type_html(p.bound, d, ctx)}</code>"
+
+            _ ->
+              "within <code>#{type_html(p.bound, d, ctx)}</code>, default <code>#{type_html(p.default, d, ctx)}</code>"
+          end
+
+        ~s(<dt><code>#{escape(p.name)}</code></dt><dd>#{about}</dd>)
+      end)
+
+    ~s(<dl class="params"><p class="label">Parameters</p>#{rows}</dl>\n)
+  end
+
+  # One row of a body: a field, a field left out of the bases, the
+  # extras, or the closing.
+  defp field_row(%{kind: :drop, name: name} = row, d, ctx) do
+    """
+    <tr class="dropped">
+      #{if d.kind == :schema, do: ~s(<td class="pos"></td>), else: ""}
+      <th scope="row" class="field"><code><s>#{escape(name)}</s></code></th>
+      <td class="type"></td>
+      <td class="notes">left out of the bases#{row_doc(row, d, ctx)}</td>
+    </tr>
+    """
+  end
+
+  defp field_row(%{kind: :closed} = row, d, ctx) do
+    """
+    <tr class="closed">
+      #{if d.kind == :schema, do: ~s(<td class="pos"></td>), else: ""}
+      <th scope="row" class="field"><code>- *</code></th>
+      <td class="type"></td>
+      <td class="notes">no entries beyond these#{row_doc(row, d, ctx)}</td>
+    </tr>
+    """
+  end
+
+  defp field_row(%{kind: :extra, key: key, type: type} = row, d, ctx) do
+    """
+    <tr class="extras">
+      #{if d.kind == :schema, do: ~s(<td class="pos"></td>), else: ""}
+      <th scope="row" class="field"><code>* #{type_html(key, d, ctx)}</code></th>
+      <td class="type"><code>#{type_html(type, d, ctx)}</code></td>
+      <td class="notes">any other entry with such a key#{row_doc(row, d, ctx)}</td>
+    </tr>
+    """
+  end
+
+  defp field_row(f, d, ctx) do
+    notes =
+      annotation_chips(f.annotations) <>
+        ([f.annotations["description"], f.description, f.doc]
+         |> Enum.reject(&(&1 in [nil, ""]))
+         |> Enum.map_join("", &Markdown.to_html(&1, linker(d, ctx)))) <>
+        values(f.annotations, d, ctx) <>
+        examples(f.annotations) <>
+        messages(f.annotations) <>
+        meta(f.annotations)
+
+    default =
+      if f.default,
+        do:
+          ~s(<div class="default"><span class="label">default</span> <code>#{type_html(f.default, d, ctx)}</code></div>),
+        else: ""
+
+    computed =
+      if f.computed,
+        do:
+          ~s(<div class="default"><span class="label">computed</span> <code>#{type_html(f.computed, d, ctx)}</code></div>),
+        else: ""
+
+    """
+    <tr>
+      #{if d.kind == :schema, do: ~s(<td class="pos">#{f.position}</td>), else: ""}
+      <th scope="row" class="field"><code>#{struck(escape(f.name), f.annotations)}</code>#{if f.optional?, do: ~s(<span class="opt">optional</span>), else: ""}</th>
+      <td class="type"><code>#{type_html(f.type, d, ctx)}</code>#{default}#{computed}</td>
+      <td class="notes">#{notes}</td>
+    </tr>
     """
   end
 
@@ -611,13 +795,8 @@ defmodule Dextrin.Schema.Docs.Html do
   defp render(%Token{text: text}, _d, _ctx), do: escape(text)
 
   defp render(%Node{rule: :symbol} = node, d, ctx) do
-    written = Docs.text(node)
-    name = Docs.resolve(written, d.scope)
-
-    case Map.fetch(ctx.known, name) do
-      {:ok, target} -> ~s(<a class="ref" href="#{href(target)}">#{escape(written)}</a>)
-      :error -> ~s(<span class="sym">#{escape(written)}</span>)
-    end
+    {name, pin} = Docs.pinned(node)
+    link(Docs.text(node), name, pin, d, ctx)
   end
 
   defp render(%Node{rule: :keyword} = node, _d, _ctx),
@@ -631,9 +810,11 @@ defmodule Dextrin.Schema.Docs.Html do
 
     case values do
       [head, field, table] ->
-        if Docs.text(head) == ":case",
-          do: case_html(field, table, d, ctx),
-          else: plain(node, d, ctx)
+        case Docs.text(head) do
+          ":case" -> case_html(field, table, d, ctx)
+          ":at" -> at_html(node, field, table, d, ctx)
+          _ -> plain(node, d, ctx)
+        end
 
       _ ->
         plain(node, d, ctx)
@@ -641,6 +822,43 @@ defmodule Dextrin.Schema.Docs.Html do
   end
 
   defp render(node, d, ctx), do: plain(node, d, ctx)
+
+  # `{:at Name N}`, what `Name(N)` writes (DXNS.md §5c): the name links
+  # to version N.
+  defp at_html(%Node{children: children}, name_value, version_value, d, ctx) do
+    {name, _} = name_value |> Docs.body() |> Docs.pinned()
+
+    pin =
+      case Integer.parse(Docs.text(version_value)) do
+        {n, ""} -> n
+        _ -> nil
+      end
+
+    Enum.map(children, fn
+      ^name_value -> link(Docs.text(name_value), name, pin, d, ctx)
+      child -> render(child, d, ctx)
+    end)
+  end
+
+  # `written`, naming `name` pinned to `pin` (or nil), as a link to that
+  # definition -- to that version of it when it has one -- or as a name.
+  defp link(written, name, pin, d, ctx) do
+    case Map.fetch(ctx.known, Docs.resolve(name, d.scope)) do
+      {:ok, target} ->
+        at =
+          if pin && Enum.any?(target.versions, &(&1.version == pin)),
+            do: page_of(target.namespace) <> "#" <> version_anchor(target, pin),
+            else: href(target)
+
+        ~s(<a class="ref" href="#{at}">#{escape(written)}</a>)
+
+      :error ->
+        ~s(<span class="sym">#{escape(written)}</span>)
+    end
+  end
+
+  defp name_link(name, nil, d, ctx), do: link(name, name, nil, d, ctx)
+  defp name_link(name, pin, d, ctx), do: link("#{name}(#{pin})", name, pin, d, ctx)
 
   defp plain(%Node{children: children}, d, ctx), do: Enum.map(children, &render(&1, d, ctx))
 
@@ -813,16 +1031,22 @@ defmodule Dextrin.Schema.Docs.Html do
     .chip-version { border-color: var(--accent); color: var(--accent); font-family: var(--font-code); }
     .chip-quiet { color: var(--muted); }
     .chip-deprecated { background: var(--warn-soft); color: var(--warn); }
-    .chip-read-only, .chip-write-only { border-color: var(--rule); color: var(--muted); }
+    .chip-read-only, .chip-write-only, .chip-key, .chip-visibility { border-color: var(--rule); color: var(--muted); }
+    .chip-secret { background: var(--warn-soft); color: var(--warn); }
+    .chip-discriminator { border-color: var(--type); color: var(--type); font-family: var(--font-code); }
+    .bases { margin: 0; font-family: var(--font-code); font-size: 0.9rem; }
+    .provenance { margin-left: 0.5rem; }
+    .fields tr.dropped .field code, .fields tr.closed .field code { font-weight: 400; color: var(--muted); }
+    .fields tr.dropped .notes, .fields tr.closed .notes, .fields tr.extras .notes { color: var(--muted); }
     .def-head .title { margin: 0; font-size: var(--step-0); color: var(--ink); }
     .examples, .meta { margin: 0.6rem 0 0; }
     .examples ul { margin: 0.2rem 0 0; padding-left: 1.2rem; }
     .meta dt, .meta dd { display: inline; margin: 0; }
     .meta dd { margin-right: 1rem; }
     .meta dt::after { content: " = "; color: var(--muted); }
-    .values { margin: 0.6rem 0 0; }
-    .values dt { margin-top: 0.2rem; }
-    .values dd { margin: 0 0 0 1.2rem; }
+    .values, .messages, .params { margin: 0.6rem 0 0; }
+    .values dt, .messages dt, .params dt { margin-top: 0.2rem; }
+    .values dd, .messages dd, .params dd { margin: 0 0 0 1.2rem; }
 
     .prose { max-width: 42rem; }
     .prose > * + * { margin-top: 0.6rem; }

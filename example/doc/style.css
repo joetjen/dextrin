@@ -129,16 +129,22 @@ h1 code { font-size: 0.85em; }
 .chip-version { border-color: var(--accent); color: var(--accent); font-family: var(--font-code); }
 .chip-quiet { color: var(--muted); }
 .chip-deprecated { background: var(--warn-soft); color: var(--warn); }
-.chip-read-only, .chip-write-only { border-color: var(--rule); color: var(--muted); }
+.chip-read-only, .chip-write-only, .chip-key, .chip-visibility { border-color: var(--rule); color: var(--muted); }
+.chip-secret { background: var(--warn-soft); color: var(--warn); }
+.chip-discriminator { border-color: var(--type); color: var(--type); font-family: var(--font-code); }
+.bases { margin: 0; font-family: var(--font-code); font-size: 0.9rem; }
+.provenance { margin-left: 0.5rem; }
+.fields tr.dropped .field code, .fields tr.closed .field code { font-weight: 400; color: var(--muted); }
+.fields tr.dropped .notes, .fields tr.closed .notes, .fields tr.extras .notes { color: var(--muted); }
 .def-head .title { margin: 0; font-size: var(--step-0); color: var(--ink); }
 .examples, .meta { margin: 0.6rem 0 0; }
 .examples ul { margin: 0.2rem 0 0; padding-left: 1.2rem; }
 .meta dt, .meta dd { display: inline; margin: 0; }
 .meta dd { margin-right: 1rem; }
 .meta dt::after { content: " = "; color: var(--muted); }
-.values { margin: 0.6rem 0 0; }
-.values dt { margin-top: 0.2rem; }
-.values dd { margin: 0 0 0 1.2rem; }
+.values, .messages, .params { margin: 0.6rem 0 0; }
+.values dt, .messages dt, .params dt { margin-top: 0.2rem; }
+.values dd, .messages dd, .params dd { margin: 0 0 0 1.2rem; }
 
 .prose { max-width: 42rem; }
 .prose > * + * { margin-top: 0.6rem; }

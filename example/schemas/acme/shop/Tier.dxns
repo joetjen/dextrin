@@ -1,0 +1,6 @@
+# The loyalty tiers, as they were first offered.
+
+%{
+  # How much a customer has bought, in steps.
+  Tier: {:enum :bronze :silver :gold}
+}

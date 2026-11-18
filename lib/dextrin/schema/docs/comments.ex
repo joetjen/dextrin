@@ -49,17 +49,18 @@ defmodule Dextrin.Schema.Docs.Comments do
   end
 
   @doc """
-  For each `:map_entry` among a container's `children`, in order, the
-  comment lines attached to it.
+  For each entry among a container's `children`, in order, the comment
+  lines attached to it: each `:map_entry`, or each node of `rules`
+  (a body's `- name`, `* K => V` and `- *` are entries too).
   """
-  @spec attached([Node.t() | Token.t()]) :: [attached()]
-  def attached(children) do
+  @spec attached([Node.t() | Token.t()], [atom()]) :: [attached()]
+  def attached(children, rules \\ [:map_entry]) do
     initial = %{done: [], current: nil, block: [], newlines: 0, on_line?: false}
 
     final =
       Enum.reduce(children, initial, fn
         %Token{trivia: true, text: text}, state -> Enum.reduce(events(text), state, &event/2)
-        %Node{rule: :map_entry}, state -> entry(state)
+        %Node{rule: rule}, state -> if rule in rules, do: entry(state), else: state
         _other, state -> state
       end)
 

@@ -5,10 +5,10 @@
 
 %{
   # Someone who buys from Acme.
-  Customer: %schema{
+  Customer: {:doc %schema{
     id: :uuid
     name: acme.common/NonEmptyString
     email: acme.common/Email
     address: acme.common/Address
-  }
+  } %{deprecated: "write version 3; read and upgrade older ones"}}
 }
